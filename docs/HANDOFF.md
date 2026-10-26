@@ -67,7 +67,7 @@ Add form, as tried on a phone:
 2. **Deploy to the Pi.** Install `uv` there (it installs without root), pull from GitHub, and run as a systemd service. Find out what is already using about 900 MB of RAM first.
 3. **Slice 2 (household).** Household login, Eaters, Categories and the Adult/Teen/Child permissions.
 4. **Later slices.** Recipes, then Menu generation, Occasions and weather, then the Shopping List, then barcode scanning and OCR.
-5. **Housekeeping.** Reboot the Pi once to confirm `/mnt/emu` mounts on its own. Set up the nightly backup, ideally copying off the Pi. Add the Scan term and the fridge-photo idea to the glossary and ADR 0003 if you want them recorded. There is a stray untracked `emu-the-menu/` folder in the repo root that looks like a nested copy of the project, so check it and delete it if it is not needed.
+5. **Housekeeping.** Reboot the Pi once to confirm `/mnt/emu` mounts on its own. Set up the nightly backup, ideally copying off the Pi. Add the Scan term and the fridge-photo idea to the glossary and ADR 0003 if you want them recorded.
 
 ## Reference
 
