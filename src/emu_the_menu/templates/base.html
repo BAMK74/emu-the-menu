@@ -1,0 +1,145 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}Emu the Menu{% endblock %}</title>
+  <style>
+    :root {
+      --bg: #f4f6f3; --card: #ffffff; --text: #1f2a24; --muted: #66756c;
+      --line: #d5ddd7; --accent: #3f7d58; --accent-text: #ffffff; --danger: #b3392c;
+      --danger-bg: #fbeae8; --warn: #e0a526; --warn-bg: #fdf3da; --radius: .6rem; --field: 2.3rem;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #151a17; --card: #1e2521; --text: #e6ece8; --muted: #93a39a;
+        --line: #33403a; --accent: #5aa578; --accent-text: #0e1612; --danger: #e5766a;
+        --danger-bg: #3a2220; --warn-bg: #3a3118;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, sans-serif; background: var(--bg); color: var(--text);
+      margin: 0; padding: 1rem; display: flex; flex-direction: column; align-items: center;
+    }
+    main { width: 100%; max-width: 22rem; }
+    h1 { font-size: 1.25rem; margin: .2rem 0 .8rem; }
+
+    input, select, button { font: inherit; font-size: .9rem; color: var(--text); }
+    input:not([type=checkbox]), select {
+      height: var(--field); width: 100%; min-width: 0; padding: 0 .6rem;
+      background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    }
+    input:focus-visible, select:focus-visible, button:focus-visible {
+      outline: 2px solid var(--accent); outline-offset: 1px;
+    }
+    input:disabled, select:disabled { opacity: .45; }
+    button {
+      height: var(--field); padding: 0 .9rem; border-radius: var(--radius); cursor: pointer;
+      background: var(--accent); color: var(--accent-text); border: 0; font-weight: 600;
+    }
+    button.quiet { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 400; }
+
+    .error {
+      background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger);
+      border-radius: var(--radius); padding: .5rem .7rem; margin: 0 0 .8rem; font-size: .9rem;
+    }
+
+    .warning {
+      background: var(--warn-bg); color: var(--text); border: 1px solid var(--warn);
+      border-radius: var(--radius); padding: .7rem .8rem; margin: 0 0 .8rem; font-size: .9rem;
+    }
+    .warning p { margin: 0 0 .5rem; }
+    .warning p.hint { margin: .5rem 0 0; font-size: .8rem; color: var(--muted); }
+    .warning button { width: 100%; background: var(--warn); color: #1f1a0a; }
+
+    form.add {
+      display: grid; gap: .6rem; padding: .9rem; margin-bottom: 1.2rem;
+      background: var(--card); border: 1px solid var(--line); border-radius: calc(var(--radius) + .2rem);
+    }
+    form.add label, form.add legend {
+      display: grid; gap: .2rem; font-size: .75rem; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .03em;
+    }
+    .pair { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+    fieldset.expiry { border: 0; padding: 0; margin: 0; min-width: 0; }
+    fieldset.expiry legend { padding: 0; margin-bottom: .2rem; display: block; }
+    .expiry-row {
+      display: flex; align-items: center; gap: .3rem; font-size: .8rem; color: var(--muted);
+      white-space: nowrap;
+    }
+    .expiry-row input, .expiry-row select { font-size: .8rem; padding: 0 .3rem; }
+    .expiry-row input[type=date] { flex: 1 1 6rem; min-width: 5.2rem; max-width: 7.5rem; }
+    .expiry-row input[type=number] { flex: 0 0 2.6rem; text-align: center; }
+    .expiry-row select { flex: 0 0 4.6rem; }
+    form.add label.no-expiry {
+      display: flex; align-items: center; gap: .25rem; margin-left: auto; text-transform: none;
+      letter-spacing: 0; font-size: .8rem; font-weight: 400;
+    }
+    form.add label.no-expiry input { margin: 0; accent-color: var(--accent); }
+
+    ul { list-style: none; padding: 0; margin: 0; display: grid; gap: .6rem; }
+    li {
+      background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: .6rem .8rem;
+    }
+    li .meta { color: var(--muted); font-size: .8rem; margin-top: .1rem; }
+    li .actions { display: flex; gap: .4rem; margin-top: .5rem; }
+    li .actions form { display: flex; gap: .3rem; }
+    li .actions input[type=number] { width: 4.6rem; }
+    li .actions select { width: 4.8rem; }
+    li .actions button { height: 2rem; padding: 0 .7rem; font-size: .8rem; }
+    li .actions form:last-child { margin-left: auto; }
+    .empty { color: var(--muted); text-align: center; }
+    nav { display: flex; gap: 1rem; align-items: baseline; margin: .2rem 0 .8rem; }
+    nav h1 { margin: 0; }
+    nav a { color: var(--muted); font-size: .9rem; text-decoration: none; }
+    nav a:hover { color: var(--accent); }
+    nav .current { margin-right: auto; }
+    dialog {
+      width: min(22rem, calc(100vw - 2rem)); padding: 1.1rem; background: var(--card);
+      color: var(--text); border: 1px solid var(--line); border-radius: calc(var(--radius) + .2rem);
+    }
+    dialog::backdrop { background: rgba(0, 0, 0, .55); }
+    dialog h2 { font-size: 1.1rem; margin: 0 0 .8rem; }
+    dialog form.add { border: 0; padding: 0; margin: 0; background: none; }
+    .buttons { display: flex; gap: .6rem; }
+    .buttons button:first-child { flex: 1; }
+    .saved { color: var(--accent); margin: 0 0 .8rem; font-size: .9rem; }
+    .hint { color: var(--muted); font-size: .8rem; margin: 0; }
+
+    /* Computers and tablets: more room, larger text. */
+    @media (min-width: 640px) {
+      :root { --field: 2.7rem; }
+      body { padding: 2rem 1rem; }
+      main { max-width: 34rem; }
+      h1 { font-size: 1.5rem; margin-bottom: 1rem; }
+      input, select, button { font-size: 1rem; }
+      form.add { padding: 1.4rem; gap: .9rem; }
+      form.add label, form.add legend { font-size: .8rem; }
+      .pair { gap: .9rem; }
+      .expiry-row { gap: .6rem; font-size: .95rem; }
+      .expiry-row input, .expiry-row select { font-size: 1rem; padding: 0 .6rem; }
+      .expiry-row input[type=date] { flex: 0 0 10rem; max-width: none; }
+      .expiry-row input[type=number] { flex: 0 0 3.8rem; }
+      .expiry-row select { flex: 0 0 6.5rem; }
+      form.add label.no-expiry { font-size: .95rem; gap: .4rem; }
+      li { padding: .9rem 1.1rem; }
+      li .meta { font-size: .9rem; }
+      li .actions { margin-top: .7rem; }
+      li .actions input[type=number] { width: 6rem; }
+      li .actions select { width: 6.5rem; }
+      li .actions button { height: 2.4rem; font-size: .95rem; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <nav>
+    <h1 class="current">{% block heading %}Stock{% endblock %}</h1>
+    {% block nav %}<a href="/">Stock</a><a href="/settings">Settings</a>{% endblock %}
+  </nav>
+  {% block content %}{% endblock %}
+</main>
+</body>
+</html>

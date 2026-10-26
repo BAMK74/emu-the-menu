@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Emu the Menu - Settings{% endblock %}
+{% block heading %}Settings{% endblock %}
+{% block nav %}<a href="/">Stock</a>{% endblock %}
+{% block content %}
+  {% if error %}<p class="error" role="alert">error: {{ error }}</p>{% endif %}
+  {% if saved %}<p class="saved" role="status">Saved.</p>{% endif %}
+  {% include "_settings_form.html" %}
+{% endblock %}

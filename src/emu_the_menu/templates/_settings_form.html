@@ -1,0 +1,14 @@
+<form class="add" method="post" action="/settings">
+  {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+  <label>Where does your household live?
+    <select name="country">
+      <option value=""{{ " selected" if not country }}>Not set</option>
+      {% for code, name in countries.items() %}<option value="{{ code }}"{{ " selected" if code == country }}>{{ name }}</option>{% endfor %}
+    </select>
+  </label>
+  <p class="hint">Used to suggest local pack sizes and, later, weather and public holidays.</p>
+  <div class="buttons">
+    <button type="submit">Save</button>
+    {% if next_url %}<button class="quiet" type="button" data-close-dialog>Cancel</button>{% endif %}
+  </div>
+</form>

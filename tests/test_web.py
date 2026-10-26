@@ -1,3 +1,5 @@
+import json
+import re
 from datetime import date
 
 import pytest
@@ -41,6 +43,13 @@ def add(
             **({"no_expiry": "on"} if no_expiry else {}),
         },
     )
+
+
+def suggestions(client):
+    """The remembered-ingredient data the page hands to its script."""
+    page = client.get("/").text
+    match = re.search(r"const suggestions = (.*?);$", page, re.MULTILINE)
+    return json.loads(match.group(1))
 
 
 def stored(db_path):
@@ -188,20 +197,20 @@ def test_bad_expiry_is_rejected(client, db_path, bad):
 
 def test_relative_expiry_is_remembered_and_offered_next_time(client):
     add(client, "spinach", "1", "count", "fridge", in_amount="1", in_unit="weeks")
-    page = client.get("/").text
-    assert '"spinach": {"shelf_life": {"amount": 1, "unit": "weeks"}, "unit": "count"}' in page
+    assert suggestions(client)["spinach"]["shelf_life"] == {"amount": 1, "unit": "weeks"}
+    assert suggestions(client)["spinach"]["unit"] == "count"
 
 
 def test_a_calendar_date_does_not_overwrite_the_remembered_shelf_life(client):
     add(client, "spinach", "1", "count", "fridge", in_amount="1", in_unit="weeks")
     add(client, "spinach", "1", "count", "fridge", expires_on="2026-11-20")
-    assert '"shelf_life": {"amount": 1, "unit": "weeks"}' in client.get("/").text
+    assert suggestions(client)["spinach"]["shelf_life"] == {"amount": 1, "unit": "weeks"}
 
 
 def test_no_expiry_does_not_overwrite_the_remembered_shelf_life(client):
     add(client, "spinach", "1", "count", "fridge", in_amount="1", in_unit="weeks")
     add(client, "spinach", "1", "count", "fridge", no_expiry=True)
-    assert '"shelf_life": {"amount": 1, "unit": "weeks"}' in client.get("/").text
+    assert suggestions(client)["spinach"]["shelf_life"] == {"amount": 1, "unit": "weeks"}
 
 
 def test_form_labels_say_what_each_field_is(client):
@@ -216,4 +225,67 @@ def test_ingredients_added_before_are_suggested(client):
     page = client.get("/").text
     assert '<datalist id="ingredient-suggestions">' in page
     assert '<option value="flour">' in page and '<option value="milk">' in page
-    assert '"milk": {"shelf_life": null, "unit": "ml"}' in page
+    assert suggestions(client)["milk"]["unit"] == "ml"
+    assert suggestions(client)["milk"]["shelf_life"] is None
+
+
+def test_the_last_quantity_entered_is_offered_next_time(client):
+    add(client, "lettuce", "2.5", "head", "fridge")
+    assert suggestions(client)["lettuce"]["last"] == {"quantity": 2.5, "unit": "head"}
+
+
+def test_settings_page_lists_countries_with_not_set_selected_at_first(client):
+    response = client.get("/settings")
+    assert response.status_code == 200
+    assert '<option value="AU">Australia</option>' in response.text
+    assert '<option value="" selected>Not set</option>' in response.text
+    assert '<option value="AU" selected>' not in response.text
+
+
+def test_saving_the_household_country(client, db_path):
+    response = client.post("/settings", data={"country": "AU"})
+    assert response.status_code == 303
+    with StockRepository(db_path) as repo:
+        assert repo.household_country() == "AU"
+    assert '<option value="AU" selected>Australia</option>' in client.get("/settings").text
+
+
+def test_an_unknown_country_is_an_error_on_the_settings_page(client, db_path):
+    response = client.post("/settings", data={"country": "ZZ"})
+    assert response.status_code == 400
+    assert 'class="error"' in response.text
+    with StockRepository(db_path) as repo:
+        assert repo.household_country() is None
+
+
+def test_the_stock_page_links_to_settings(client):
+    assert 'href="/settings"' in client.get("/").text
+
+
+def test_settings_open_as_an_overlay_on_the_stock_page(client):
+    page = client.get("/").text
+    assert '<dialog id="settings-dialog"' in page
+    assert 'name="country"' in page.split('<dialog id="settings-dialog"')[1]
+    assert '<input type="hidden" name="next" value="/">' in page
+
+
+def test_saving_from_the_overlay_returns_to_the_stock_page(client, db_path):
+    response = client.post("/settings", data={"country": "NZ", "next": "/"})
+    assert response.status_code == 303
+    assert response.headers["location"] == "/?saved=1"
+    with StockRepository(db_path) as repo:
+        assert repo.household_country() == "NZ"
+    assert "Settings saved" in client.get("/?saved=1").text
+    assert "Settings saved" not in client.get("/").text
+
+
+@pytest.mark.parametrize("target", ["//evil.example", "https://evil.example", "/items"])
+def test_the_overlay_cannot_redirect_anywhere_but_the_stock_page(client, target):
+    response = client.post("/settings", data={"country": "NZ", "next": target})
+    assert response.headers["location"] == "/settings?saved=1"
+
+
+def test_the_overlay_shows_the_saved_country(client):
+    client.post("/settings", data={"country": "AU"})
+    page = client.get("/").text.split('<dialog id="settings-dialog"')[1]
+    assert '<option value="AU" selected>Australia</option>' in page

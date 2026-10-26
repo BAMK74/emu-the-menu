@@ -4,7 +4,7 @@ from datetime import date
 
 import pytest
 
-from emu_the_menu.repository import ItemNotFoundError, StockRepository
+from emu_the_menu.repository import ItemNotFoundError, LastEntry, StockRepository
 from emu_the_menu.shelf_life import ShelfLife, ShelfLifeUnit
 from emu_the_menu.stock import InsufficientStockError, Location, StockItem
 from emu_the_menu.units import BaseUnit, IncompatibleUnitError, UnknownUnitError
@@ -176,3 +176,71 @@ def test_changing_the_base_unit_rejects_an_unknown_unit(repo):
     with pytest.raises(UnknownUnitError):
         repo.change_base_unit("chicken", "furlong")
     assert repo.list_items()[0].base_unit == BaseUnit.MILLILITRE
+
+
+def test_the_last_quantity_and_unit_entered_are_remembered(repo):
+    repo.add("Kale", 2, " Bunch ", Location.FRIDGE)
+    assert repo.ingredients()[0].last_entry == LastEntry(2, "bunch")
+    repo.add("kale", 1.5, "head", Location.FRIDGE)
+    assert repo.ingredients()[0].last_entry == LastEntry(1.5, "head")
+
+
+def test_a_failed_add_does_not_change_the_remembered_quantity(repo):
+    repo.add("milk", 1, "l", Location.FRIDGE)
+    with pytest.raises(IncompatibleUnitError):
+        repo.add("milk", 9, "g", Location.FRIDGE)
+    assert repo.ingredients()[0].last_entry == LastEntry(1, "l")
+
+
+def test_changing_the_base_unit_forgets_the_remembered_quantity(repo):
+    repo.add("chicken", 500, "ml", Location.FRIDGE)
+    repo.change_base_unit("chicken", "g")
+    assert repo.ingredients()[0].last_entry is None
+
+
+def test_an_old_database_without_last_entry_columns_is_upgraded(tmp_path):
+    path = tmp_path / "old.db"
+    db = sqlite3.connect(path)
+    db.executescript(
+        """CREATE TABLE ingredients (id INTEGER PRIMARY KEY,
+               name TEXT NOT NULL UNIQUE COLLATE NOCASE, base_unit TEXT NOT NULL,
+               shelf_life_amount INTEGER, shelf_life_unit TEXT);
+           CREATE TABLE stock_items (id INTEGER PRIMARY KEY,
+               ingredient_id INTEGER NOT NULL REFERENCES ingredients(id),
+               quantity REAL NOT NULL, location TEXT NOT NULL, expires_on TEXT);
+           INSERT INTO ingredients (name, base_unit) VALUES ('flour', 'g');"""
+    )
+    db.commit()
+    db.close()
+    with StockRepository(path) as repo:
+        assert repo.ingredients()[0].last_entry is None
+        repo.add("flour", 1, "kg", Location.PANTRY)
+        assert repo.ingredients()[0].last_entry == LastEntry(1, "kg")
+
+
+def test_household_country_starts_unset_and_can_be_saved(repo):
+    assert repo.household_country() is None
+    repo.set_household_country("au")
+    assert repo.household_country() == "AU"
+
+
+def test_household_country_survives_reopening(tmp_path):
+    path = tmp_path / "emu.db"
+    with StockRepository(path) as repo:
+        repo.set_household_country("NZ")
+    with StockRepository(path) as repo:
+        assert repo.household_country() == "NZ"
+
+
+def test_household_country_can_be_changed_and_cleared(repo):
+    repo.set_household_country("AU")
+    repo.set_household_country("GB")
+    assert repo.household_country() == "GB"
+    repo.set_household_country("")
+    assert repo.household_country() is None
+
+
+def test_an_unknown_country_is_rejected(repo):
+    with pytest.raises(ValueError, match="country"):
+        repo.set_household_country("ZZ")
+    assert repo.household_country() is None

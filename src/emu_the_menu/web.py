@@ -9,6 +9,7 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
+from emu_the_menu.countries import COUNTRIES
 from emu_the_menu.repository import ItemNotFoundError, StockRepository
 from emu_the_menu.shelf_life import ShelfLife, ShelfLifeUnit
 from emu_the_menu.stock import Location
@@ -66,6 +67,8 @@ def create_app(
                 "suggestions": {
                     i.name: {
                         "unit": i.base_unit.value,
+                        "last": i.last_entry
+                        and {"quantity": i.last_entry.quantity, "unit": i.last_entry.unit},
                         "shelf_life": i.shelf_life
                         and {"amount": i.shelf_life.amount, "unit": i.shelf_life.unit.value},
                     }
@@ -76,6 +79,9 @@ def create_app(
                 "form": form,
                 "error": error,
                 "warning": warning,
+                "countries": COUNTRIES,
+                "country": repo.household_country(),
+                "saved": request.query_params.get("saved") == "1",
             },
             status_code=400 if error else 409 if warning else 200,
         )
@@ -83,6 +89,39 @@ def create_app(
     @app.get("/", response_class=HTMLResponse)
     def index(request: Request, repo: StockRepository = Depends(get_repo)):
         return page(request, repo, _BLANK_FORM)
+
+    def settings_page(request: Request, repo: StockRepository, error: str | None = None):
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "settings.html",
+            {
+                "countries": COUNTRIES,
+                "country": repo.household_country(),
+                "saved": request.query_params.get("saved") == "1",
+                "error": error,
+            },
+            status_code=400 if error else 200,
+        )
+
+    @app.get("/settings", response_class=HTMLResponse)
+    def settings(request: Request, repo: StockRepository = Depends(get_repo)):
+        return settings_page(request, repo)
+
+    @app.post("/settings")
+    def save_settings(
+        request: Request,
+        country: str = Form(""),
+        next: str = Form(""),
+        repo: StockRepository = Depends(get_repo),
+    ):
+        try:
+            repo.set_household_country(country)
+        except ValueError as exc:
+            return settings_page(request, repo, str(exc))
+        # Only the Stock page may be returned to, so this cannot redirect elsewhere.
+        return RedirectResponse(
+            "/?saved=1" if next == "/" else "/settings?saved=1", status_code=303
+        )
 
     @app.post("/items")
     def add_item(

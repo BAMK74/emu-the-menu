@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+from emu_the_menu.countries import COUNTRIES
 from emu_the_menu.shelf_life import ShelfLife, ShelfLifeUnit
 from emu_the_menu.stock import Location, StockItem, add_stock, reduce_stock, sort_by_expiry
 from emu_the_menu.units import BaseUnit, IncompatibleUnitError, base_unit_for, to_base
@@ -20,7 +21,9 @@ CREATE TABLE IF NOT EXISTS ingredients (
     name      TEXT NOT NULL UNIQUE COLLATE NOCASE,
     base_unit TEXT NOT NULL,
     shelf_life_amount INTEGER,
-    shelf_life_unit   TEXT
+    shelf_life_unit   TEXT,
+    last_quantity     REAL,
+    last_unit         TEXT
 );
 CREATE TABLE IF NOT EXISTS stock_items (
     id            INTEGER PRIMARY KEY,
@@ -29,7 +32,19 @@ CREATE TABLE IF NOT EXISTS stock_items (
     location      TEXT NOT NULL,
     expires_on    TEXT
 );
+CREATE TABLE IF NOT EXISTS settings (
+    key   TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """
+
+# Columns added to `ingredients` after the first release, for upgrading older databases.
+_ADDED_COLUMNS = {
+    "shelf_life_amount": "INTEGER",
+    "shelf_life_unit": "TEXT",
+    "last_quantity": "REAL",
+    "last_unit": "TEXT",
+}
 
 
 class ItemNotFoundError(LookupError):
@@ -37,10 +52,19 @@ class ItemNotFoundError(LookupError):
 
 
 @dataclass(frozen=True)
+class LastEntry:
+    """The quantity and unit text last typed for an Ingredient, such as 2 "bunch"."""
+
+    quantity: float
+    unit: str
+
+
+@dataclass(frozen=True)
 class Ingredient:
     name: str
     base_unit: BaseUnit
     shelf_life: ShelfLife | None = None  # how long it usually keeps, as last entered
+    last_entry: LastEntry | None = None
 
 
 class StockRepository:
@@ -54,9 +78,9 @@ class StockRepository:
         """Add columns that databases created by older versions lack."""
         columns = {row[1] for row in self._db.execute("PRAGMA table_info(ingredients)")}
         with self._db:
-            if "shelf_life_amount" not in columns:
-                self._db.execute("ALTER TABLE ingredients ADD COLUMN shelf_life_amount INTEGER")
-                self._db.execute("ALTER TABLE ingredients ADD COLUMN shelf_life_unit TEXT")
+            for name, sql_type in _ADDED_COLUMNS.items():
+                if name not in columns:
+                    self._db.execute(f"ALTER TABLE ingredients ADD COLUMN {name} {sql_type}")
 
     def __enter__(self) -> "StockRepository":
         return self
@@ -81,18 +105,24 @@ class StockRepository:
     ) -> None:
         """Add Stock. The first add of an Ingredient fixes its base unit from `unit`.
 
-        A `shelf_life` is remembered for the Ingredient, replacing any earlier one,
-        but only if the add succeeds.
+        The quantity and unit typed are remembered for the Ingredient, and so is a
+        `shelf_life` if given, each replacing any earlier one. Nothing is remembered
+        if the add fails.
         """
         self._apply(
             lambda items: add_stock(items, ingredient, quantity, unit, location, expires_on)
         )
-        if shelf_life:
-            with self._db:
+        with self._db:
+            name = ingredient.strip().lower()
+            self._db.execute(
+                "UPDATE ingredients SET last_quantity = ?, last_unit = ? WHERE name = ?",
+                (quantity, unit.strip().lower(), name),
+            )
+            if shelf_life:
                 self._db.execute(
                     "UPDATE ingredients SET shelf_life_amount = ?, shelf_life_unit = ?"
                     " WHERE name = ?",
-                    (shelf_life.amount, shelf_life.unit.value, ingredient.strip().lower()),
+                    (shelf_life.amount, shelf_life.unit.value, name),
                 )
 
     def use(self, ingredient: str, quantity: float, unit: str) -> None:
@@ -117,13 +147,15 @@ class StockRepository:
         """Correct the unit an Ingredient is stored in, such as chicken entered in ml by mistake.
 
         Quantities already in Stock keep their numbers and are read in the new unit,
-        because grams cannot be converted from millilitres. Does nothing if the
+        because grams cannot be converted from millilitres. The remembered quantity
+        is forgotten, as its unit may be in the wrong family. Does nothing if the
         Ingredient is unknown.
         """
         base = base_unit_for(unit)
         with self._db:
             self._db.execute(
-                "UPDATE ingredients SET base_unit = ? WHERE name = ?",
+                "UPDATE ingredients SET base_unit = ?, last_quantity = NULL, last_unit = NULL"
+                " WHERE name = ?",
                 (base.value, ingredient.strip().lower()),
             )
 
@@ -136,7 +168,7 @@ class StockRepository:
     def ingredients(self) -> list[Ingredient]:
         """Every Ingredient ever added, by name, for suggestions."""
         rows = self._db.execute(
-            "SELECT name, base_unit, shelf_life_amount, shelf_life_unit"
+            "SELECT name, base_unit, shelf_life_amount, shelf_life_unit, last_quantity, last_unit"
             " FROM ingredients ORDER BY name"
         )
         return [
@@ -144,9 +176,30 @@ class StockRepository:
                 name,
                 BaseUnit(base_unit),
                 ShelfLife(amount, ShelfLifeUnit(life_unit)) if amount else None,
+                LastEntry(last_quantity, last_unit) if last_unit else None,
             )
-            for name, base_unit, amount, life_unit in rows
+            for name, base_unit, amount, life_unit, last_quantity, last_unit in rows
         ]
+
+    def household_country(self) -> str | None:
+        """The ISO country code the Household lives in, or None if not set yet."""
+        row = self._db.execute("SELECT value FROM settings WHERE key = 'country'").fetchone()
+        return row[0] if row else None
+
+    def set_household_country(self, code: str) -> None:
+        """Save the Household country by ISO code. A blank code clears it."""
+        code = code.strip().upper()
+        if code and code not in COUNTRIES:
+            raise ValueError("Choose a country from the list")
+        with self._db:
+            if code:
+                self._db.execute(
+                    "INSERT INTO settings (key, value) VALUES ('country', ?)"
+                    " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                    (code,),
+                )
+            else:
+                self._db.execute("DELETE FROM settings WHERE key = 'country'")
 
     def _load(self) -> list[StockItem]:
         rows = self._db.execute(
