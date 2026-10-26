@@ -27,6 +27,8 @@ _UNITS: dict[str, tuple[BaseUnit, float]] = {
     "tbsp": (BaseUnit.MILLILITRE, 15),
     "cup": (BaseUnit.MILLILITRE, 240),
     "count": (BaseUnit.COUNT, 1),
+    "bunch": (BaseUnit.COUNT, 1),  # a bunch of kale
+    "head": (BaseUnit.COUNT, 1),  # a head of lettuce
 }
 
 

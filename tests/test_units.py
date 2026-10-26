@@ -21,6 +21,8 @@ from emu_the_menu.units import (
         ("tbsp", BaseUnit.MILLILITRE),
         ("cup", BaseUnit.MILLILITRE),
         ("count", BaseUnit.COUNT),
+        ("bunch", BaseUnit.COUNT),
+        ("head", BaseUnit.COUNT),
     ],
 )
 def test_base_unit_for_each_family(unit, expected):
@@ -39,6 +41,8 @@ def test_base_unit_for_each_family(unit, expected):
         (1, "tbsp", 15),
         (1, "cup", 240),
         (3, "count", 3),
+        (2, "bunch", 2),
+        (1, "head", 1),
     ],
 )
 def test_to_base(quantity, unit, expected):
@@ -70,6 +74,11 @@ def test_convert_within_a_family():
     assert convert(1500, "g", "kg") == pytest.approx(1.5)
     assert convert(2, "cup", "ml") == pytest.approx(480)
     assert convert(1, "l", "tbsp") == pytest.approx(1000 / 15)
+
+
+def test_bunch_and_head_count_as_whole_items():
+    assert convert(2, "bunch", "count") == pytest.approx(2)
+    assert convert(1, "head", "bunch") == pytest.approx(1)
 
 
 def test_convert_across_families_is_rejected():

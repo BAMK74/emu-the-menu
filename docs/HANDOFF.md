@@ -28,10 +28,11 @@ Emu the Menu is a self-hosted household app. It tracks what is in the fridge, fr
 - ADR 0002: PolyForm Noncommercial licence.
 - ADR 0003: swappable OCR provider, starting with local Tesseract.
 - `src/emu_the_menu/repository.py`: `StockRepository`, SQLite storage for Ingredients and Stock Items (add, use, set quantity, delete, list by expiry). Tests in `tests/test_repository.py`.
+- `src/emu_the_menu/shelf_life.py`: `ShelfLife` (N days, weeks or months) with month-end clamping.
 - `src/emu_the_menu/web.py` and `templates/index.html`: FastAPI and Jinja Stock page (add, set quantity, delete, list by expiry) with plain POST-redirect-GET forms. Tests in `tests/test_web.py`.
 - Project scaffold: `pyproject.toml` pinned to Python 3.13, `uv.lock`, `.gitignore`, `.gitattributes` (LF line endings) and `README.md`.
 - `src/emu_the_menu/units.py` and `stock.py`: the pure stock rules, with docstrings that define the behaviour.
-- `tests/test_units.py`, `tests/test_stock.py` and `tests/test_repository.py`: 64 tests, all passing.
+- `tests/test_units.py`, `tests/test_stock.py`, `tests/test_repository.py`, `tests/test_shelf_life.py` and `tests/test_web.py`: 106 tests, all passing.
 
 **Raspberry Pi** (`pi-host`, Tailscale IP 100.64.0.1, SSH user `pi-user`, key login works):
 
@@ -43,19 +44,26 @@ Emu the Menu is a self-hosted household app. It tracks what is in the fridge, fr
 
 ## In progress
 
-Nothing. Slice 1 is done, including SQLite storage and the Stock web forms, with `uv run pytest` passing all 64 tests on Python 3.13 and `ruff` clean. Claude wrote the implementations at Kevin's request.
+Nothing. Slice 1 is done, including SQLite storage and the Stock web forms, with `uv run pytest` passing all 106 tests on Python 3.13 and `ruff` clean. Claude wrote the implementations at Kevin's request.
 
 Choices to know about: 1 tsp = 5 ml, 1 tbsp = 15 ml, 1 cup = 240 ml. `reduce_stock` uses the earliest expiry first, with no-expiry items last. Ingredient names are stored lowercased and stripped. Quantities are floats, and amounts below 1e-9 count as zero. Mixing unit families for one Ingredient raises `IncompatibleUnitError`, in both `add_stock` and `reduce_stock`.
 
 Storage: `StockItem` has an optional `id`, which is `None` until stored. `StockRepository` runs the pure stock rules inside one transaction and writes back only the changed rows. The first add of an Ingredient fixes its base unit from the unit typed, so there is no separate create-Ingredient step. A dedicated form could replace that later. The repository takes a database path, and nothing points at `/mnt/emu/db` yet.
 
-Web: `create_app(db_path)` in `web.py` reads `EMU_DB` (default `emu.db`). Run locally with `uv run uvicorn emu_the_menu.web:create_app --factory`. Each request opens its own repository. There is no HTMX, no login and no "cooked" action yet, and quantity changes are a manual set. `set_quantity` and `delete` raise `ItemNotFoundError` for a missing id.
+Web: `create_app(db_path, today)` in `web.py` reads `EMU_DB` (default `emu.db`). Run locally with `uv run uvicorn emu_the_menu.web:create_app --factory`, optionally with `--host <tailscale ip>` to try it on a phone. Each request opens its own repository. There is no HTMX, no login and no "cooked" action yet, and quantity changes are a manual set.
+
+Add form, as tried on a phone:
+- Units include `bunch` and `head`, which count as whole items.
+- Expiry is one row: a calendar date, or "in N days/weeks/months", or a "No expiry" checkbox. They are alternatives, and the server rejects a date plus a number. Entering "in N ..." remembers that shelf life for the Ingredient (`ingredients.shelf_life_*`), and picking the Ingredient later pre-fills it. A calendar date or "No expiry" never overwrites it. Older databases are upgraded on open.
+- The Ingredient box suggests every Ingredient ever added and pre-selects its unit.
+- A unit-family clash (for example chicken first entered in ml, then added in g) is a 409 warning with a one-tap fix, "Store chicken in g instead". The fix calls `repo.change_base_unit`, which keeps existing numbers (500 ml becomes 500 g) because the families cannot convert. The Set form on an item row does the same. Other bad input is a red 400 error.
+- Layout is a narrow centred card on phones and a roomier one from 640px, with dark mode.
 
 `uv` is at `%LOCALAPPDATA%\Microsoft\WinGet\Links\uv.exe` and may not be on PATH in every shell.
 
 ## Next steps
 
-1. **Try the forms on a phone**, then fix whatever feels wrong. Consider a "use" action that calls `repo.use`, and HTMX if full-page reloads annoy.
+1. **Quantity and pack-size lookup.** Kevin wants two things based on where the household lives: a typical amount per Ingredient (1 bunch of kale, 1 head of lettuce) and the pack size from a barcode through Open Food Facts. Nothing exists yet. It needs a Household location setting first, which weather and holidays will also use. No reputable online source for typical amounts was found, so start with the last quantity bought per Ingredient, as shelf life already works, and decide whether to add a built-in produce table. Record the decision in an ADR.
 2. **Deploy to the Pi.** Install `uv` there (it installs without root), pull from GitHub, and run as a systemd service. Find out what is already using about 900 MB of RAM first.
 3. **Slice 2 (household).** Household login, Eaters, Categories and the Adult/Teen/Child permissions.
 4. **Later slices.** Recipes, then Menu generation, Occasions and weather, then the Shopping List, then barcode scanning and OCR.

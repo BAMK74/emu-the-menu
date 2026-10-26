@@ -1,11 +1,13 @@
+import sqlite3
 from dataclasses import replace
 from datetime import date
 
 import pytest
 
 from emu_the_menu.repository import ItemNotFoundError, StockRepository
+from emu_the_menu.shelf_life import ShelfLife, ShelfLifeUnit
 from emu_the_menu.stock import InsufficientStockError, Location, StockItem
-from emu_the_menu.units import BaseUnit, IncompatibleUnitError
+from emu_the_menu.units import BaseUnit, IncompatibleUnitError, UnknownUnitError
 
 SOON = date(2026, 10, 28)
 LATER = date(2026, 11, 15)
@@ -100,3 +102,77 @@ def test_missing_item_raises(repo):
         repo.delete(999)
     with pytest.raises(ItemNotFoundError):
         repo.set_quantity(999, 1, "g")
+
+
+def test_ingredients_remember_everything_ever_added(repo):
+    repo.add("flour", 100, "g", Location.PANTRY)
+    repo.add("milk", 1, "l", Location.FRIDGE)
+    [flour] = [i for i in repo.list_items() if i.ingredient == "flour"]
+    repo.delete(flour.id)
+    assert [(i.name, i.base_unit) for i in repo.ingredients()] == [
+        ("flour", BaseUnit.GRAM),
+        ("milk", BaseUnit.MILLILITRE),
+    ]
+
+
+def test_shelf_life_is_remembered_per_ingredient(repo):
+    week = ShelfLife(1, ShelfLifeUnit.WEEK)
+    repo.add("Spinach", 1, "count", Location.FRIDGE, SOON, shelf_life=week)
+    repo.add("flour", 1, "kg", Location.PANTRY)
+    by_name = {i.name: i for i in repo.ingredients()}
+    assert by_name["spinach"].shelf_life == week
+    assert by_name["flour"].shelf_life is None
+
+
+def test_a_newer_shelf_life_replaces_the_old_one(repo):
+    repo.add("spinach", 1, "count", Location.FRIDGE, shelf_life=ShelfLife(1, ShelfLifeUnit.WEEK))
+    repo.add("spinach", 1, "count", Location.FRIDGE, shelf_life=ShelfLife(3, ShelfLifeUnit.DAY))
+    [spinach] = repo.ingredients()
+    assert spinach.shelf_life == ShelfLife(3, ShelfLifeUnit.DAY)
+
+
+def test_a_failed_add_remembers_nothing(repo):
+    repo.add("milk", 1, "l", Location.FRIDGE)
+    with pytest.raises(IncompatibleUnitError):
+        repo.add("milk", 1, "g", Location.FRIDGE, shelf_life=ShelfLife(1, ShelfLifeUnit.DAY))
+    assert repo.ingredients()[0].shelf_life is None
+
+
+def test_an_old_database_without_shelf_life_columns_is_upgraded(tmp_path):
+    path = tmp_path / "old.db"
+    db = sqlite3.connect(path)
+    db.executescript(
+        """CREATE TABLE ingredients (id INTEGER PRIMARY KEY,
+               name TEXT NOT NULL UNIQUE COLLATE NOCASE, base_unit TEXT NOT NULL);
+           CREATE TABLE stock_items (id INTEGER PRIMARY KEY,
+               ingredient_id INTEGER NOT NULL REFERENCES ingredients(id),
+               quantity REAL NOT NULL, location TEXT NOT NULL, expires_on TEXT);
+           INSERT INTO ingredients (name, base_unit) VALUES ('flour', 'g');"""
+    )
+    db.commit()
+    db.close()
+    with StockRepository(path) as repo:
+        assert repo.ingredients()[0].shelf_life is None
+        repo.add("flour", 1, "kg", Location.PANTRY, shelf_life=ShelfLife(2, ShelfLifeUnit.MONTH))
+        assert repo.ingredients()[0].shelf_life == ShelfLife(2, ShelfLifeUnit.MONTH)
+
+
+def test_changing_the_base_unit_keeps_the_numbers_and_fixes_the_unit(repo):
+    repo.add("chicken", 500, "ml", Location.FRIDGE)
+    repo.change_base_unit("Chicken", "kg")
+    [item] = repo.list_items()
+    assert (item.quantity, item.base_unit) == (500, BaseUnit.GRAM)
+    repo.add("chicken", 1, "kg", Location.FRIDGE)
+    assert repo.list_items()[0].quantity == pytest.approx(1500)
+
+
+def test_changing_the_base_unit_of_an_unknown_ingredient_does_nothing(repo):
+    repo.change_base_unit("chicken", "g")
+    assert repo.ingredients() == []
+
+
+def test_changing_the_base_unit_rejects_an_unknown_unit(repo):
+    repo.add("chicken", 500, "ml", Location.FRIDGE)
+    with pytest.raises(UnknownUnitError):
+        repo.change_base_unit("chicken", "furlong")
+    assert repo.list_items()[0].base_unit == BaseUnit.MILLILITRE

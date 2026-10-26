@@ -5,36 +5,209 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Emu the Menu - Stock</title>
   <style>
-    body { font-family: system-ui, sans-serif; margin: 0 auto; padding: 1rem; max-width: 40rem; }
-    h1 { font-size: 1.4rem; }
-    form.add { display: grid; gap: .5rem; margin-bottom: 1.5rem; }
-    input, select, button { font: inherit; padding: .6rem; }
-    .error { background: #fde8e8; border: 1px solid #c0392b; padding: .6rem; margin-bottom: 1rem; }
-    ul { list-style: none; padding: 0; }
-    li { border-bottom: 1px solid #ddd; padding: .6rem 0; }
-    li .meta { color: #666; font-size: .9rem; }
-    li form { display: inline-flex; gap: .3rem; margin-top: .4rem; }
-    li input[type=number] { width: 6rem; }
+    :root {
+      --bg: #f4f6f3; --card: #ffffff; --text: #1f2a24; --muted: #66756c;
+      --line: #d5ddd7; --accent: #3f7d58; --accent-text: #ffffff; --danger: #b3392c;
+      --danger-bg: #fbeae8; --warn: #e0a526; --warn-bg: #fdf3da; --radius: .6rem; --field: 2.3rem;
+    }
+    @media (prefers-color-scheme: dark) {
+      :root {
+        --bg: #151a17; --card: #1e2521; --text: #e6ece8; --muted: #93a39a;
+        --line: #33403a; --accent: #5aa578; --accent-text: #0e1612; --danger: #e5766a;
+        --danger-bg: #3a2220; --warn-bg: #3a3118;
+      }
+    }
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, sans-serif; background: var(--bg); color: var(--text);
+      margin: 0; padding: 1rem; display: flex; flex-direction: column; align-items: center;
+    }
+    main { width: 100%; max-width: 22rem; }
+    h1 { font-size: 1.25rem; margin: .2rem 0 .8rem; }
+
+    input, select, button { font: inherit; font-size: .9rem; color: var(--text); }
+    input:not([type=checkbox]), select {
+      height: var(--field); width: 100%; min-width: 0; padding: 0 .6rem;
+      background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+    }
+    input:focus-visible, select:focus-visible, button:focus-visible {
+      outline: 2px solid var(--accent); outline-offset: 1px;
+    }
+    input:disabled, select:disabled { opacity: .45; }
+    button {
+      height: var(--field); padding: 0 .9rem; border-radius: var(--radius); cursor: pointer;
+      background: var(--accent); color: var(--accent-text); border: 0; font-weight: 600;
+    }
+    button.quiet { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 400; }
+
+    .error {
+      background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger);
+      border-radius: var(--radius); padding: .5rem .7rem; margin: 0 0 .8rem; font-size: .9rem;
+    }
+
+    .warning {
+      background: var(--warn-bg); color: var(--text); border: 1px solid var(--warn);
+      border-radius: var(--radius); padding: .7rem .8rem; margin: 0 0 .8rem; font-size: .9rem;
+    }
+    .warning p { margin: 0 0 .5rem; }
+    .warning p.hint { margin: .5rem 0 0; font-size: .8rem; color: var(--muted); }
+    .warning button { width: 100%; background: var(--warn); color: #1f1a0a; }
+
+    form.add {
+      display: grid; gap: .6rem; padding: .9rem; margin-bottom: 1.2rem;
+      background: var(--card); border: 1px solid var(--line); border-radius: calc(var(--radius) + .2rem);
+    }
+    form.add label, form.add legend {
+      display: grid; gap: .2rem; font-size: .75rem; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .03em;
+    }
+    .pair { display: grid; grid-template-columns: 1fr 1fr; gap: .6rem; }
+    fieldset.expiry { border: 0; padding: 0; margin: 0; min-width: 0; }
+    fieldset.expiry legend { padding: 0; margin-bottom: .2rem; display: block; }
+    .expiry-row {
+      display: flex; align-items: center; gap: .3rem; font-size: .8rem; color: var(--muted);
+      white-space: nowrap;
+    }
+    .expiry-row input, .expiry-row select { font-size: .8rem; padding: 0 .3rem; }
+    .expiry-row input[type=date] { flex: 1 1 6rem; min-width: 5.2rem; max-width: 7.5rem; }
+    .expiry-row input[type=number] { flex: 0 0 2.6rem; text-align: center; }
+    .expiry-row select { flex: 0 0 4.6rem; }
+    form.add label.no-expiry {
+      display: flex; align-items: center; gap: .25rem; margin-left: auto; text-transform: none;
+      letter-spacing: 0; font-size: .8rem; font-weight: 400;
+    }
+    form.add label.no-expiry input { margin: 0; accent-color: var(--accent); }
+
+    ul { list-style: none; padding: 0; margin: 0; display: grid; gap: .6rem; }
+    li {
+      background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: .6rem .8rem;
+    }
+    li .meta { color: var(--muted); font-size: .8rem; margin-top: .1rem; }
+    li .actions { display: flex; gap: .4rem; margin-top: .5rem; }
+    li .actions form { display: flex; gap: .3rem; }
+    li .actions input[type=number] { width: 4.6rem; }
+    li .actions select { width: 4.8rem; }
+    li .actions button { height: 2rem; padding: 0 .7rem; font-size: .8rem; }
+    li .actions form:last-child { margin-left: auto; }
+    .empty { color: var(--muted); text-align: center; }
+
+    /* Computers and tablets: more room, larger text. */
+    @media (min-width: 640px) {
+      :root { --field: 2.7rem; }
+      body { padding: 2rem 1rem; }
+      main { max-width: 34rem; }
+      h1 { font-size: 1.5rem; margin-bottom: 1rem; }
+      input, select, button { font-size: 1rem; }
+      form.add { padding: 1.4rem; gap: .9rem; }
+      form.add label, form.add legend { font-size: .8rem; }
+      .pair { gap: .9rem; }
+      .expiry-row { gap: .6rem; font-size: .95rem; }
+      .expiry-row input, .expiry-row select { font-size: 1rem; padding: 0 .6rem; }
+      .expiry-row input[type=date] { flex: 0 0 10rem; max-width: none; }
+      .expiry-row input[type=number] { flex: 0 0 3.8rem; }
+      .expiry-row select { flex: 0 0 6.5rem; }
+      form.add label.no-expiry { font-size: .95rem; gap: .4rem; }
+      li { padding: .9rem 1.1rem; }
+      li .meta { font-size: .9rem; }
+      li .actions { margin-top: .7rem; }
+      li .actions input[type=number] { width: 6rem; }
+      li .actions select { width: 6.5rem; }
+      li .actions button { height: 2.4rem; font-size: .95rem; }
+    }
   </style>
 </head>
 <body>
+<main>
   <h1>Stock</h1>
 
   {% if error %}<p class="error" role="alert">error: {{ error }}</p>{% endif %}
+  {% if warning %}
+  <div class="warning" role="alert">
+    <p>{{ warning.message }}</p>
+    <form method="post" action="{{ warning.action }}">
+      {% for key, value in warning.fields.items() %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
+      <button type="submit">{{ warning.button }}</button>
+    </form>
+    <p class="hint">Amounts already in stock keep their numbers. You can fix them with Set.</p>
+  </div>
+  {% endif %}
 
   <form class="add" method="post" action="/items">
-    <input name="ingredient" placeholder="Ingredient" value="{{ form.ingredient }}" required>
-    <input name="quantity" type="number" step="any" min="0" inputmode="decimal"
-           placeholder="Quantity" value="{{ form.quantity }}" required>
-    <select name="unit" aria-label="Unit">
-      {% for u in units %}<option value="{{ u }}" {{ "selected" if u == form.unit }}>{{ u }}</option>{% endfor %}
-    </select>
-    <select name="location" aria-label="Location">
-      {% for l in locations %}<option value="{{ l }}" {{ "selected" if l == form.location }}>{{ l }}</option>{% endfor %}
-    </select>
-    <input name="expires_on" type="date" aria-label="Expiry date" value="{{ form.expires_on }}">
+    <label>Ingredient
+      <input id="ingredient" name="ingredient" list="ingredient-suggestions" autocomplete="off"
+             value="{{ form.ingredient }}" required>
+    </label>
+    <datalist id="ingredient-suggestions">
+      {% for name in suggestions %}<option value="{{ name }}">{% endfor %}
+    </datalist>
+    <div class="pair">
+      <label>Quantity
+        <input name="quantity" type="number" step="any" min="0" inputmode="decimal"
+               value="{{ form.quantity }}" required>
+      </label>
+      <label>Unit
+        <select id="unit" name="unit">
+          {% for u in units %}<option value="{{ u }}" {{ "selected" if u == form.unit }}>{{ u }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    <label>Where
+      <select name="location">
+        {% for l in locations %}<option value="{{ l }}" {{ "selected" if l == form.location }}>{{ l }}</option>{% endfor %}
+      </select>
+    </label>
+    <fieldset class="expiry">
+      <legend>Expires</legend>
+      <div class="expiry-row">
+        <input id="expires-on" name="expires_on" type="date" aria-label="Expiry date"
+               value="{{ form.expires_on }}">
+        <span>or in</span>
+        <input id="in-amount" name="in_amount" type="number" min="1" step="1" inputmode="numeric"
+               aria-label="Number" value="{{ form.in_amount }}">
+        <select id="in-unit" name="in_unit" aria-label="Days, weeks or months">
+          {% for u in shelf_life_units %}<option value="{{ u }}" {{ "selected" if u == form.in_unit }}>{{ u }}</option>{% endfor %}
+        </select>
+        <label class="no-expiry">
+          <input id="no-expiry" name="no_expiry" type="checkbox" value="on" {{ "checked" if form.no_expiry }}>
+          No expiry
+        </label>
+      </div>
+    </fieldset>
     <button type="submit">Add to stock</button>
   </form>
+  <script>
+    const suggestions = {{ suggestions|tojson }};
+    const $ = (id) => document.getElementById(id);
+
+    // The date, the number of days/weeks/months and "No expiry" are alternatives:
+    // using one clears the others.
+    function setNoExpiry(on) {
+      $("no-expiry").checked = on;
+      $("expires-on").disabled = on;
+      $("in-amount").disabled = on;
+      $("in-unit").disabled = on;
+      if (on) { $("expires-on").value = ""; $("in-amount").value = ""; }
+    }
+    $("no-expiry").addEventListener("change", (event) => setNoExpiry(event.target.checked));
+    $("expires-on").addEventListener("input", () => { $("in-amount").value = ""; });
+    $("in-amount").addEventListener("input", () => { $("expires-on").value = ""; });
+    setNoExpiry($("no-expiry").checked);
+
+    // Picking a remembered ingredient fills in the unit it is stored in and,
+    // if it was last added with "in N days/weeks/months", that shelf life too.
+    $("ingredient").addEventListener("input", (event) => {
+      const known = suggestions[event.target.value.trim().toLowerCase()];
+      if (!known) return;
+      $("unit").value = known.unit;
+      if (known.shelf_life) {
+        setNoExpiry(false);
+        $("expires-on").value = "";
+        $("in-amount").value = known.shelf_life.amount;
+        $("in-unit").value = known.shelf_life.unit;
+      }
+    });
+  </script>
 
   {% if items %}
   <ul>
@@ -43,23 +216,26 @@
       <strong>{{ item.ingredient }}</strong>
       {{ "%g"|format(item.quantity) }} {{ item.base_unit.value }}
       <div class="meta">{{ item.location.value }} &middot;
-        {% if item.expires_on %}expires {{ item.expires_on.isoformat() }}{% else %}no expiry{% endif %}</div>
-      <form method="post" action="/items/{{ item.id }}/quantity">
-        <input name="quantity" type="number" step="any" min="0" inputmode="decimal"
-               aria-label="New quantity" value="{{ "%g"|format(item.quantity) }}" required>
-        <select name="unit" aria-label="Unit">
-          {% for u in units %}<option value="{{ u }}" {{ "selected" if u == item.base_unit.value }}>{{ u }}</option>{% endfor %}
-        </select>
-        <button type="submit">Set</button>
-      </form>
-      <form method="post" action="/items/{{ item.id }}/delete">
-        <button type="submit">Delete</button>
-      </form>
+        {% if item.expires_on %}expires {{ item.expires_on.strftime("%d/%m/%Y") }}{% else %}no expiry{% endif %}</div>
+      <div class="actions">
+        <form method="post" action="/items/{{ item.id }}/quantity">
+          <input name="quantity" type="number" step="any" min="0" inputmode="decimal"
+                 aria-label="New quantity" value="{{ "%g"|format(item.quantity) }}" required>
+          <select name="unit" aria-label="Unit">
+            {% for u in units %}<option value="{{ u }}" {{ "selected" if u == item.base_unit.value }}>{{ u }}</option>{% endfor %}
+          </select>
+          <button type="submit">Set</button>
+        </form>
+        <form method="post" action="/items/{{ item.id }}/delete">
+          <button class="quiet" type="submit">Delete</button>
+        </form>
+      </div>
     </li>
     {% endfor %}
   </ul>
   {% else %}
-  <p>Nothing in stock yet.</p>
+  <p class="empty">Nothing in stock yet.</p>
   {% endif %}
+</main>
 </body>
 </html>
