@@ -10,6 +10,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 
 from emu_the_menu.countries import COUNTRIES
+from emu_the_menu.openfoodfacts import Fetch, LookupUnavailableError, find_product, http_fetch
 from emu_the_menu.repository import ItemNotFoundError, StockRepository
 from emu_the_menu.shelf_life import ShelfLife, ShelfLifeUnit
 from emu_the_menu.stock import Location
@@ -17,6 +18,7 @@ from emu_the_menu.units import IncompatibleUnitError, known_units
 
 _TEMPLATES = Jinja2Templates(directory=Path(__file__).parent / "templates")
 _BLANK_FORM = {
+    "barcode": "",
     "ingredient": "",
     "quantity": "",
     "unit": "g",
@@ -41,7 +43,9 @@ def _unit_warning(
 
 
 def create_app(
-    db_path: str | Path | None = None, today: Callable[[], date] = date.today
+    db_path: str | Path | None = None,
+    today: Callable[[], date] = date.today,
+    fetch_product: Fetch = http_fetch,
 ) -> FastAPI:
     path = db_path or os.environ.get("EMU_DB", "emu.db")
     app = FastAPI(title="Emu the Menu")
@@ -57,6 +61,7 @@ def create_app(
         form: dict,
         error: str | None = None,
         warning: dict | None = None,
+        notice: str | None = None,
     ):
         return _TEMPLATES.TemplateResponse(
             request,
@@ -79,6 +84,7 @@ def create_app(
                 "form": form,
                 "error": error,
                 "warning": warning,
+                "notice": notice,
                 "countries": COUNTRIES,
                 "country": repo.household_country(),
                 "saved": request.query_params.get("saved") == "1",
@@ -123,9 +129,55 @@ def create_app(
             "/?saved=1" if next == "/" else "/settings?saved=1", status_code=303
         )
 
+    @app.post("/lookup")
+    def look_up_barcode(
+        request: Request,
+        barcode: str = Form(""),
+        ingredient: str = Form(""),
+        quantity: str = Form(""),
+        unit: str = Form(""),
+        location: str = Form(""),
+        expires_on: str = Form(""),
+        in_amount: str = Form(""),
+        in_unit: str = Form("days"),
+        no_expiry: str = Form(""),
+        repo: StockRepository = Depends(get_repo),
+    ):
+        """Fill in the Add form from a barcode. Never changes Stock: the user confirms."""
+        form = {
+            "barcode": barcode,
+            "ingredient": ingredient,
+            "quantity": quantity,
+            "unit": unit,
+            "location": location,
+            "expires_on": expires_on,
+            "in_amount": in_amount,
+            "in_unit": in_unit,
+            "no_expiry": no_expiry,
+        }
+        try:
+            info = find_product(barcode, repo, fetch_product)
+        except ValueError as exc:
+            return page(request, repo, form, str(exc))
+        except LookupUnavailableError:
+            notice = "Could not reach Open Food Facts. Enter the quantity by hand."
+            return page(request, repo, form, notice=notice)
+        if info is None:
+            return page(request, repo, form, notice="No product found for that barcode.")
+        if info.name and not ingredient.strip():
+            form["ingredient"] = info.name
+        found = f"Found {info.name or 'a product'}"
+        if info.quantity:
+            form["quantity"], form["unit"] = f"{info.quantity:g}", info.unit
+            notice = f"{found}: pack size {info.quantity:g} {info.unit}."
+        else:
+            notice = f"{found}, but it has no pack size listed. Enter the quantity by hand."
+        return page(request, repo, form, notice=f"{notice} Data from Open Food Facts.")
+
     @app.post("/items")
     def add_item(
         request: Request,
+        barcode: str = Form(""),
         ingredient: str = Form(""),
         quantity: str = Form(""),
         unit: str = Form(""),
@@ -138,6 +190,7 @@ def create_app(
         repo: StockRepository = Depends(get_repo),
     ):
         form = {
+            "barcode": barcode,
             "ingredient": ingredient,
             "quantity": quantity,
             "unit": unit,

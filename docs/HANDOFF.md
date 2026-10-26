@@ -23,17 +23,19 @@ Emu the Menu is a self-hosted household app. It tracks what is in the fridge, fr
 
 **Repo** (branch `main`, pushed):
 
-- `LICENSE.md`, `NOTICE.md` (copyright line says BAMK74, so check that is the name you want), `GLOSSARY.md` with 13 terms.
+- `LICENSE.md`, `NOTICE.md` (copyright line says BAMK74, so check that is the name you want), `GLOSSARY.md` with 14 terms.
 - ADR 0001: Python, FastAPI, SQLite and HTMX on a Pi 5.
 - ADR 0002: PolyForm Noncommercial licence.
 - ADR 0003: swappable OCR provider, starting with local Tesseract.
+- ADR 0004: Open Food Facts for barcode lookup.
 - `src/emu_the_menu/repository.py`: `StockRepository`, SQLite storage for Ingredients and Stock Items (add, use, set quantity, delete, list by expiry). Tests in `tests/test_repository.py`.
+- `src/emu_the_menu/openfoodfacts.py`: barcode lookup (`find_product`, `ProductInfo`, `http_fetch`), standard library only. Tests in `tests/test_openfoodfacts.py` use a fake fetcher and never touch the network.
 - `src/emu_the_menu/countries.py`: the 49 countries a Household can pick, by ISO code.
 - `src/emu_the_menu/shelf_life.py`: `ShelfLife` (N days, weeks or months) with month-end clamping.
 - `src/emu_the_menu/web.py` and `templates/index.html`: FastAPI and Jinja Stock page (add, set quantity, delete, list by expiry) with plain POST-redirect-GET forms. Tests in `tests/test_web.py`.
 - Project scaffold: `pyproject.toml` pinned to Python 3.13, `uv.lock`, `.gitignore`, `.gitattributes` (LF line endings) and `README.md`.
 - `src/emu_the_menu/units.py` and `stock.py`: the pure stock rules, with docstrings that define the behaviour.
-- `tests/test_units.py`, `tests/test_stock.py`, `tests/test_repository.py`, `tests/test_shelf_life.py` and `tests/test_web.py`: 125 tests, all passing.
+- `tests/test_units.py`, `tests/test_stock.py`, `tests/test_repository.py`, `tests/test_shelf_life.py` and `tests/test_web.py`: 157 tests, all passing.
 
 **Raspberry Pi** (`pi-host`, Tailscale IP 100.64.0.1, SSH user `pi-user`, key login works):
 
@@ -45,7 +47,7 @@ Emu the Menu is a self-hosted household app. It tracks what is in the fridge, fr
 
 ## In progress
 
-Nothing. Slice 1 is done, including SQLite storage and the Stock web forms, with `uv run pytest` passing all 125 tests on Python 3.13 and `ruff` clean. Claude wrote the implementations at Kevin's request.
+Nothing. Slice 1 is done, including SQLite storage and the Stock web forms, with `uv run pytest` passing all 157 tests on Python 3.13 and `ruff` clean. Claude wrote the implementations at Kevin's request.
 
 Choices to know about: 1 tsp = 5 ml, 1 tbsp = 15 ml, 1 cup = 240 ml. `reduce_stock` uses the earliest expiry first, with no-expiry items last. Ingredient names are stored lowercased and stripped. Quantities are floats, and amounts below 1e-9 count as zero. Mixing unit families for one Ingredient raises `IncompatibleUnitError`, in both `add_stock` and `reduce_stock`.
 
@@ -60,13 +62,14 @@ Add form, as tried on a phone:
 - A unit-family clash (for example chicken first entered in ml, then added in g) is a 409 warning with a one-tap fix, "Store chicken in g instead". The fix calls `repo.change_base_unit`, which keeps existing numbers (500 ml becomes 500 g) because the families cannot convert. The Set form on an item row does the same. Other bad input is a red 400 error.
 - Each Ingredient also remembers the quantity and unit last typed (`ingredients.last_quantity` and `last_unit`). Picking it pre-fills the unit, and the quantity if the box is empty. `change_base_unit` forgets it. This is the "typical amount" suggestion for now, and it comes from the household's own history, not the internet.
 - Household location: `settings` table (key and value) and `repo.household_country()` and `set_household_country()`, by ISO code. Settings open as a `<dialog>` overlay on the Stock page and the link falls back to `/settings` without scripting. Saving from the overlay posts `next=/` and returns to `/?saved=1`, and only that value is honoured, so there is no open redirect. Pages share `templates/base.html`, and the form is `_settings_form.html`. The country is not used by anything yet.
+- Barcode lookup: an optional Barcode field and a Look up button on the Add form post to `/lookup`, which fills in quantity and unit (and the Ingredient name only if empty) and shows a notice crediting Open Food Facts. It never adds Stock. The Look up button has `formnovalidate`, and a hidden first submit button keeps Enter as "Add to stock". Found products are cached in `product_cache`, so repeats are instant and work offline, and unknown barcodes are not cached. A bad barcode is a 400 error, and an unknown barcode or an unreachable service is a plain notice. The household country is deliberately not sent, because a barcode identifies a product worldwide (see ADR 0004). `create_app` takes a `fetch_product` argument so tests can fake the network. Product names from Open Food Facts are brand-style ("isabelle" for water), so the user should check the Ingredient name.
 - Layout is a narrow centred card on phones and a roomier one from 640px, with dark mode.
 
 `uv` is at `%LOCALAPPDATA%\Microsoft\WinGet\Links\uv.exe` and may not be on PATH in every shell.
 
 ## Next steps
 
-1. **Pack size from a barcode (Open Food Facts).** The first feature that calls the internet, so write an ADR for it first. Add a barcode field to the Add form and look the product up with the Household country, mapping its quantity ("500 g") to a quantity and unit. Cache results as the design says, and fail soft when offline. A camera scan needs HTTPS, which Tailscale can provide, so it is a later step. No reputable online source for typical amounts (1 bunch of kale) was found, so that stays as the remembered last quantity, with a built-in produce table as an option.
+1. **Camera scanning of barcodes.** Phone browsers only allow the camera on a secure (HTTPS) page, which Tailscale can provide (`tailscale serve` or MagicDNS certificates). Check that the Pi can do this before building the scan. Typing or pasting a barcode already works. Consider a built-in produce table for typical amounts (1 bunch of kale), since no reputable online source was found.
 2. **Deploy to the Pi.** Install `uv` there (it installs without root), pull from GitHub, and run as a systemd service. Find out what is already using about 900 MB of RAM first.
 3. **Slice 2 (household).** Household login, Eaters, Categories and the Adult/Teen/Child permissions.
 4. **Later slices.** Recipes, then Menu generation, Occasions and weather, then the Shopping List, then barcode scanning and OCR.

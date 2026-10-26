@@ -14,9 +14,28 @@ def db_path(tmp_path):
     return tmp_path / "emu.db"
 
 
+class FakeOpenFoodFacts:
+    """Stands in for the network: set `response` or `error`, and see `calls`."""
+
+    def __init__(self):
+        self.response, self.error, self.calls = {"status": 0}, None, []
+
+    def __call__(self, barcode):
+        self.calls.append(barcode)
+        if self.error:
+            raise self.error
+        return self.response
+
+
 @pytest.fixture
-def client(db_path):
-    return TestClient(create_app(db_path, today=lambda: date(2026, 10, 26)), follow_redirects=False)
+def off():
+    return FakeOpenFoodFacts()
+
+
+@pytest.fixture
+def client(db_path, off):
+    app = create_app(db_path, today=lambda: date(2026, 10, 26), fetch_product=off)
+    return TestClient(app, follow_redirects=False)
 
 
 def add(
@@ -289,3 +308,106 @@ def test_the_overlay_shows_the_saved_country(client):
     client.post("/settings", data={"country": "AU"})
     page = client.get("/").text.split('<dialog id="settings-dialog"')[1]
     assert '<option value="AU" selected>Australia</option>' in page
+
+
+BARCODE = "3274080005003"
+
+
+def penne(**extra):
+    product = {"product_name": "Penne", "product_quantity": 500, "product_quantity_unit": "g"}
+    return {"status": 1, "product": {**product, **extra}}
+
+
+def lookup(client, barcode=BARCODE, **fields):
+    data = {
+        "barcode": barcode,
+        "ingredient": "",
+        "quantity": "",
+        "unit": "ml",
+        "location": "pantry",
+    }
+    return client.post("/lookup", data={**data, **fields})
+
+
+def test_the_add_form_has_a_barcode_field_and_a_look_up_button(client):
+    page = client.get("/").text
+    assert 'name="barcode"' in page
+    assert 'formaction="/lookup"' in page
+
+
+def test_looking_up_a_barcode_fills_in_name_quantity_and_unit(client, off, db_path):
+    off.response = penne()
+    response = lookup(client)
+    assert response.status_code == 200
+    assert 'name="ingredient"' in response.text and 'value="Penne"' in response.text
+    assert re.search(r'name="quantity"[^>]*value="500"', response.text, re.S)
+    assert '<option value="g" selected>g</option>' in response.text
+    assert "Open Food Facts" in response.text
+    assert stored(db_path) == []  # a lookup never changes Stock
+
+
+def test_a_typed_ingredient_name_is_kept(client, off):
+    off.response = penne()
+    response = lookup(client, ingredient="pasta")
+    assert 'value="pasta"' in response.text
+    assert 'value="Penne"' not in response.text
+
+
+def test_other_fields_are_kept_when_looking_up(client, off):
+    off.response = penne()
+    response = lookup(client, location="fridge", in_amount="3", in_unit="weeks")
+    assert '<option value="fridge" selected>fridge</option>' in response.text
+    assert 'value="3"' in response.text
+    assert '<option value="weeks" selected>weeks</option>' in response.text
+    assert f'value="{BARCODE}"' in response.text
+
+
+def test_an_unknown_barcode_says_so_and_keeps_the_form(client):
+    response = lookup(client, ingredient="pasta")
+    assert response.status_code == 200
+    assert "No product found" in response.text
+    assert 'value="pasta"' in response.text
+
+
+def test_a_product_without_a_pack_size_asks_for_the_quantity(client, off):
+    off.response = {"status": 1, "product": {"product_name": "Penne"}}
+    response = lookup(client)
+    assert "no pack size" in response.text
+    assert 'value="Penne"' in response.text
+
+
+def test_an_unreachable_service_is_a_notice_not_an_error(client, off):
+    off.error = OSError("offline")
+    response = lookup(client, ingredient="pasta")
+    assert response.status_code == 200
+    assert "Could not reach Open Food Facts" in response.text
+    assert 'class="error"' not in response.text
+    assert 'value="pasta"' in response.text
+
+
+def test_a_bad_barcode_is_an_error(client, off):
+    response = lookup(client, barcode="abc")
+    assert response.status_code == 400
+    assert 'class="error"' in response.text
+    assert off.calls == []
+
+
+def test_a_barcode_is_fetched_only_once(client, off):
+    off.response = penne()
+    lookup(client)
+    lookup(client)
+    assert len(off.calls) == 1
+
+
+def test_adding_stock_never_calls_the_lookup(client, off):
+    client.post(
+        "/items",
+        data={
+            "ingredient": "pasta",
+            "quantity": "500",
+            "unit": "g",
+            "location": "pantry",
+            "barcode": BARCODE,
+        },
+    )
+    assert off.calls == []

@@ -5,6 +5,7 @@
   {% if saved %}<p class="saved" role="status">Settings saved.</p>{% endif %}
 
   {% if error %}<p class="error" role="alert">error: {{ error }}</p>{% endif %}
+  {% if notice %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
   {% if warning %}
   <div class="warning" role="alert">
     <p>{{ warning.message }}</p>
@@ -17,6 +18,14 @@
   {% endif %}
 
   <form class="add" method="post" action="/items">
+    {# First, so Enter adds stock; the visible Look up button below would otherwise be the default. #}
+    <button type="submit" class="default-submit" tabindex="-1" aria-hidden="true">Add to stock</button>
+    <div class="barcode">
+      <label>Barcode (optional)
+        <input name="barcode" inputmode="numeric" autocomplete="off" value="{{ form.barcode }}">
+      </label>
+      <button type="submit" class="quiet" formaction="/lookup" formnovalidate>Look up</button>
+    </div>
     <label>Ingredient
       <input id="ingredient" name="ingredient" list="ingredient-suggestions" autocomplete="off"
              value="{{ form.ingredient }}" required>

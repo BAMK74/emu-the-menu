@@ -11,6 +11,7 @@ from datetime import date
 from pathlib import Path
 
 from emu_the_menu.countries import COUNTRIES
+from emu_the_menu.openfoodfacts import ProductInfo
 from emu_the_menu.shelf_life import ShelfLife, ShelfLifeUnit
 from emu_the_menu.stock import Location, StockItem, add_stock, reduce_stock, sort_by_expiry
 from emu_the_menu.units import BaseUnit, IncompatibleUnitError, base_unit_for, to_base
@@ -31,6 +32,12 @@ CREATE TABLE IF NOT EXISTS stock_items (
     quantity      REAL NOT NULL CHECK (quantity >= 0),
     location      TEXT NOT NULL,
     expires_on    TEXT
+);
+CREATE TABLE IF NOT EXISTS product_cache (
+    barcode  TEXT PRIMARY KEY,
+    name     TEXT,
+    quantity REAL,
+    unit     TEXT
 );
 CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
@@ -180,6 +187,21 @@ class StockRepository:
             )
             for name, base_unit, amount, life_unit, last_quantity, last_unit in rows
         ]
+
+    def cached_product(self, barcode: str) -> ProductInfo | None:
+        """A product found by an earlier barcode lookup."""
+        row = self._db.execute(
+            "SELECT name, quantity, unit FROM product_cache WHERE barcode = ?", (barcode,)
+        ).fetchone()
+        return ProductInfo(barcode, *row) if row else None
+
+    def cache_product(self, info: ProductInfo) -> None:
+        with self._db:
+            self._db.execute(
+                "INSERT OR REPLACE INTO product_cache (barcode, name, quantity, unit)"
+                " VALUES (?, ?, ?, ?)",
+                (info.barcode, info.name, info.quantity, info.unit),
+            )
 
     def household_country(self) -> str | None:
         """The ISO country code the Household lives in, or None if not set yet."""

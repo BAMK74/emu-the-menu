@@ -32,6 +32,10 @@ _Avoid_: Dish, meal idea
 A quantity of one Ingredient held in a Location, with an optional expiry date.
 _Avoid_: Inventory entry, pantry item
 
+**Pack size**:
+The quantity printed on a product's packaging, such as 500 g, found by looking up its barcode. It fills in the quantity and unit of a Stock Item for confirmation.
+_Avoid_: Weight, size
+
 **Location**:
 Where a Stock Item is kept: Fridge, Freezer or Pantry.
 _Avoid_: Shelf, storage
