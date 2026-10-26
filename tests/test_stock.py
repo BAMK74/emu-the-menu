@@ -10,7 +10,7 @@ from emu_the_menu.stock import (
     reduce_stock,
     sort_by_expiry,
 )
-from emu_the_menu.units import BaseUnit
+from emu_the_menu.units import BaseUnit, IncompatibleUnitError
 
 TODAY = date(2026, 10, 26)
 SOON = date(2026, 10, 28)
@@ -52,6 +52,11 @@ def test_add_keeps_separate_items_for_different_location():
     items = [flour(100, location=Location.PANTRY)]
     result = add_stock(items, "flour", 100, "g", Location.FRIDGE)
     assert {i.location for i in result} == {Location.PANTRY, Location.FRIDGE}
+
+
+def test_add_rejects_a_different_unit_family_for_the_same_ingredient():
+    with pytest.raises(IncompatibleUnitError):
+        add_stock([flour(100)], "flour", 100, "ml", Location.PANTRY)
 
 
 def test_add_rejects_negative_quantity():

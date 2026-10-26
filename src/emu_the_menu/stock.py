@@ -26,6 +26,7 @@ class StockItem:
     base_unit: BaseUnit
     location: Location
     expires_on: date | None = None
+    id: int | None = None  # set once the item is stored in the database
 
 
 def _name(ingredient: str) -> str:
@@ -54,6 +55,8 @@ def add_stock(
     base = base_unit_for(unit)
     amount = to_base(quantity, unit)
     name = _name(ingredient)
+    if any(_name(i.ingredient) == name and i.base_unit != base for i in items):
+        raise IncompatibleUnitError(f"{unit!r} does not match how {name} is stored")
     result = list(items)
     for i, item in enumerate(result):
         if (
