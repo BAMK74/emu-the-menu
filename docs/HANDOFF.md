@@ -28,9 +28,10 @@ Emu the Menu is a self-hosted household app. It tracks what is in the fridge, fr
 - ADR 0002: PolyForm Noncommercial licence.
 - ADR 0003: swappable OCR provider, starting with local Tesseract.
 - `src/emu_the_menu/repository.py`: `StockRepository`, SQLite storage for Ingredients and Stock Items (add, use, set quantity, delete, list by expiry). Tests in `tests/test_repository.py`.
+- `src/emu_the_menu/web.py` and `templates/index.html`: FastAPI and Jinja Stock page (add, set quantity, delete, list by expiry) with plain POST-redirect-GET forms. Tests in `tests/test_web.py`.
 - Project scaffold: `pyproject.toml` pinned to Python 3.13, `uv.lock`, `.gitignore`, `.gitattributes` (LF line endings) and `README.md`.
 - `src/emu_the_menu/units.py` and `stock.py`: the pure stock rules, with docstrings that define the behaviour.
-- `tests/test_units.py`, `tests/test_stock.py` and `tests/test_repository.py`: 50 tests, all passing.
+- `tests/test_units.py`, `tests/test_stock.py` and `tests/test_repository.py`: 64 tests, all passing.
 
 **Raspberry Pi** (`pi-host`, Tailscale IP 100.64.0.1, SSH user `pi-user`, key login works):
 
@@ -42,17 +43,19 @@ Emu the Menu is a self-hosted household app. It tracks what is in the fridge, fr
 
 ## In progress
 
-Nothing. Slice 1 is done, including SQLite storage: the stock rules and the repository, with `uv run pytest` passing all 50 tests on Python 3.13 and `ruff` clean. Claude wrote the implementations at Kevin's request.
+Nothing. Slice 1 is done, including SQLite storage and the Stock web forms, with `uv run pytest` passing all 64 tests on Python 3.13 and `ruff` clean. Claude wrote the implementations at Kevin's request.
 
 Choices to know about: 1 tsp = 5 ml, 1 tbsp = 15 ml, 1 cup = 240 ml. `reduce_stock` uses the earliest expiry first, with no-expiry items last. Ingredient names are stored lowercased and stripped. Quantities are floats, and amounts below 1e-9 count as zero. Mixing unit families for one Ingredient raises `IncompatibleUnitError`, in both `add_stock` and `reduce_stock`.
 
 Storage: `StockItem` has an optional `id`, which is `None` until stored. `StockRepository` runs the pure stock rules inside one transaction and writes back only the changed rows. The first add of an Ingredient fixes its base unit from the unit typed, so there is no separate create-Ingredient step. A dedicated form could replace that later. The repository takes a database path, and nothing points at `/mnt/emu/db` yet.
 
+Web: `create_app(db_path)` in `web.py` reads `EMU_DB` (default `emu.db`). Run locally with `uv run uvicorn emu_the_menu.web:create_app --factory`. Each request opens its own repository. There is no HTMX, no login and no "cooked" action yet, and quantity changes are a manual set. `set_quantity` and `delete` raise `ItemNotFoundError` for a missing id.
+
 `uv` is at `%LOCALAPPDATA%\Microsoft\WinGet\Links\uv.exe` and may not be on PATH in every shell.
 
 ## Next steps
 
-1. **Web forms.** Phone-friendly add, adjust and delete for Stock, and a list sorted by expiry. Add a few smoke tests for the routes. Use the item `id` for edit and delete.
+1. **Try the forms on a phone**, then fix whatever feels wrong. Consider a "use" action that calls `repo.use`, and HTMX if full-page reloads annoy.
 2. **Deploy to the Pi.** Install `uv` there (it installs without root), pull from GitHub, and run as a systemd service. Find out what is already using about 900 MB of RAM first.
 3. **Slice 2 (household).** Household login, Eaters, Categories and the Adult/Teen/Child permissions.
 4. **Later slices.** Recipes, then Menu generation, Occasions and weather, then the Shopping List, then barcode scanning and OCR.

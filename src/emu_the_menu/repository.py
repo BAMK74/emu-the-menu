@@ -10,7 +10,7 @@ from datetime import date
 from pathlib import Path
 
 from emu_the_menu.stock import Location, StockItem, add_stock, reduce_stock, sort_by_expiry
-from emu_the_menu.units import BaseUnit, to_base
+from emu_the_menu.units import BaseUnit, IncompatibleUnitError, base_unit_for, to_base
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS ingredients (
@@ -26,6 +26,10 @@ CREATE TABLE IF NOT EXISTS stock_items (
     expires_on    TEXT
 );
 """
+
+
+class ItemNotFoundError(LookupError):
+    """No Stock Item has the given id."""
 
 
 class StockRepository:
@@ -66,11 +70,22 @@ class StockRepository:
     def set_quantity(self, item_id: int, quantity: float, unit: str) -> None:
         amount = to_base(quantity, unit)
         with self._db:
+            row = self._db.execute(
+                """SELECT i.base_unit FROM stock_items s
+                   JOIN ingredients i ON i.id = s.ingredient_id WHERE s.id = ?""",
+                (item_id,),
+            ).fetchone()
+            if row is None:
+                raise ItemNotFoundError(item_id)
+            if base_unit_for(unit) != BaseUnit(row[0]):
+                raise IncompatibleUnitError(f"{unit!r} does not match how this item is stored")
             self._db.execute("UPDATE stock_items SET quantity = ? WHERE id = ?", (amount, item_id))
 
     def delete(self, item_id: int) -> None:
         with self._db:
-            self._db.execute("DELETE FROM stock_items WHERE id = ?", (item_id,))
+            cursor = self._db.execute("DELETE FROM stock_items WHERE id = ?", (item_id,))
+            if cursor.rowcount == 0:
+                raise ItemNotFoundError(item_id)
 
     def _load(self) -> list[StockItem]:
         rows = self._db.execute(

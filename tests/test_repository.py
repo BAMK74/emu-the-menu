@@ -3,7 +3,7 @@ from datetime import date
 
 import pytest
 
-from emu_the_menu.repository import StockRepository
+from emu_the_menu.repository import ItemNotFoundError, StockRepository
 from emu_the_menu.stock import InsufficientStockError, Location, StockItem
 from emu_the_menu.units import BaseUnit, IncompatibleUnitError
 
@@ -85,3 +85,18 @@ def test_data_survives_reopening_the_database(tmp_path):
         repo.add("flour", 100, "g", Location.PANTRY, SOON)
     with StockRepository(path) as repo:
         assert repo.list_items()[0].expires_on == SOON
+
+
+def test_set_quantity_rejects_a_different_unit_family(repo):
+    repo.add("milk", 1, "l", Location.FRIDGE)
+    [item] = repo.list_items()
+    with pytest.raises(IncompatibleUnitError):
+        repo.set_quantity(item.id, 2, "kg")
+    assert repo.list_items()[0].quantity == 1000
+
+
+def test_missing_item_raises(repo):
+    with pytest.raises(ItemNotFoundError):
+        repo.delete(999)
+    with pytest.raises(ItemNotFoundError):
+        repo.set_quantity(999, 1, "g")

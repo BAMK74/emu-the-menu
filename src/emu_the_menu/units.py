@@ -30,6 +30,11 @@ _UNITS: dict[str, tuple[BaseUnit, float]] = {
 }
 
 
+def known_units() -> tuple[str, ...]:
+    """The unit names Emu understands, for building forms."""
+    return tuple(_UNITS)
+
+
 def _lookup(unit: str) -> tuple[BaseUnit, float]:
     try:
         return _UNITS[unit.strip().lower()]

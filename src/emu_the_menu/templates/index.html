@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Emu the Menu - Stock</title>
+  <style>
+    body { font-family: system-ui, sans-serif; margin: 0 auto; padding: 1rem; max-width: 40rem; }
+    h1 { font-size: 1.4rem; }
+    form.add { display: grid; gap: .5rem; margin-bottom: 1.5rem; }
+    input, select, button { font: inherit; padding: .6rem; }
+    .error { background: #fde8e8; border: 1px solid #c0392b; padding: .6rem; margin-bottom: 1rem; }
+    ul { list-style: none; padding: 0; }
+    li { border-bottom: 1px solid #ddd; padding: .6rem 0; }
+    li .meta { color: #666; font-size: .9rem; }
+    li form { display: inline-flex; gap: .3rem; margin-top: .4rem; }
+    li input[type=number] { width: 6rem; }
+  </style>
+</head>
+<body>
+  <h1>Stock</h1>
+
+  {% if error %}<p class="error" role="alert">error: {{ error }}</p>{% endif %}
+
+  <form class="add" method="post" action="/items">
+    <input name="ingredient" placeholder="Ingredient" value="{{ form.ingredient }}" required>
+    <input name="quantity" type="number" step="any" min="0" inputmode="decimal"
+           placeholder="Quantity" value="{{ form.quantity }}" required>
+    <select name="unit" aria-label="Unit">
+      {% for u in units %}<option value="{{ u }}" {{ "selected" if u == form.unit }}>{{ u }}</option>{% endfor %}
+    </select>
+    <select name="location" aria-label="Location">
+      {% for l in locations %}<option value="{{ l }}" {{ "selected" if l == form.location }}>{{ l }}</option>{% endfor %}
+    </select>
+    <input name="expires_on" type="date" aria-label="Expiry date" value="{{ form.expires_on }}">
+    <button type="submit">Add to stock</button>
+  </form>
+
+  {% if items %}
+  <ul>
+    {% for item in items %}
+    <li>
+      <strong>{{ item.ingredient }}</strong>
+      {{ "%g"|format(item.quantity) }} {{ item.base_unit.value }}
+      <div class="meta">{{ item.location.value }} &middot;
+        {% if item.expires_on %}expires {{ item.expires_on.isoformat() }}{% else %}no expiry{% endif %}</div>
+      <form method="post" action="/items/{{ item.id }}/quantity">
+        <input name="quantity" type="number" step="any" min="0" inputmode="decimal"
+               aria-label="New quantity" value="{{ "%g"|format(item.quantity) }}" required>
+        <select name="unit" aria-label="Unit">
+          {% for u in units %}<option value="{{ u }}" {{ "selected" if u == item.base_unit.value }}>{{ u }}</option>{% endfor %}
+        </select>
+        <button type="submit">Set</button>
+      </form>
+      <form method="post" action="/items/{{ item.id }}/delete">
+        <button type="submit">Delete</button>
+      </form>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p>Nothing in stock yet.</p>
+  {% endif %}
+</body>
+</html>
