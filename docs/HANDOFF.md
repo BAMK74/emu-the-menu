@@ -28,8 +28,8 @@ Emu the Menu is a self-hosted household app. It tracks what is in the fridge, fr
 - ADR 0002: PolyForm Noncommercial licence.
 - ADR 0003: swappable OCR provider, starting with local Tesseract.
 - Project scaffold: `pyproject.toml` pinned to Python 3.13, `uv.lock`, `.gitignore`, `.gitattributes` (LF line endings) and `README.md`.
-- `src/emu_the_menu/units.py` and `stock.py` as stubs that raise `NotImplementedError`, with docstrings that define the behaviour.
-- `tests/test_units.py` and `tests/test_stock.py`: 39 tests.
+- `src/emu_the_menu/units.py` and `stock.py` implemented, with docstrings that define the behaviour.
+- `tests/test_units.py` and `tests/test_stock.py`: 39 tests, all passing.
 
 **Raspberry Pi** (`pi-host`, Tailscale IP 100.64.0.1, SSH user `pi-user`, key login works):
 
@@ -41,19 +41,20 @@ Emu the Menu is a self-hosted household app. It tracks what is in the fridge, fr
 
 ## In progress
 
-Slice 1, stock core. The tests are written and all fail on purpose: 38 failed and 1 passed, and `ruff check` is clean. Kevin is writing the implementations, and Claude's role is to review and unblock.
+Nothing. Slice 1 (stock core) is done: `units.py` and `stock.py` are implemented and `uv run pytest` passes all 39 tests on Python 3.13, with `ruff` clean. Claude wrote the implementations at Kevin's request.
 
-Test choices that can be changed: 1 tsp = 5 ml, 1 tbsp = 15 ml, 1 cup = 240 ml. `reduce_stock` uses the earliest expiry first, with no-expiry items last. Ingredient names match ignoring case and surrounding spaces. Quantities are floats compared with `pytest.approx`.
+Choices to know about: 1 tsp = 5 ml, 1 tbsp = 15 ml, 1 cup = 240 ml. `reduce_stock` uses the earliest expiry first, with no-expiry items last. Ingredient names are stored lowercased and stripped. Quantities are floats, and amounts below 1e-9 count as zero. `reduce_stock` raises `IncompatibleUnitError` when the unit family differs from how the Ingredient is stored (not covered by tests yet).
+
+`uv` is at `%LOCALAPPDATA%\Microsoft\WinGet\Links\uv.exe` and may not be on PATH in every shell.
 
 ## Next steps
 
-1. **Finish the logic.** Implement `units.py` (`base_unit_for`, `to_base`, `convert`), then `stock.py` (`sort_by_expiry`, `add_stock`, `reduce_stock`). Run `uv run pytest` until it is green, then ask for a review.
-2. **SQLite storage.** Tables for Ingredient and Stock Item, with the database at `/mnt/emu/db` on the Pi. An Ingredient is created the first time a Stock Item names it, and the user chooses its base unit (g, ml or count).
-3. **Web forms.** Phone-friendly add, adjust and delete for Stock, and a list sorted by expiry. Add a few smoke tests for the routes.
-4. **Deploy to the Pi.** Install `uv` there (it installs without root), pull from GitHub, and run as a systemd service. Find out what is already using about 900 MB of RAM first.
-5. **Slice 2.** Household login, Eaters, Categories and the Adult/Teen/Child permissions.
-6. **Later slices.** Recipes, then Menu generation, Occasions and weather, then the Shopping List, then barcode scanning and OCR.
-7. **Housekeeping.** Reboot the Pi once to confirm `/mnt/emu` mounts on its own. Set up the nightly backup, ideally copying off the Pi. Add the Scan term and the fridge-photo idea to the glossary and ADR 0003 if you want them recorded.
+1. **SQLite storage.** Tables for Ingredient and Stock Item, with the database at `/mnt/emu/db` on the Pi. An Ingredient is created the first time a Stock Item names it, and the user chooses its base unit (g, ml or count).
+2. **Web forms.** Phone-friendly add, adjust and delete for Stock, and a list sorted by expiry. Add a few smoke tests for the routes.
+3. **Deploy to the Pi.** Install `uv` there (it installs without root), pull from GitHub, and run as a systemd service. Find out what is already using about 900 MB of RAM first.
+4. **Slice 2.** Household login, Eaters, Categories and the Adult/Teen/Child permissions.
+5. **Later slices.** Recipes, then Menu generation, Occasions and weather, then the Shopping List, then barcode scanning and OCR.
+6. **Housekeeping.** Reboot the Pi once to confirm `/mnt/emu` mounts on its own. Set up the nightly backup, ideally copying off the Pi. Add the Scan term and the fridge-photo idea to the glossary and ADR 0003 if you want them recorded. There is a stray untracked `emu-the-menu/` folder in the repo root that looks like a nested copy of the project, so check it and delete it if it is not needed.
 
 ## Reference
 
