@@ -23,7 +23,7 @@ Emu the Menu is a self-hosted household app. It tracks what is in the fridge, fr
 
 **Repo** (branch `main`, pushed):
 
-- `LICENSE.md`, `NOTICE.md` (copyright line says BAMK74, so check that is the name you want), `GLOSSARY.md` with 17 terms.
+- `LICENSE.md`, `NOTICE.md` (copyright line says BAMK74, so check that is the name you want), `GLOSSARY.md` with 19 terms.
 - ADR 0001: Python, FastAPI, SQLite and HTMX on a Pi 5.
 - ADR 0002: PolyForm Noncommercial licence.
 - ADR 0003: swappable OCR provider, starting with local Tesseract.
@@ -31,8 +31,8 @@ Emu the Menu is a self-hosted household app. It tracks what is in the fridge, fr
 - ADR 0005: Eaters without accounts for now (Tailscale is the only gate, and anyone on the tailnet can edit anyone's details, so add accounts before a device outside the household joins the tailnet).
 - `src/emu_the_menu/repository.py`: `StockRepository`, SQLite storage for Ingredients and Stock Items (add, use, set quantity, delete, list by expiry). Tests in `tests/test_repository.py`.
 - `src/emu_the_menu/static/zxing.min.js`: the ZXing barcode reader (Apache-2.0, version 0.21.3, unmodified), served at `/static`. `THIRD_PARTY.md` and `third_party/zxing-LICENSE.txt` carry the notices Apache-2.0 requires.
-- `src/emu_the_menu/eaters.py`: Eaters. `Category` (man, woman, teen, child), `DEFAULT_CALORIE_GOALS` (2500, 2000, 2200 and 1600 kcal, rough figures picked by Claude and overridable per Eater, valid goals 500 to 6000), `Eater`, the form parsers (`clean_name`, `parse_terms`, `parse_calorie_goal`) and `EaterRepository`. Allergies and dislikes are plain lowercase terms such as "peanuts", stored in `eater_terms`. A term typed as both is kept only as an allergy, and names are unique ignoring case. How the terms match Recipe ingredients is still open and belongs to the Recipes slice. `EaterRepository` opens its own connection to the same SQLite file, so it is independent of `StockRepository`.
-- `src/emu_the_menu/web_eaters.py` and `templates/eaters.html`: the Eaters page (`/eaters`) as an `APIRouter`, with add, edit (a drawer on each card), and remove (which asks first, through a `data-confirm` form so names are never put in inline JavaScript). `src/emu_the_menu/templating.py` holds the shared Jinja setup.
+- `src/emu_the_menu/eaters.py`: Eaters. `Category` (man, woman, teen, child) and `DEFAULT_CALORIE_GOALS` (built-in defaults of 2500, 2000, 2200 and 1600 kcal, rough figures picked by Claude). The defaults can be changed per Category on the Eaters page and are stored in `category_goals`, and a blank box goes back to the built-in figure. A goal must stay between 500 and 6000. Each Eater stores a `calorie_adjustment` picked from `CALORIE_ADJUSTMENTS` (steps of 100 kcal up to 500 either way, then 750 and 1000), and their goal is the Category default plus the adjustment, so changing a default moves everyone in that Category. Older databases that kept an absolute goal are converted on open, snapping to the nearest step. `Diet` (omnivore, low-meat, pescatarian, vegetarian, vegan) and `FoodGroup` (meat, poultry, fish, dairy, eggs, honey): a strict diet excludes whole food groups as a hard rule through `Diet.excluded_groups`, while low meat excludes none and is a soft limit (`limits_meat`) whose weekly amount is still to be set in the Menu slice. Recipes will tag ingredients with `FoodGroup`. `Eater`, the form parsers (`clean_name`, `parse_terms`, `parse_calorie_goal`, `parse_calorie_adjustment`, `parse_diet`) and `EaterRepository` are here too. Allergies and dislikes are plain lowercase terms such as "peanuts" in `eater_terms`. A term typed as both is kept only as an allergy, and names are unique ignoring case. How the terms match Recipe ingredients is still open and belongs to the Recipes slice. A Menu for several people has to satisfy the strictest diet among them. `EaterRepository` opens its own connection to the same SQLite file, so it is independent of `StockRepository`.
+- `src/emu_the_menu/web_eaters.py` and `templates/eaters.html`: the Eaters page (`/eaters`) as an `APIRouter`, with a collapsible Default calorie goals section (`POST /eaters/defaults`, registered before the `{eater_id}` routes), add, edit (a drawer on each card), and remove (which asks first, through a `data-confirm` form so names are never put in inline JavaScript). `src/emu_the_menu/templating.py` holds the shared Jinja setup.
 - `src/emu_the_menu/backup.py`: nightly database backup (`python -m emu_the_menu.backup`, reading `EMU_DB` and `EMU_BACKUP_DIR`). It copies with SQLite's backup API, so it is safe while the app runs, checks the copy with `PRAGMA integrity_check`, writes to a temporary file first, gzips to `emu-YYYY-MM-DD.db.gz` and prunes. Retention is the last 14 days plus the first backup of each of the last 6 calendar months, and files not named like backups are never touched. Tests in `tests/test_backup.py` restore a backup and read it back.
 - `src/emu_the_menu/openfoodfacts.py`: barcode lookup (`find_product`, `ProductInfo`, `http_fetch`), standard library only. Tests in `tests/test_openfoodfacts.py` use a fake fetcher and never touch the network.
 - `src/emu_the_menu/countries.py`: the 49 countries a Household can pick, by ISO code.
@@ -40,7 +40,7 @@ Emu the Menu is a self-hosted household app. It tracks what is in the fridge, fr
 - `src/emu_the_menu/web.py` and `templates/index.html`: FastAPI and Jinja Stock page (add, set quantity, delete, list by expiry) with plain POST-redirect-GET forms. Tests in `tests/test_web.py`.
 - Project scaffold: `pyproject.toml` pinned to Python 3.13, `uv.lock`, `.gitignore`, `.gitattributes` (LF line endings) and `README.md`.
 - `src/emu_the_menu/units.py` and `stock.py`: the pure stock rules, with docstrings that define the behaviour.
-- `tests/test_units.py`, `tests/test_stock.py`, `tests/test_repository.py`, `tests/test_shelf_life.py`, `tests/test_openfoodfacts.py`, `tests/test_backup.py`, `tests/test_eaters.py`, `tests/test_eater_repository.py`, `tests/test_web_eaters.py` and `tests/test_web.py`: 286 tests, all passing.
+- `tests/test_units.py`, `tests/test_stock.py`, `tests/test_repository.py`, `tests/test_shelf_life.py`, `tests/test_openfoodfacts.py`, `tests/test_backup.py`, `tests/test_eaters.py`, `tests/test_eater_repository.py`, `tests/test_web_eaters.py` and `tests/test_web.py`: 357 tests, all passing.
 
 **Raspberry Pi** (`pi-host`, Tailscale IP 100.64.0.1, SSH user `pi-user`, logged in with Tailscale SSH):
 
@@ -62,7 +62,7 @@ Emu the Menu is a self-hosted household app. It tracks what is in the fridge, fr
 
 ## In progress
 
-Nothing. Slice 1 is done, including SQLite storage and the Stock web forms, with `uv run pytest` passing all 286 tests on Python 3.13 and `ruff` clean. Claude wrote the implementations at Kevin's request.
+Nothing. Slice 1 is done, including SQLite storage and the Stock web forms, with `uv run pytest` passing all 357 tests on Python 3.13 and `ruff` clean. Claude wrote the implementations at Kevin's request.
 
 Choices to know about: 1 tsp = 5 ml, 1 tbsp = 15 ml, 1 cup = 240 ml. `reduce_stock` uses the earliest expiry first, with no-expiry items last. Ingredient names are stored lowercased and stripped. Quantities are floats, and amounts below 1e-9 count as zero. Mixing unit families for one Ingredient raises `IncompatibleUnitError`, in both `add_stock` and `reduce_stock`.
 
@@ -90,7 +90,7 @@ Add form, as tried on a phone:
 ## Next steps
 
 1. **Live camera scanning.** Waiting on Kevin enabling HTTPS for the tailnet (Tailscale admin console, DNS page, Enable HTTPS), which he will do later. Enabling it publishes the tailnet and machine names in public certificate logs, which Kevin was told. Then serve the app with `tailscale serve`, add a live camera view with ZXing's `decodeFromVideoDevice` that only appears when `window.isSecureContext` is true, and test it on the phone. Scanning by photo already works over HTTP. Consider a built-in produce table for typical amounts (1 bunch of kale), since no reputable online source was found.
-2. **Rest of the household slice.** Eaters, Categories, allergies, dislikes and calorie goals are done. Login and the Adult, Teen and Child permissions are deferred (ADR 0005).
+2. **Rest of the household slice.** Eaters, Categories, calorie goals, allergies, dislikes and diets are done. Not done: halal, kosher, gluten-free and lactose-free as proper diets (use allergy or dislike terms for now), a weekly limit for low meat, and login with the Adult, Teen and Child permissions (deferred, ADR 0005).
 3. **Later slices, in dependency order.** Recipes (ingredients, quantities, calories, weather tags, and how an allergy or dislike term matches an ingredient) is next, then Menu generation (hard rules for allergies, Shopping Allowance and Cooldown, then the weighted score, starting with calorie fit and expiring Stock), then Occasions and weather (needs a household town, not only the country), then the Shopping List, then OCR.
 4. **Housekeeping.** Download the database backup from Settings now and then to keep a copy off the Pi, because a scheduled pull over Tailscale SSH would break silently when Tailscale asks for a fresh approval. Remove the stale `an old phone` from the tailnet in the Tailscale admin console. Add the Scan term and the fridge-photo idea to the glossary and ADR 0003 if you want them recorded.
 

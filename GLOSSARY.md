@@ -30,6 +30,14 @@ _Avoid_: Intolerance, restriction
 A food an Eater would rather avoid. Menus treat it as a soft penalty when ranking Recipes.
 _Avoid_: Preference, hate
 
+**Diet**:
+An Eater's eating pattern: eats everything, low meat, pescatarian, vegetarian or vegan. Strict diets exclude whole Food groups as a hard rule, and low meat is a soft limit on meat.
+_Avoid_: Preference, restriction
+
+**Food group**:
+A kind of food a Diet can exclude: meat, poultry, fish, dairy, eggs or honey. Recipes tag their Ingredients with these.
+_Avoid_: Category, type
+
 ### Food
 
 **Ingredient**:

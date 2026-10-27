@@ -197,6 +197,9 @@ def create_app(
             **repo.export_data(),
         }
         with EaterRepository(path) as eaters:
+            data["default_calorie_goals"] = {
+                c.value: kcal for c, kcal in eaters.default_goals().items()
+            }
             data["eaters"] = export_eaters(eaters.list())
         body = json.dumps(data, indent=2, ensure_ascii=False)
         return download(body, "application/json", f"emu-{today().isoformat()}.json")
