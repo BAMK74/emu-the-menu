@@ -9,21 +9,44 @@
       --bg: #f4f6f3; --card: #ffffff; --text: #1f2a24; --muted: #66756c;
       --line: #d5ddd7; --accent: #3f7d58; --accent-text: #ffffff; --danger: #b3392c;
       --danger-bg: #fbeae8; --warn: #e0a526; --warn-bg: #fdf3da; --radius: .6rem; --field: 2.3rem;
+      --accent-soft: #e3efe7; --shadow: 0 1px 2px rgba(31, 42, 36, .06), 0 2px 8px rgba(31, 42, 36, .04);
+      --ok: #2f7a4c; --ok-bg: #e3f2e8; --soon: #8a5a00; --soon-bg: #fdf0cf;
     }
     @media (prefers-color-scheme: dark) {
       :root {
         --bg: #151a17; --card: #1e2521; --text: #e6ece8; --muted: #93a39a;
         --line: #33403a; --accent: #5aa578; --accent-text: #0e1612; --danger: #e5766a;
-        --danger-bg: #3a2220; --warn-bg: #3a3118;
+        --danger-bg: #3a2220; --warn-bg: #3a3118; --accent-soft: #1d2d24;
+        --shadow: 0 1px 2px rgba(0, 0, 0, .3); --ok: #7fc99a; --ok-bg: #1d3125;
+        --soon: #f0c36a; --soon-bg: #3a3118;
       }
     }
     * { box-sizing: border-box; }
     body {
       font-family: system-ui, sans-serif; background: var(--bg); color: var(--text);
-      margin: 0; padding: 1rem; display: flex; flex-direction: column; align-items: center;
+      margin: 0; line-height: 1.4;
     }
-    main { width: 100%; max-width: 22rem; }
+    main { width: 100%; max-width: 24rem; margin: 0 auto; padding: 1rem; }
     h1 { font-size: 1.25rem; margin: .2rem 0 .8rem; }
+
+    /* The header: brand on the left, navigation on the right. */
+    header.topbar { background: var(--card); border-bottom: 1px solid var(--line); box-shadow: var(--shadow); }
+    .topbar-inner {
+      max-width: 74rem; margin: 0 auto; padding: .5rem 1rem; display: flex; flex-wrap: wrap;
+      align-items: center; justify-content: space-between; gap: .3rem 1rem;
+    }
+    a.brand {
+      display: flex; align-items: center; gap: .5rem; color: var(--text); text-decoration: none;
+      font-weight: 700; font-size: 1.05rem; letter-spacing: -.01em;
+    }
+    .logo { width: 1.9rem; height: 1.9rem; color: var(--accent); flex: none; }
+    header nav { display: flex; gap: .2rem; }
+    header nav a {
+      color: var(--muted); font-size: .9rem; text-decoration: none; padding: .35rem .7rem;
+      border-radius: 999px;
+    }
+    header nav a:hover { background: var(--accent-soft); color: var(--text); }
+    header nav a[aria-current="page"] { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
 
     input, select, button { font: inherit; font-size: .9rem; color: var(--text); }
     input:not([type=checkbox]), select {
@@ -38,7 +61,9 @@
       height: var(--field); padding: 0 .9rem; border-radius: var(--radius); cursor: pointer;
       background: var(--accent); color: var(--accent-text); border: 0; font-weight: 600;
     }
+    button:hover { filter: brightness(1.07); }
     button.quiet { background: transparent; color: var(--muted); border: 1px solid var(--line); font-weight: 400; }
+    button.quiet:hover { filter: none; border-color: var(--accent); color: var(--accent); }
 
     .error {
       background: var(--danger-bg); color: var(--danger); border: 1px solid var(--danger);
@@ -56,6 +81,7 @@
     form.add {
       display: grid; gap: .6rem; padding: .9rem; margin-bottom: 1.2rem;
       background: var(--card); border: 1px solid var(--line); border-radius: calc(var(--radius) + .2rem);
+      box-shadow: var(--shadow);
     }
     form.add label, form.add legend {
       display: grid; gap: .2rem; font-size: .75rem; font-weight: 600; color: var(--muted);
@@ -81,8 +107,11 @@
     ul { list-style: none; padding: 0; margin: 0; display: grid; gap: .6rem; }
     li {
       background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
-      padding: .6rem .8rem;
+      padding: .6rem .8rem; box-shadow: var(--shadow);
     }
+    li .item-head { display: flex; align-items: baseline; justify-content: space-between; gap: .6rem; }
+    li .item-head strong { font-size: 1.02rem; text-transform: capitalize; }
+    li .qty { font-size: 1.05rem; font-weight: 600; color: var(--accent); white-space: nowrap; }
     li .meta { color: var(--muted); font-size: .8rem; margin-top: .1rem; }
     li .actions { display: flex; gap: .4rem; margin-top: .5rem; }
     li .actions form { display: flex; gap: .3rem; }
@@ -90,12 +119,39 @@
     li .actions select { width: 4.8rem; }
     li .actions button { height: 2rem; padding: 0 .7rem; font-size: .8rem; }
     li .actions form:last-child { margin-left: auto; }
-    .empty { color: var(--muted); text-align: center; }
-    nav { display: flex; gap: 1rem; align-items: baseline; margin: .2rem 0 .8rem; }
-    nav h1 { margin: 0; }
-    nav a { color: var(--muted); font-size: .9rem; text-decoration: none; }
-    nav a:hover { color: var(--accent); }
-    nav .current { margin-right: auto; }
+    .empty { color: var(--muted); text-align: center; padding: 2rem 1rem; background: var(--card);
+      border: 1px dashed var(--line); border-radius: var(--radius); }
+
+    /* Small coloured labels: where something is kept and how soon it goes off. */
+    .chips { display: flex; flex-wrap: wrap; gap: .3rem; margin: .35rem 0 .1rem; }
+    .chip {
+      display: inline-block; font-size: .72rem; line-height: 1; padding: .28rem .55rem;
+      border-radius: 999px; background: var(--accent-soft); color: var(--muted);
+    }
+    .chip-ok { background: var(--ok-bg); color: var(--ok); }
+    .chip-soon { background: var(--soon-bg); color: var(--soon); font-weight: 600; }
+    .chip-expired { background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+    .chip-none { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+
+    /* A card is one big link to its adjust form. */
+    li { position: relative; }
+    a.card-link { color: inherit; text-decoration: none; }
+    a.card-link::after { content: ""; position: absolute; inset: 0; border-radius: var(--radius); }
+    a.card-link:focus-visible { outline: none; }
+    li:has(a.card-link) { cursor: pointer; }
+    li:has(a.card-link):hover { border-color: var(--accent); }
+    li:has(a.card-link:focus-visible) { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .panel-title { font-size: 1.15rem; margin: 0 0 .8rem; }
+    .expiry-edit { display: grid; grid-template-columns: 1fr auto; gap: .6rem; align-items: end; }
+    .expiry-edit label.check { align-self: end; padding-bottom: .6rem; }
+    form.remove { margin-top: .6rem; }
+    form.remove button { width: 100%; }
+    button.danger { color: var(--danger); border-color: var(--danger); }
+    button.danger:hover { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); }
+    .results-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem 1rem; margin-bottom: .7rem; }
+    .results-head h2 { font-size: 1.05rem; margin: 0; }
+    .summary { margin: 0; display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
+
     .notice {
       background: var(--card); border: 1px solid var(--accent); border-radius: var(--radius);
       padding: .5rem .7rem; margin: 0 0 .8rem; font-size: .9rem;
@@ -107,19 +163,84 @@
     }
     dialog {
       width: min(22rem, calc(100vw - 2rem)); padding: 1.1rem; background: var(--card);
+      max-height: calc(100vh - 2rem); overflow-y: auto;
       color: var(--text); border: 1px solid var(--line); border-radius: calc(var(--radius) + .2rem);
     }
     dialog::backdrop { background: rgba(0, 0, 0, .55); }
     dialog h2 { font-size: 1.1rem; margin: 0 0 .8rem; }
-    dialog form.add { border: 0; padding: 0; margin: 0; background: none; }
+    dialog form.add { border: 0; padding: 0; margin: 0; background: none; box-shadow: none; }
     .buttons { display: flex; gap: .6rem; }
+    .disclaimer-banner, .warning-note {
+      background: var(--warn-bg); border: 1px solid var(--warn); border-radius: var(--radius);
+      padding: .6rem .8rem; margin: 0 0 .8rem; font-size: .85rem;
+    }
+    .disclaimer-banner p, .warning-note p { margin: 0; }
+    .disclaimer-banner a, .warning-note a { color: inherit; font-weight: 600; }
+    footer.legal {
+      margin-top: 1.5rem; padding-top: .8rem; border-top: 1px solid var(--line);
+      font-size: .75rem; color: var(--muted);
+    }
+    footer.legal p { margin: 0; }
+    footer.legal a { color: inherit; }
+    .legal-text h2 { font-size: 1rem; margin: 1.3rem 0 .4rem; }
+    .legal-text p { margin: 0 0 .6rem; font-size: .9rem; line-height: 1.5; }
+    .legal-text .version { color: var(--muted); font-size: .8rem; }
+    form.add label.check {
+      display: flex; align-items: flex-start; gap: .5rem; font-size: .9rem; font-weight: 600;
+      color: var(--text); text-transform: none; letter-spacing: 0;
+    }
+    form.add label.check input { margin-top: .2rem; accent-color: var(--accent); }
     .tag {
       font-size: .75rem; color: var(--muted); border: 1px solid var(--line);
       border-radius: 999px; padding: .05rem .5rem; margin-left: .3rem; text-transform: capitalize;
     }
+    form.add label small {
+      font-size: .75rem; font-weight: 400; color: var(--muted); text-transform: none;
+      letter-spacing: 0;
+    }
+    fieldset.allergens { border: 0; padding: 0; margin: 0; min-width: 0; }
+    fieldset.allergens legend {
+      padding: 0; margin-bottom: .3rem; font-size: .75rem; font-weight: 600; color: var(--muted);
+      text-transform: uppercase; letter-spacing: .03em;
+    }
+    /* Allergens are tick-pills that flow to fit the block, so no label wraps or leaves a ragged row. */
+    form.add .checks { display: flex; flex-wrap: wrap; gap: .4rem; }
+    form.add .checks label {
+      display: inline-flex; align-items: center; gap: .35rem; padding: .3rem .7rem;
+      font-size: .82rem; font-weight: 400; color: var(--text); text-transform: none;
+      letter-spacing: 0; background: var(--card); border: 1px solid var(--line);
+      border-radius: 999px; cursor: pointer; white-space: nowrap;
+    }
+    form.add .checks label:hover { border-color: var(--accent); }
+    form.add .checks label:has(input:checked) {
+      background: var(--accent-soft); border-color: var(--accent); font-weight: 600;
+    }
+    form.add .checks input { margin: 0; accent-color: var(--accent); }
+    fieldset.allergens .hint { margin-top: .5rem; }
+    .calorie-goals { margin-top: 1.1rem; padding-top: .9rem; border-top: 1px solid var(--line); }
+    .calorie-goals summary {
+      font-size: .8rem; font-weight: 600; color: var(--muted); text-transform: uppercase;
+      letter-spacing: .03em; cursor: pointer; padding: .1rem 0;
+    }
+    .calorie-goals summary:hover { color: var(--accent); }
+    .calorie-goals details[open] > summary { margin-bottom: .5rem; color: var(--text); }
+    .calorie-goals h4 { font-size: .9rem; margin: 0; }
+    .calorie-goals table { width: 100%; border-collapse: collapse; margin: .6rem 0; font-size: .85rem; }
+    .calorie-goals th, .calorie-goals td { text-align: left; padding: .45rem .4rem; vertical-align: top; border-top: 1px solid var(--line); }
+    .calorie-goals thead th {
+      border-top: 0; padding-top: 0; font-size: .72rem; color: var(--muted); text-transform: uppercase;
+      letter-spacing: .03em;
+    }
+    .calorie-goals thead th:first-child { padding-left: 0; }
+    .calorie-goals thead th:last-child { padding-right: 0; text-align: right; white-space: nowrap; }
+    .calorie-goals tbody th { font-weight: 600; white-space: nowrap; padding-left: 0; }
+    .calorie-goals td.num { text-align: right; font-weight: 600; color: var(--accent); white-space: nowrap; padding-right: 0; }
+    .calorie-goals td.num small { display: block; font-weight: 400; color: var(--muted); }
+    .calorie-goals form.add { border: 0; box-shadow: none; padding: 0; margin: .6rem 0 .8rem; background: none; }
+    .calorie-goals .warning-note { margin: 0; }
     details { margin-top: .5rem; }
     details summary { cursor: pointer; color: var(--muted); font-size: .85rem; }
-    details form.edit { margin: .6rem 0; padding: 0; border: 0; background: none; }
+    details form.edit { margin: .6rem 0; padding: 0; border: 0; background: none; box-shadow: none; }
     details > form + form { margin-top: .4rem; }
     .backup { margin-top: 1.1rem; padding-top: .9rem; border-top: 1px solid var(--line); }
     .backup h3 { font-size: .8rem; margin: 0 0 .5rem; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
@@ -135,12 +256,15 @@
     .saved { color: var(--accent); margin: 0 0 .8rem; font-size: .9rem; }
     .hint { color: var(--muted); font-size: .8rem; margin: 0; }
 
-    /* Computers and tablets: more room, larger text. */
+    /* Tablets and computers: more room, larger text. */
     @media (min-width: 640px) {
       :root { --field: 2.7rem; }
-      body { padding: 2rem 1rem; }
-      main { max-width: 34rem; }
-      h1 { font-size: 1.5rem; margin-bottom: 1rem; }
+      body { background: linear-gradient(180deg, var(--accent-soft) 0, var(--bg) 20rem) no-repeat, var(--bg); }
+      .topbar-inner { padding: .7rem 1.5rem; }
+      header nav a { font-size: .95rem; padding: .45rem .9rem; }
+      main { max-width: 36rem; padding: 2rem 1.5rem 3rem; }
+      main.reading { max-width: 46rem; }
+      h1 { font-size: 1.75rem; margin: .2rem 0 1.2rem; letter-spacing: -.02em; }
       input, select, button { font-size: 1rem; }
       form.add { padding: 1.4rem; gap: .9rem; }
       form.add label, form.add legend { font-size: .8rem; }
@@ -157,15 +281,56 @@
       li .actions input[type=number] { width: 6rem; }
       li .actions select { width: 6.5rem; }
       li .actions button { height: 2.4rem; font-size: .95rem; }
+      .chip { font-size: .78rem; padding: .3rem .65rem; }
+      dialog { width: min(28rem, calc(100vw - 2rem)); padding: 1.4rem; }
+    }
+
+    /* Wide screens: the forms stay in a column on the left, the cards fill the right. */
+    @media (min-width: 1000px) {
+      main.wide { max-width: 74rem; }
+      .split { display: grid; grid-template-columns: 28rem 1fr; gap: 2.5rem; align-items: start; }
+      .split .side { position: sticky; top: 1.5rem; }
+      .split .side form.add { margin-bottom: 1rem; }
+      .results ul { grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); gap: 1rem; align-items: start; }
+      .split .side .expiry-row { gap: .35rem; font-size: .85rem; flex-wrap: wrap; }
+      .split .side .expiry-row input, .split .side .expiry-row select { font-size: .85rem; padding: 0 .4rem; }
+      .split .side .expiry-row input[type=date] { flex: 1 1 8.2rem; min-width: 7.4rem; max-width: none; }
+      .split .side .expiry-row input[type=number] { flex: 0 0 3rem; }
+      .split .side .expiry-row select { flex: 0 0 5.2rem; }
+      .split .side form.add label.no-expiry { font-size: .85rem; gap: .3rem; }
+      li .actions { flex-wrap: wrap; }
+      li .actions input[type=number] { width: 4.4rem; }
+      li .actions select { width: 5.6rem; }
+      li .actions button { padding: 0 .55rem; font-size: .9rem; }
+      li { transition: border-color .15s, box-shadow .15s; }
+      li:hover { border-color: var(--accent); }
+      footer.legal { text-align: center; }
     }
   </style>
 </head>
 <body>
-<main>
-  <nav>
-    <h1 class="current">{% block heading %}Stock{% endblock %}</h1>
-    {% block nav %}<a href="/">Stock</a><a href="/eaters">Eaters</a><a id="settings-link" href="/settings">Settings</a>{% endblock %}
-  </nav>
+<header class="topbar">
+  <div class="topbar-inner">
+    <a class="brand" href="/">
+      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
+        <rect width="32" height="32" rx="8" fill="currentColor"/>
+        <circle cx="16" cy="18" r="8" fill="none" stroke="#fff" stroke-width="2.2"/>
+        <path d="M15 10.5c0-3.2 2.8-5.4 6.6-5.6-.1 3.4-2.4 5.6-6.6 5.6z" fill="#fff"/>
+      </svg>
+      <span>Emu the Menu</span>
+    </a>
+    <nav aria-label="Main">
+      {% block nav %}<a href="/"{% if request.url.path == "/" %} aria-current="page"{% endif %}>Stock</a><a href="/eaters"{% if request.url.path == "/eaters" %} aria-current="page"{% endif %}>Eaters</a><a id="settings-link" href="/settings"{% if request.url.path == "/settings" %} aria-current="page"{% endif %}>Settings</a>{% endblock %}
+    </nav>
+  </div>
+</header>
+<main class="{% block main_class %}{% endblock %}">
+  <h1>{% block heading %}Stock{% endblock %}</h1>
+  {% block disclaimer_banner %}{% if not disclaimer_accepted %}
+  <div class="disclaimer-banner" role="region" aria-label="Disclaimer">
+    <p><strong>Before you rely on Emu the Menu:</strong> it is an app, not a dietitian or a doctor, and it cannot guarantee that a food is safe for an allergy. <a href="/disclaimer?next={{ request.url.path|urlencode }}">Read the disclaimer and accept it</a>.</p>
+  </div>
+  {% endif %}{% endblock %}
   {% block saved_banner %}{% if request.query_params.get("saved") == "1" %}<p class="saved" role="status">Settings saved.</p>{% endif %}{% endblock %}
   {% block content %}{% endblock %}
   {% block settings_overlay %}
@@ -200,6 +365,25 @@
     })();
   </script>
   {% endblock %}
+  <footer class="legal">
+    <p>Emu the Menu is a household cooking app, not a dietitian, a doctor or an allergy service. Always read food labels. <a href="/disclaimer">Read the full disclaimer</a>.</p>
+  </footer>
 </main>
+<script>
+  // Shared by every page, and by forms that arrive inside a popup.
+  // A form marked data-confirm asks before it is sent.
+  document.addEventListener("submit", (event) => {
+    const form = event.target.closest("form[data-confirm]");
+    if (form && !confirm(form.dataset.confirm)) event.preventDefault();
+  });
+  // Ticking "No expiry" switches the date off and clears it.
+  document.addEventListener("change", (event) => {
+    const box = event.target.closest("input[data-no-expiry]");
+    if (!box) return;
+    const date = box.form.querySelector('input[name="expires_on"]');
+    date.disabled = box.checked;
+    if (box.checked) date.value = "";
+  });
+</script>
 </body>
 </html>

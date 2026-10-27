@@ -550,10 +550,10 @@ def test_setting_one_kilogram_shows_one_kilogram(client, db_path):
     add(client, "flour", "500", "g")
     [item] = stored(db_path)
     client.post(f"/items/{item.id}/quantity", data={"quantity": "1", "unit": "kg"})
-    entry = list_item_html(client, "flour")
-    assert "1 kg" in entry
-    assert '<option value="kg" selected>kg</option>' in entry
-    assert 'value="1"' in entry
+    assert "1 kg" in list_item_html(client, "flour")
+    popup = client.get(f"/items/{item.id}/panel").text  # the adjust form lives in the popup now
+    assert '<option value="kg" selected>kg</option>' in popup
+    assert re.search(r'name="quantity"[^>]*value="1"', popup, re.S)
 
 
 def test_millilitres_are_shown_as_litres_and_small_amounts_stay_small(client):
@@ -655,3 +655,88 @@ def test_the_backup_status_is_also_in_the_panel(backup_client, backup_dir):
     (backup_dir / "emu-2026-10-26.db.gz").write_bytes(b"x")
     panel = backup_client.get("/settings/panel", params={"next": "/"}).text
     assert "Last nightly backup: today" in " ".join(panel.split())
+
+
+# --- layout: header, overview and expiry chips -----------------------------------------------
+
+
+@pytest.mark.parametrize(
+    ("path", "current"),
+    [("/", "Stock"), ("/eaters", "Eaters"), ("/settings", "Settings")],
+)
+def test_the_header_marks_the_page_you_are_on(client, path, current):
+    page = client.get(path).text
+    assert '<header class="topbar">' in page
+    assert 'class="brand"' in page and "Emu the Menu" in page
+    marked = re.findall(r'<a[^>]*aria-current="page"[^>]*>([^<]*)</a>', page)
+    assert marked == [current]
+    for link in ('href="/"', 'href="/eaters"', 'href="/settings"'):
+        assert link in page
+
+
+def test_the_disclaimer_page_marks_none_of_the_main_links(client):
+    assert not re.findall(r'<a[^>]*aria-current="page"', client.get("/disclaimer").text)
+
+
+@pytest.mark.parametrize(
+    ("path", "layout"),
+    [("/", "wide"), ("/eaters", "wide"), ("/disclaimer", "reading")],
+)
+def test_pages_choose_a_wide_or_a_reading_layout(client, path, layout):
+    assert f'<main class="{layout}">' in client.get(path).text
+
+
+def chips(client, name):
+    page = client.get("/").text.split("<ul>")[1]
+    entry = next(li for li in page.split("<li>") if f"<strong>{name}</strong>" in li)
+    return [
+        (css.split()[-1], " ".join(text.split()))
+        for css, text in re.findall(r'<span class="(chip[^"]*)">([^<]*)</span>', entry)
+    ]
+
+
+def test_expiry_chips_say_how_soon_something_goes_off(client):
+    # Today is 2026-10-26 in these tests.
+    for name, day in [
+        ("gone", "2026-10-25"),
+        ("today", "2026-10-26"),
+        ("tomorrow", "2026-10-27"),
+        ("three", "2026-10-29"),
+        ("later", "2026-11-20"),
+    ]:
+        add(client, name, expires_on=day)
+    add(client, "never")
+    assert ("chip-expired", "Expired 25/10/2026") in chips(client, "gone")
+    assert ("chip-soon", "Expires today") in chips(client, "today")
+    assert ("chip-soon", "Expires tomorrow") in chips(client, "tomorrow")
+    assert ("chip-soon", "Expires in 3 days") in chips(client, "three")
+    assert ("chip-ok", "Expires 20/11/2026") in chips(client, "later")
+    assert ("chip-none", "No expiry") in chips(client, "never")
+
+
+def test_each_item_shows_where_it_is_kept(client):
+    add(client, "milk", "1", "l", "fridge")
+    assert ("chip", "Fridge") in chips(client, "milk")
+
+
+def overview(client):
+    match = re.search(r'<p class="summary">(.*?)</p>', client.get("/").text, re.S)
+    return " ".join(re.sub(r"<[^>]+>", " ", match.group(1)).split()) if match else None
+
+
+def test_the_overview_counts_items_expiring_soon_and_expired(client):
+    add(client, "gone", expires_on="2026-10-25")
+    add(client, "today", expires_on="2026-10-26")
+    add(client, "three", expires_on="2026-10-29")
+    add(client, "four", expires_on="2026-10-30")
+    add(client, "never")
+    assert overview(client) == "5 items 2 expiring within 3 days 1 expired"
+
+
+def test_the_overview_leaves_out_zero_counts_and_uses_the_singular(client):
+    add(client, "flour")
+    assert overview(client) == "1 item"
+
+
+def test_an_empty_stock_has_no_overview(client):
+    assert overview(client) is None

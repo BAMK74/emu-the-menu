@@ -12,13 +12,19 @@ from fastapi.staticfiles import StaticFiles
 
 from emu_the_menu.backup import BackupError, latest_backup, snapshot_gz
 from emu_the_menu.countries import COUNTRIES
-from emu_the_menu.eaters import EaterRepository
+from emu_the_menu.eaters import (
+    DEFAULT_CALORIE_GOALS,
+    Category,
+    EaterRepository,
+    parse_calorie_goal,
+)
 from emu_the_menu.openfoodfacts import Fetch, LookupUnavailableError, find_product, http_fetch
 from emu_the_menu.repository import ItemNotFoundError, StockRepository
 from emu_the_menu.shelf_life import ShelfLife, ShelfLifeUnit
 from emu_the_menu.stock import Location
 from emu_the_menu.templating import TEMPLATES as _TEMPLATES
-from emu_the_menu.units import IncompatibleUnitError, known_units
+from emu_the_menu.units import IncompatibleUnitError, display_quantity, known_units
+from emu_the_menu.web_disclaimer import create_router as create_disclaimer_router
 from emu_the_menu.web_eaters import create_router as create_eaters_router
 from emu_the_menu.web_eaters import export_eaters
 
@@ -69,7 +75,9 @@ def create_app(
     path = db_path or os.environ.get("EMU_DB", "emu.db")
     backup_dir = backup_dir or os.environ.get("EMU_BACKUP_DIR")
     app = FastAPI(title="Emu the Menu")
+    app.state.db_path = path  # read by the shared templates, for the disclaimer banner
     app.include_router(create_eaters_router(path))
+    app.include_router(create_disclaimer_router(path, today))
     app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
     def get_repo() -> Iterator[StockRepository]:
@@ -98,11 +106,21 @@ def create_app(
         warning: dict | None = None,
         notice: str | None = None,
     ):
+        items = repo.list_items()
+        current = today()
+        days_left = [(i.expires_on - current).days for i in items if i.expires_on]
+        summary = {
+            "total": len(items),
+            "soon": sum(1 for d in days_left if 0 <= d <= 3),
+            "expired": sum(1 for d in days_left if d < 0),
+        }
         return _TEMPLATES.TemplateResponse(
             request,
             "index.html",
             {
-                "items": repo.list_items(),
+                "items": items,
+                "today": current,
+                "summary": summary,
                 "units": known_units(),
                 "suggestions": {
                     i.name: {
@@ -128,7 +146,25 @@ def create_app(
     def index(request: Request, repo: StockRepository = Depends(get_repo)):
         return page(request, repo, _BLANK_FORM)
 
-    def settings_page(request: Request, repo: StockRepository, error: str | None = None):
+    def calorie_context(goal_form: dict | None = None) -> dict:
+        """What the Calorie goals section of Settings shows: the current defaults of each type,
+        or what was typed in a bad try."""
+        with EaterRepository(path) as eaters:
+            defaults = eaters.default_goals()
+        return {
+            "categories": list(Category),
+            "default_goals": {c.value: kcal for c, kcal in defaults.items()},
+            "builtin_goals": {c.value: kcal for c, kcal in DEFAULT_CALORIE_GOALS.items()},
+            "goal_form": goal_form or {c.value: str(kcal) for c, kcal in defaults.items()},
+            "goals_open": goal_form is not None,
+        }
+
+    def settings_page(
+        request: Request,
+        repo: StockRepository,
+        error: str | None = None,
+        goal_form: dict | None = None,
+    ):
         return _TEMPLATES.TemplateResponse(
             request,
             "settings.html",
@@ -138,6 +174,7 @@ def create_app(
                 "saved": request.query_params.get("saved") == "1",
                 "error": error,
                 "backup": backup_status(),
+                **calorie_context(goal_form),
             },
             status_code=400 if error else 200,
         )
@@ -153,7 +190,35 @@ def create_app(
                 "country": repo.household_country(),
                 "backup": backup_status(),
                 "next_url": next if next in _RETURN_PAGES else None,
+                **calorie_context(),
             },
+        )
+
+    @app.post("/settings/calorie-goals")
+    def save_calorie_goals(
+        request: Request,
+        goal_man: str = Form(""),
+        goal_woman: str = Form(""),
+        goal_teen: str = Form(""),
+        goal_child: str = Form(""),
+        next: str = Form(""),
+        repo: StockRepository = Depends(get_repo),
+    ):
+        typed = {
+            Category.MAN: goal_man,
+            Category.WOMAN: goal_woman,
+            Category.TEEN: goal_teen,
+            Category.CHILD: goal_child,
+        }
+        try:
+            with EaterRepository(path) as eaters:
+                eaters.set_default_goals({c: parse_calorie_goal(t) for c, t in typed.items()})
+        except ValueError as exc:
+            goal_form = {c.value: text for c, text in typed.items()}
+            return settings_page(request, repo, str(exc), goal_form)
+        # Only known pages may be returned to, so this cannot redirect elsewhere.
+        return RedirectResponse(
+            f"{next}?saved=1" if next in _RETURN_PAGES else "/settings?saved=1", status_code=303
         )
 
     @app.get("/settings", response_class=HTMLResponse)
@@ -336,6 +401,99 @@ def create_app(
             )
         except ValueError as exc:
             return page(request, repo, form, str(exc))
+        return RedirectResponse("/", status_code=303)
+
+    def find_item(repo: StockRepository, item_id: int):
+        item = next((i for i in repo.list_items() if i.id == item_id), None)
+        if item is None:
+            raise HTTPException(404, "No such item")
+        return item
+
+    def item_form(item) -> dict:
+        """The popup form's values for an item, in the unit people read."""
+        quantity, unit = display_quantity(item.quantity, item.base_unit)
+        return {
+            "quantity": f"{quantity:g}",
+            "unit": unit,
+            "location": item.location.value,
+            "expires_on": item.expires_on.isoformat() if item.expires_on else "",
+            "no_expiry": "" if item.expires_on else "on",
+        }
+
+    def item_context(item, form: dict, error: str | None = None) -> dict:
+        return {
+            "item": item,
+            "form": form,
+            "error": error,
+            "units": known_units(),
+            "locations": [loc.value for loc in Location],
+        }
+
+    @app.get("/items/{item_id}/panel", response_class=HTMLResponse)
+    def item_panel(request: Request, item_id: int, repo: StockRepository = Depends(get_repo)):
+        """Just the adjust form, for the popup on the Stock page."""
+        item = find_item(repo, item_id)
+        return _TEMPLATES.TemplateResponse(
+            request, "_item_panel.html", item_context(item, item_form(item))
+        )
+
+    @app.get("/items/{item_id}", response_class=HTMLResponse)
+    def item_page(request: Request, item_id: int, repo: StockRepository = Depends(get_repo)):
+        """The same form as a page of its own, for use without scripting."""
+        item = find_item(repo, item_id)
+        return _TEMPLATES.TemplateResponse(
+            request, "item.html", item_context(item, item_form(item))
+        )
+
+    @app.post("/items/{item_id}")
+    def update_item(
+        request: Request,
+        item_id: int,
+        quantity: str = Form(""),
+        unit: str = Form(""),
+        location: str = Form(""),
+        expires_on: str = Form(""),
+        no_expiry: str = Form(""),
+        switch_unit: str = Form(""),
+        repo: StockRepository = Depends(get_repo),
+    ):
+        item = find_item(repo, item_id)
+        form = {
+            "quantity": quantity,
+            "unit": unit,
+            "location": location,
+            "expires_on": expires_on,
+            "no_expiry": no_expiry,
+        }
+        try:
+            try:
+                amount = float(quantity)
+            except ValueError:
+                raise ValueError("Enter the quantity as a number") from None
+            try:
+                where = Location(location)
+            except ValueError:
+                raise ValueError("Choose where it is kept") from None
+            expires = None
+            if expires_on and not no_expiry:
+                try:
+                    expires = date.fromisoformat(expires_on)
+                except ValueError:
+                    raise ValueError("Pick the expiry date from the calendar") from None
+            if switch_unit:
+                repo.change_base_unit(item.ingredient, unit)
+            repo.update_item(item_id, amount, unit, where, expires)
+        except ItemNotFoundError:
+            raise HTTPException(404, "No such item") from None
+        except IncompatibleUnitError:
+            warning = _unit_warning(
+                item.ingredient, item.base_unit.value, unit, f"/items/{item_id}", form
+            )
+            return page(request, repo, _BLANK_FORM, warning=warning)
+        except ValueError as exc:
+            return _TEMPLATES.TemplateResponse(
+                request, "item.html", item_context(item, form, str(exc)), status_code=400
+            )
         return RedirectResponse("/", status_code=303)
 
     @app.post("/items/{item_id}/quantity")

@@ -150,6 +150,36 @@ class StockRepository:
                 raise IncompatibleUnitError(f"{unit!r} does not match how this item is stored")
             self._db.execute("UPDATE stock_items SET quantity = ? WHERE id = ?", (amount, item_id))
 
+    def update_item(
+        self,
+        item_id: int,
+        quantity: float,
+        unit: str,
+        location: Location,
+        expires_on: date | None = None,
+    ) -> None:
+        """Change what one Stock Item holds, where it is kept and when it expires.
+
+        The unit must be in the same family as the Ingredient is stored in. Nothing is
+        changed if any value is rejected.
+        """
+        amount = to_base(quantity, unit)
+        location = Location(location)
+        with self._db:
+            row = self._db.execute(
+                """SELECT i.base_unit FROM stock_items s
+                   JOIN ingredients i ON i.id = s.ingredient_id WHERE s.id = ?""",
+                (item_id,),
+            ).fetchone()
+            if row is None:
+                raise ItemNotFoundError(item_id)
+            if base_unit_for(unit) != BaseUnit(row[0]):
+                raise IncompatibleUnitError(f"{unit!r} does not match how this item is stored")
+            self._db.execute(
+                "UPDATE stock_items SET quantity = ?, location = ?, expires_on = ? WHERE id = ?",
+                (amount, location.value, expires_on.isoformat() if expires_on else None, item_id),
+            )
+
     def change_base_unit(self, ingredient: str, unit: str) -> None:
         """Correct the unit an Ingredient is stored in, such as chicken entered in ml by mistake.
 
@@ -229,6 +259,22 @@ class StockRepository:
                 for item in self.list_items()
             ],
         }
+
+    def disclaimer_acceptance(self) -> tuple[str, date] | None:
+        """The disclaimer version that was accepted and the date, or None if never accepted."""
+        row = self._db.execute("SELECT value FROM settings WHERE key = 'disclaimer'").fetchone()
+        if not row:
+            return None
+        version, _, accepted_on = row[0].partition("|")
+        return version, date.fromisoformat(accepted_on)
+
+    def accept_disclaimer(self, version: str, accepted_on: date) -> None:
+        with self._db:
+            self._db.execute(
+                "INSERT INTO settings (key, value) VALUES ('disclaimer', ?)"
+                " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                (f"{version}|{accepted_on.isoformat()}",),
+            )
 
     def household_country(self) -> str | None:
         """The ISO country code the Household lives in, or None if not set yet."""

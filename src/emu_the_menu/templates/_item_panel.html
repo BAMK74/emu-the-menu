@@ -1,0 +1,37 @@
+<h2 class="panel-title">{{ item.ingredient|capitalize }}</h2>
+{% if error %}<p class="error" role="alert">error: {{ error }}</p>{% endif %}
+<form class="add" method="post" action="/items/{{ item.id }}">
+  <div class="pair">
+    <label>Quantity
+      <input name="quantity" type="number" step="any" min="0" inputmode="decimal"
+             value="{{ form.quantity }}" required>
+    </label>
+    <label>Unit
+      <select name="unit">
+        {% for u in units %}<option value="{{ u }}"{{ " selected" if u == form.unit }}>{{ u }}</option>{% endfor %}
+      </select>
+    </label>
+  </div>
+  <label>Where
+    <select name="location">
+      {% for l in locations %}<option value="{{ l }}"{{ " selected" if l == form.location }}>{{ l }}</option>{% endfor %}
+    </select>
+  </label>
+  <div class="expiry-edit">
+    <label>Expires
+      <input name="expires_on" type="date" value="{{ form.expires_on }}"{{ " disabled" if form.no_expiry }}>
+    </label>
+    <label class="check">
+      <input type="checkbox" name="no_expiry" value="on" data-no-expiry{{ " checked" if form.no_expiry }}>
+      No expiry
+    </label>
+  </div>
+  <p class="hint">Expiry dates are reminders you set, not a food safety check.</p>
+  <div class="buttons">
+    <button type="submit">Save</button>
+    <button class="quiet" type="button" data-close-dialog>Cancel</button>
+  </div>
+</form>
+<form class="remove" method="post" action="/items/{{ item.id }}/delete" data-confirm="Remove {{ item.ingredient }} from stock?">
+  <button class="quiet danger" type="submit">Delete</button>
+</form>

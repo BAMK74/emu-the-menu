@@ -1,0 +1,8 @@
+{% extends "base.html" %}
+{% block title %}Emu the Menu - Adjust {{ item.ingredient }}{% endblock %}
+{% block heading %}Adjust stock{% endblock %}
+{% block main_class %}reading{% endblock %}
+{% block content %}
+  {% include "_item_panel.html" %}
+  <p><a href="/">Back to stock</a></p>
+{% endblock %}

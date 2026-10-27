@@ -17,6 +17,8 @@ from dataclasses import dataclass
 from enum import StrEnum
 from pathlib import Path
 
+from emu_the_menu.allergens import Allergen, parse_allergens
+
 
 class Category(StrEnum):
     MAN = "man"
@@ -106,6 +108,8 @@ class Eater:
     allergies: tuple[str, ...] = ()
     dislikes: tuple[str, ...] = ()
     diet: Diet = Diet.OMNIVORE
+    # Ticked from the 14 EU allergens. `allergies` holds anything else, as free text.
+    allergens: tuple[Allergen, ...] = ()
     # The Category's current default, filled in by the repository. None means the built-in one.
     default_goal: int | None = None
 
@@ -212,6 +216,11 @@ CREATE TABLE IF NOT EXISTS eater_terms (
     position INTEGER NOT NULL,
     PRIMARY KEY (eater_id, kind, term)
 );
+CREATE TABLE IF NOT EXISTS eater_allergens (
+    eater_id INTEGER NOT NULL REFERENCES eaters(id) ON DELETE CASCADE,
+    allergen TEXT NOT NULL,
+    PRIMARY KEY (eater_id, allergen)
+);
 CREATE TABLE IF NOT EXISTS category_goals (
     category TEXT PRIMARY KEY,
     kcal     INTEGER NOT NULL
@@ -311,10 +320,12 @@ class EaterRepository:
         allergies: Iterable[str] = (),
         dislikes: Iterable[str] = (),
         diet: Diet = Diet.OMNIVORE,
+        allergens: Iterable[Allergen] = (),
     ) -> Eater:
         name = clean_name(name)
         category = Category(category)
         diet = Diet(diet)
+        allergens = parse_allergens(Allergen(a).value for a in allergens)
         self._check_goal_for(category, calorie_adjustment)
         try:
             with self._db:
@@ -324,6 +335,7 @@ class EaterRepository:
                     (name, category.value, calorie_adjustment, diet.value),
                 )
                 self._save_terms(cursor.lastrowid, allergies, dislikes)
+                self._save_allergens(cursor.lastrowid, allergens)
         except sqlite3.IntegrityError:
             raise ValueError(f"Someone called {name} is already in the household") from None
         return self.get(cursor.lastrowid)
@@ -337,10 +349,12 @@ class EaterRepository:
         allergies: Iterable[str] = (),
         dislikes: Iterable[str] = (),
         diet: Diet = Diet.OMNIVORE,
+        allergens: Iterable[Allergen] = (),
     ) -> Eater:
         name = clean_name(name)
         category = Category(category)
         diet = Diet(diet)
+        allergens = parse_allergens(Allergen(a).value for a in allergens)
         self._check_goal_for(category, calorie_adjustment)
         if self.get(eater_id) is None:
             raise EaterNotFoundError(eater_id)
@@ -352,7 +366,9 @@ class EaterRepository:
                     (name, category.value, calorie_adjustment, diet.value, eater_id),
                 )
                 self._db.execute("DELETE FROM eater_terms WHERE eater_id = ?", (eater_id,))
+                self._db.execute("DELETE FROM eater_allergens WHERE eater_id = ?", (eater_id,))
                 self._save_terms(eater_id, allergies, dislikes)
+                self._save_allergens(eater_id, allergens)
         except sqlite3.IntegrityError:
             raise ValueError(f"Someone called {name} is already in the household") from None
         return self.get(eater_id)
@@ -367,6 +383,13 @@ class EaterRepository:
         """The adjustment must be a listed one and the resulting goal must stay in range."""
         _check_adjustment(adjustment)
         _check_goal(self.default_goals()[category] + adjustment)
+
+    def _save_allergens(self, eater_id: int, allergens: Iterable[Allergen]) -> None:
+        for allergen in allergens:
+            self._db.execute(
+                "INSERT INTO eater_allergens (eater_id, allergen) VALUES (?, ?)",
+                (eater_id, Allergen(allergen).value),
+            )
 
     def _save_terms(self, eater_id: int, allergies: Iterable[str], dislikes: Iterable[str]) -> None:
         allergy_terms = _clean_terms(allergies)
@@ -392,6 +415,9 @@ class EaterRepository:
             "SELECT kind, term FROM eater_terms WHERE eater_id = ? ORDER BY kind, position",
             (eater_id,),
         ).fetchall()
+        allergens = self._db.execute(
+            "SELECT allergen FROM eater_allergens WHERE eater_id = ?", (eater_id,)
+        ).fetchall()
         return Eater(
             eater_id,
             name,
@@ -400,5 +426,6 @@ class EaterRepository:
             allergies=tuple(term for kind, term in terms if kind == "allergy"),
             dislikes=tuple(term for kind, term in terms if kind == "dislike"),
             diet=Diet(diet),
+            allergens=parse_allergens(value for (value,) in allergens),
             default_goal=defaults[Category(category)],
         )

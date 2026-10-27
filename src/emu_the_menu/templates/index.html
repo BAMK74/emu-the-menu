@@ -1,7 +1,9 @@
 {% extends "base.html" %}
 {% block title %}Emu the Menu - Stock{% endblock %}
+{% block main_class %}wide{% endblock %}
 {% block content %}
-
+  <div class="split">
+  <aside class="side">
   {% if error %}<p class="error" role="alert">error: {{ error }}</p>{% endif %}
   {% if notice %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
   {% if warning %}
@@ -69,9 +71,49 @@
           No expiry
         </label>
       </div>
+      <p class="hint">Expiry dates are reminders you set, not a food safety check.</p>
     </fieldset>
     <button type="submit">Add to stock</button>
   </form>
+  </aside>
+
+  <section class="results" aria-label="Stock">
+    <div class="results-head">
+      <h2>In stock</h2>
+      {% if summary.total %}<p class="summary"><span class="chip">{{ summary.total }} item{{ "" if summary.total == 1 else "s" }}</span>{% if summary.soon %}<span class="chip chip-soon">{{ summary.soon }} expiring within 3 days</span>{% endif %}{% if summary.expired %}<span class="chip chip-expired">{{ summary.expired }} expired</span>{% endif %}</p>{% endif %}
+      {% if items %}<em class="hint">Click an item to adjust it.</em>{% endif %}
+    </div>
+  {% if items %}
+  <ul>
+    {% for item in items %}
+    <li>
+      {% set shown_quantity, shown_unit = display_quantity(item.quantity, item.base_unit) %}
+      {% set days = (item.expires_on - today).days if item.expires_on else none %}
+      <div class="item-head">
+        <a class="card-link" href="/items/{{ item.id }}" data-panel="/items/{{ item.id }}/panel"><strong>{{ item.ingredient }}</strong></a>
+        <span class="qty">{{ "%g"|format(shown_quantity) }} {{ shown_unit }}</span>
+      </div>
+      <div class="chips">
+        <span class="chip">{{ item.location.value|capitalize }}</span>
+        {% if days is none %}<span class="chip chip-none">No expiry</span>
+        {% elif days < 0 %}<span class="chip chip-expired">Expired {{ item.expires_on.strftime("%d/%m/%Y") }}</span>
+        {% elif days == 0 %}<span class="chip chip-soon">Expires today</span>
+        {% elif days == 1 %}<span class="chip chip-soon">Expires tomorrow</span>
+        {% elif days <= 3 %}<span class="chip chip-soon">Expires in {{ days }} days</span>
+        {% else %}<span class="chip chip-ok">Expires {{ item.expires_on.strftime("%d/%m/%Y") }}</span>{% endif %}
+      </div>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">Nothing in stock yet.</p>
+  {% endif %}
+  </section>
+  </div>
+
+  <dialog id="item-dialog" aria-label="Adjust stock item">
+    <div id="item-panel"></div>
+  </dialog>
   <script src="/static/zxing.min.js"></script>
   <script>
     const $ = (id) => document.getElementById(id);
@@ -163,34 +205,29 @@
         $("in-unit").value = known.shelf_life.unit;
       }
     });
-  </script>
 
-  {% if items %}
-  <ul>
-    {% for item in items %}
-    <li>
-      {% set shown_quantity, shown_unit = display_quantity(item.quantity, item.base_unit) %}
-      <strong>{{ item.ingredient }}</strong>
-      {{ "%g"|format(shown_quantity) }} {{ shown_unit }}
-      <div class="meta">{{ item.location.value }} &middot;
-        {% if item.expires_on %}expires {{ item.expires_on.strftime("%d/%m/%Y") }}{% else %}no expiry{% endif %}</div>
-      <div class="actions">
-        <form method="post" action="/items/{{ item.id }}/quantity">
-          <input name="quantity" type="number" step="any" min="0" inputmode="decimal"
-                 aria-label="New quantity" value="{{ "%g"|format(shown_quantity) }}" required>
-          <select name="unit" aria-label="Unit">
-            {% for u in units %}<option value="{{ u }}" {{ "selected" if u == shown_unit }}>{{ u }}</option>{% endfor %}
-          </select>
-          <button type="submit">Set</button>
-        </form>
-        <form method="post" action="/items/{{ item.id }}/delete">
-          <button class="quiet" type="submit">Delete</button>
-        </form>
-      </div>
-    </li>
-    {% endfor %}
-  </ul>
-  {% else %}
-  <p class="empty">Nothing in stock yet.</p>
-  {% endif %}
+    // Click an item to adjust it in a popup. The form is fetched when it opens, so it always
+    // shows the item as it is now. Without scripting the link opens the same form as a page.
+    const itemDialog = $("item-dialog");
+    document.addEventListener("click", async (event) => {
+      const card = event.target.closest(".results li");
+      const link = card && card.querySelector("a.card-link");
+      if (!link || typeof itemDialog.showModal !== "function") return;
+      if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+      event.preventDefault();
+      try {
+        const response = await fetch(link.dataset.panel);
+        if (!response.ok) throw new Error("HTTP " + response.status);
+        $("item-panel").innerHTML = await response.text();
+        itemDialog.showModal();
+      } catch (error) {
+        window.location.href = link.href;
+      }
+    });
+    itemDialog.addEventListener("click", (event) => {
+      if (event.target === itemDialog || event.target.closest("[data-close-dialog]")) {
+        itemDialog.close();
+      }
+    });
+  </script>
 {% endblock %}

@@ -1,0 +1,39 @@
+<section class="calorie-goals" aria-label="Calorie goals">
+  <details{{ " open" if goals_open }}>
+  <summary>Calorie goals by type</summary>
+  <p class="hint">Each person starts from the goal of their type. On the Eaters page, a person's Calories menu adds or takes away from it.</p>
+  {% set who = {
+    "man": "Adult men of average size and activity.",
+    "woman": "Adult women of average size and activity.",
+    "teen": "Teenagers, roughly 13 to 17. Needs vary a lot with age, growth and sport.",
+    "child": "Children, roughly 4 to 12. Needs rise quickly with age and activity.",
+  } %}
+  <table>
+    <thead><tr><th scope="col">Type</th><th scope="col">Meant for</th><th scope="col">kcal a day</th></tr></thead>
+    <tbody>
+      {% for c in categories %}
+      <tr>
+        <th scope="row">{{ c.value|capitalize }}</th>
+        <td>{{ who[c.value] }}</td>
+        <td class="num">{{ default_goals[c.value] }}{% if default_goals[c.value] != builtin_goals[c.value] %} <small>(built-in {{ builtin_goals[c.value] }})</small>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <form class="add" method="post" action="/settings/calorie-goals">
+    {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+    <h4>Change the defaults</h4>
+    <div class="pair">
+      {% for c in categories %}
+      <label>{{ c.value|capitalize }} (kcal a day)
+        <input name="goal_{{ c.value }}" inputmode="numeric" autocomplete="off"
+               placeholder="{{ builtin_goals[c.value] }}" value="{{ goal_form[c.value] }}">
+      </label>
+      {% endfor %}
+    </div>
+    <p class="hint">Changing a default moves everyone of that type. Clear a box to go back to the built-in figure.</p>
+    <button type="submit">Save goals</button>
+  </form>
+  <p class="warning-note">These are rough starting points, not recommendations for any individual. Real needs depend on age, size, activity, health and more, and the figures here have not been checked by a dietitian or doctor. Talk to a doctor or dietitian about what you or your children should eat, especially for children, teenagers, pregnancy or a medical condition. <a href="/disclaimer">Read the disclaimer</a>.</p>
+  </details>
+</section>

@@ -6,9 +6,9 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from emu_the_menu.allergens import Allergen, parse_allergens
 from emu_the_menu.eaters import (
     CALORIE_ADJUSTMENTS,
-    DEFAULT_CALORIE_GOALS,
     Category,
     Diet,
     Eater,
@@ -16,7 +16,6 @@ from emu_the_menu.eaters import (
     EaterRepository,
     clean_name,
     parse_calorie_adjustment,
-    parse_calorie_goal,
     parse_diet,
     parse_terms,
 )
@@ -29,6 +28,7 @@ _BLANK_FORM = {
     "allergies": "",
     "dislikes": "",
     "diet": Diet.OMNIVORE.value,
+    "allergens": (),
 }
 
 
@@ -39,7 +39,8 @@ def _read_form(
     allergies: str,
     dislikes: str,
     diet: str,
-) -> tuple[str, Category, int, tuple[str, ...], tuple[str, ...], Diet]:
+    allergens: list[str],
+) -> tuple[str, Category, int, tuple[str, ...], tuple[str, ...], Diet, tuple[Allergen, ...]]:
     """Check what the form sent. Raises ValueError with a message the page can show."""
     try:
         parsed_category = Category(category)
@@ -52,6 +53,7 @@ def _read_form(
         parse_terms(allergies),
         parse_terms(dislikes),
         parse_diet(diet),
+        parse_allergens(allergens),
     )
 
 
@@ -66,9 +68,7 @@ def create_router(db_path: str | Path) -> APIRouter:
         request: Request,
         repo: EaterRepository,
         form: dict | None = None,
-        goal_form: dict | None = None,
         error: str | None = None,
-        defaults_open: bool = False,
     ):
         defaults = repo.default_goals()
         return TEMPLATES.TemplateResponse(
@@ -78,14 +78,11 @@ def create_router(db_path: str | Path) -> APIRouter:
                 "eaters": repo.list(),
                 "categories": list(Category),
                 "diets": list(Diet),
+                "allergen_choices": list(Allergen),
                 "adjustments": CALORIE_ADJUSTMENTS,
                 "form": form or _BLANK_FORM,
                 "default_goals": {c.value: kcal for c, kcal in defaults.items()},
-                "builtin_goals": {c.value: kcal for c, kcal in DEFAULT_CALORIE_GOALS.items()},
-                # What the defaults form shows: the current goals, or what was typed in a bad try.
-                "goal_form": goal_form or {c.value: str(kcal) for c, kcal in defaults.items()},
                 "error": error,
-                "defaults_open": defaults_open,
             },
             status_code=400 if error else 200,
         )
@@ -93,29 +90,6 @@ def create_router(db_path: str | Path) -> APIRouter:
     @router.get("/eaters", response_class=HTMLResponse)
     def eaters(request: Request, repo: EaterRepository = Depends(get_repo)):
         return page(request, repo)
-
-    # Registered before "/eaters/{eater_id}", which would otherwise try to read "defaults" as an id.
-    @router.post("/eaters/defaults")
-    def save_default_goals(
-        request: Request,
-        goal_man: str = Form(""),
-        goal_woman: str = Form(""),
-        goal_teen: str = Form(""),
-        goal_child: str = Form(""),
-        repo: EaterRepository = Depends(get_repo),
-    ):
-        typed = {
-            Category.MAN: goal_man,
-            Category.WOMAN: goal_woman,
-            Category.TEEN: goal_teen,
-            Category.CHILD: goal_child,
-        }
-        try:
-            repo.set_default_goals({c: parse_calorie_goal(text) for c, text in typed.items()})
-        except ValueError as exc:
-            goal_form = {c.value: text for c, text in typed.items()}
-            return page(request, repo, goal_form=goal_form, error=str(exc), defaults_open=True)
-        return RedirectResponse("/eaters", status_code=303)
 
     @router.post("/eaters")
     def add_eater(
@@ -126,6 +100,7 @@ def create_router(db_path: str | Path) -> APIRouter:
         allergies: str = Form(""),
         dislikes: str = Form(""),
         diet: str = Form("omnivore"),
+        allergens: list[str] = Form([]),
         repo: EaterRepository = Depends(get_repo),
     ):
         form = {
@@ -135,9 +110,14 @@ def create_router(db_path: str | Path) -> APIRouter:
             "allergies": allergies,
             "dislikes": dislikes,
             "diet": diet,
+            "allergens": allergens,
         }
         try:
-            repo.add(*_read_form(name, category, calorie_adjustment, allergies, dislikes, diet))
+            repo.add(
+                *_read_form(
+                    name, category, calorie_adjustment, allergies, dislikes, diet, allergens
+                )
+            )
         except ValueError as exc:
             return page(request, repo, form, error=str(exc))
         return RedirectResponse("/eaters", status_code=303)
@@ -152,6 +132,7 @@ def create_router(db_path: str | Path) -> APIRouter:
         allergies: str = Form(""),
         dislikes: str = Form(""),
         diet: str = Form("omnivore"),
+        allergens: list[str] = Form([]),
         repo: EaterRepository = Depends(get_repo),
     ):
         if repo.get(eater_id) is None:
@@ -159,7 +140,9 @@ def create_router(db_path: str | Path) -> APIRouter:
         try:
             repo.update(
                 eater_id,
-                *_read_form(name, category, calorie_adjustment, allergies, dislikes, diet),
+                *_read_form(
+                    name, category, calorie_adjustment, allergies, dislikes, diet, allergens
+                ),
             )
         except ValueError as exc:
             return page(request, repo, error=str(exc))
@@ -187,6 +170,7 @@ def export_eaters(eaters: list[Eater]) -> list[dict]:
             "calorie_goal": eater.calorie_goal,
             "calorie_adjustment": eater.calorie_adjustment,
             "calorie_goal_is_custom": eater.has_custom_goal,
+            "allergens": [a.value for a in eater.allergens],
             "allergies": list(eater.allergies),
             "dislikes": list(eater.dislikes),
             "diet": eater.diet.value,

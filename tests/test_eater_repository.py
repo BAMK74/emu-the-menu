@@ -2,6 +2,7 @@ import sqlite3
 
 import pytest
 
+from emu_the_menu.allergens import Allergen
 from emu_the_menu.eaters import (
     DEFAULT_CALORIE_GOALS,
     Category,
@@ -288,3 +289,62 @@ def test_a_database_from_before_diets_gets_everyone_eating_everything(tmp_path):
         repo.update(mia.id, "Mia", Category.WOMAN, 200, diet=Diet.VEGAN)
     with EaterRepository(path) as repo:
         assert repo.list()[0].diet is Diet.VEGAN
+
+
+# --- allergens ------------------------------------------------------------------------------
+
+
+def test_an_eater_has_no_allergens_unless_some_are_chosen(repo):
+    assert repo.add("Sam", Category.MAN).allergens == ()
+
+
+def test_allergens_are_stored_in_the_standard_order(repo):
+    eater = repo.add("Mia", Category.WOMAN, allergens=[Allergen.TREE_NUTS, Allergen.MILK])
+    assert eater.allergens == (Allergen.MILK, Allergen.TREE_NUTS)
+    assert repo.get(eater.id).allergens == (Allergen.MILK, Allergen.TREE_NUTS)
+
+
+def test_allergens_and_free_text_allergies_are_kept_apart(repo):
+    eater = repo.add("Mia", Category.WOMAN, allergies=["kiwi"], allergens=[Allergen.MILK])
+    assert (eater.allergens, eater.allergies) == ((Allergen.MILK,), ("kiwi",))
+
+
+def test_updating_replaces_the_allergens(repo):
+    eater = repo.add("Mia", Category.WOMAN, allergens=[Allergen.MILK, Allergen.EGGS])
+    updated = repo.update(eater.id, "Mia", Category.WOMAN, allergens=[Allergen.SESAME])
+    assert updated.allergens == (Allergen.SESAME,)
+    assert repo.update(eater.id, "Mia", Category.WOMAN).allergens == ()
+
+
+def test_deleting_an_eater_removes_their_allergens(repo, tmp_path):
+    eater = repo.add("Mia", Category.WOMAN, allergens=[Allergen.MILK])
+    repo.delete(eater.id)
+    db = sqlite3.connect(tmp_path / "emu.db")
+    assert db.execute("SELECT COUNT(*) FROM eater_allergens").fetchone()[0] == 0
+
+
+def test_allergens_survive_reopening_the_database(tmp_path):
+    path = tmp_path / "emu.db"
+    with EaterRepository(path) as repo:
+        repo.add("Mia", Category.WOMAN, allergens=[Allergen.GLUTEN, Allergen.SOY])
+    with EaterRepository(path) as repo:
+        assert repo.list()[0].allergens == (Allergen.GLUTEN, Allergen.SOY)
+
+
+def test_a_database_from_before_allergens_still_opens(tmp_path):
+    path = tmp_path / "old.db"
+    db = sqlite3.connect(path)
+    db.executescript(
+        """CREATE TABLE eaters (id INTEGER PRIMARY KEY,
+               name TEXT NOT NULL UNIQUE COLLATE NOCASE, category TEXT NOT NULL,
+               calorie_adjustment INTEGER NOT NULL DEFAULT 0,
+               diet TEXT NOT NULL DEFAULT 'omnivore');
+           INSERT INTO eaters (name, category) VALUES ('Mia', 'woman');"""
+    )
+    db.commit()
+    db.close()
+    with EaterRepository(path) as repo:
+        [mia] = repo.list()
+        assert mia.allergens == ()
+        repo.update(mia.id, "Mia", Category.WOMAN, allergens=[Allergen.FISH])
+        assert repo.list()[0].allergens == (Allergen.FISH,)

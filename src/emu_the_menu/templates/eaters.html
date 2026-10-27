@@ -1,24 +1,11 @@
 {% extends "base.html" %}
 {% block title %}Emu the Menu - Eaters{% endblock %}
 {% block heading %}Eaters{% endblock %}
+{% block main_class %}wide{% endblock %}
 {% block content %}
+  <div class="split">
+  <aside class="side">
   {% if error %}<p class="error" role="alert">error: {{ error }}</p>{% endif %}
-
-  <details class="defaults"{{ " open" if defaults_open }}>
-    <summary>Default calorie goals</summary>
-    <form class="add" method="post" action="/eaters/defaults">
-      <div class="pair">
-        {% for c in categories %}
-        <label>{{ c.value|capitalize }} (kcal a day)
-          <input name="goal_{{ c.value }}" inputmode="numeric" autocomplete="off"
-                 placeholder="{{ builtin_goals[c.value] }}" value="{{ goal_form[c.value] }}">
-        </label>
-        {% endfor %}
-      </div>
-      <p class="hint">Each person's goal is their category's default plus their own adjustment, so changing a default moves everyone in that category. Clear a box to go back to the built-in goal.</p>
-      <button type="submit">Save defaults</button>
-    </form>
-  </details>
 
   <form class="add" method="post" action="/eaters">
     <label>Name
@@ -27,10 +14,10 @@
     <div class="pair">
       <label>Category
         <select name="category">
-          {% for c in categories %}<option value="{{ c.value }}"{{ " selected" if c.value == form.category }}>{{ c.value }}</option>{% endfor %}
+          {% for c in categories %}<option value="{{ c.value }}"{{ " selected" if c.value == form.category }}>{{ c.value|capitalize }}</option>{% endfor %}
         </select>
       </label>
-      <label>Calories
+      <label>Calories (kcal)
         <select name="calorie_adjustment">
           {% for a in adjustments %}<option value="{{ a }}"{{ " selected" if a|string == form.calorie_adjustment|string }}>{{ "Default" if a == 0 else "%+d kcal"|format(a) }}</option>{% endfor %}
         </select>
@@ -41,25 +28,46 @@
         {% for d in diets %}<option value="{{ d.value }}"{{ " selected" if d.value == form.diet }}>{{ d.label }}</option>{% endfor %}
       </select>
     </label>
-    <label>Allergies
-      <input name="allergies" placeholder="peanuts, shellfish" autocomplete="off"
+    <fieldset class="allergens">
+      <legend>Allergens</legend>
+      <div class="checks">
+        {% for a in allergen_choices %}<label title="{{ a.label }}"><input type="checkbox" name="allergens" value="{{ a.value }}"{{ " checked" if a.value in form.allergens }}> {{ a.short_label }}</label>{% endfor %}
+      </div>
+      <p class="hint">Gluten: wheat, rye, barley, oats. Tree nuts: almonds, hazelnuts, walnuts. Crustaceans: prawns, crab, lobster. Molluscs: mussels, squid, snails.</p>
+    </fieldset>
+    <label>Other allergies
+      <input name="allergies" placeholder="kiwi, buckwheat" autocomplete="off"
              value="{{ form.allergies }}">
+      <small>Separate with commas or semicolons, like kiwi, buckwheat</small>
     </label>
     <label>Dislikes
       <input name="dislikes" placeholder="olives, mushrooms" autocomplete="off"
              value="{{ form.dislikes }}">
+      <small>Separate with commas or semicolons, like olives, mushrooms</small>
     </label>
-    <p class="hint">{% for d in diets if d.value != "omnivore" %}{{ d.label }}: {{ d.description }}{{ ". " if not loop.last }}{% endfor %}. Allergies are never suggested. Dislikes are avoided when there is a choice. Calories are the category's default unless you choose more or less.</p>
+    <p class="hint">{% for d in diets if d.value != "omnivore" %}{{ d.label }}: {{ d.description }}{{ ". " if not loop.last }}{% endfor %}. Allergens and other allergies are never suggested. Dislikes are avoided when there is a choice. Calories are the category's default unless you choose more or less. Change the defaults in Settings.</p>
     <button type="submit">Add eater</button>
   </form>
+
+
+  </aside>
+
+  <section class="results" aria-label="Eaters">
+  <div class="warning-note" role="note">
+    <p><strong>Not medical advice.</strong> Emu the Menu cannot guarantee that a food is free of an allergen: always read the label of every product. Calorie goals and diets are rough guides, not medical or dietary advice. Talk to a doctor or dietitian about what you or your children should eat. <a href="/disclaimer">Read the disclaimer</a>.</p>
+  </div>
 
   {% if eaters %}
   <ul>
     {% for eater in eaters %}
     <li>
-      <strong>{{ eater.name }}</strong> <span class="tag">{{ eater.category.value }}</span>
+      <div class="item-head">
+        <span><strong>{{ eater.name }}</strong> <span class="tag">{{ eater.category.value|capitalize }}</span></span>
+        <span class="qty">{{ eater.calorie_goal }} kcal</span>
+      </div>
       <div class="meta">{{ eater.calorie_goal }} kcal a day ({% if eater.has_custom_goal %}default {{ eater.default_calorie_goal }}, {{ "%+d"|format(eater.calorie_adjustment) }}{% else %}default{% endif %})</div>
-      {% if eater.allergies %}<div class="meta">Allergies: {{ eater.allergies|join(", ") }}</div>{% endif %}
+      {% set allergy_names = eater.allergens|map(attribute="short_label")|list + eater.allergies|list %}
+      {% if allergy_names %}<div class="meta">Allergies: {{ allergy_names|join(", ") }}</div>{% endif %}
       {% if eater.dislikes %}<div class="meta">Dislikes: {{ eater.dislikes|join(", ") }}</div>{% endif %}
       {% if eater.diet.value != "omnivore" %}<div class="meta">Diet: {{ eater.diet.label }}</div>{% endif %}
       <details>
@@ -71,10 +79,10 @@
           <div class="pair">
             <label>Category
               <select name="category">
-                {% for c in categories %}<option value="{{ c.value }}"{{ " selected" if c == eater.category }}>{{ c.value }}</option>{% endfor %}
+                {% for c in categories %}<option value="{{ c.value }}"{{ " selected" if c == eater.category }}>{{ c.value|capitalize }}</option>{% endfor %}
               </select>
             </label>
-            <label>Calories
+            <label>Calories (kcal)
               <select name="calorie_adjustment">
                 {% for a in adjustments %}<option value="{{ a }}"{{ " selected" if a == eater.calorie_adjustment }}>{{ "Default" if a == 0 else "%+d kcal"|format(a) }}</option>{% endfor %}
               </select>
@@ -85,11 +93,20 @@
               {% for d in diets %}<option value="{{ d.value }}"{{ " selected" if d == eater.diet }}>{{ d.label }}</option>{% endfor %}
             </select>
           </label>
-          <label>Allergies
+          <fieldset class="allergens">
+            <legend>Allergens</legend>
+            <div class="checks">
+              {% for a in allergen_choices %}<label title="{{ a.label }}"><input type="checkbox" name="allergens" value="{{ a.value }}"{{ " checked" if a in eater.allergens }}> {{ a.short_label }}</label>{% endfor %}
+            </div>
+            <p class="hint">Gluten: wheat, rye, barley, oats. Tree nuts: almonds, hazelnuts, walnuts. Crustaceans: prawns, crab, lobster. Molluscs: mussels, squid, snails.</p>
+          </fieldset>
+          <label>Other allergies
             <input name="allergies" autocomplete="off" value="{{ eater.allergies|join(", ") }}">
+            <small>Separate with commas or semicolons</small>
           </label>
           <label>Dislikes
             <input name="dislikes" autocomplete="off" value="{{ eater.dislikes|join(", ") }}">
+            <small>Separate with commas or semicolons</small>
           </label>
           <button type="submit">Save</button>
         </form>
@@ -103,15 +120,10 @@
   {% else %}
   <p class="empty">No one yet. Add the people you cook for.</p>
   {% endif %}
+  </section>
+  </div>
 
   <script>
-    // Removing someone asks first.
-    document.querySelectorAll("form[data-confirm]").forEach((form) => {
-      form.addEventListener("submit", (event) => {
-        if (!confirm(form.dataset.confirm)) event.preventDefault();
-      });
-    });
-
     // Show what each choice comes to for the chosen category, such as "+200 kcal (2200)".
     const defaultGoals = {{ default_goals|tojson }};
     function showGoals(form) {
@@ -119,8 +131,8 @@
       form.querySelectorAll('select[name="calorie_adjustment"] option').forEach((option) => {
         const step = Number(option.value);
         option.textContent = step === 0
-          ? `Default (${base} kcal)`
-          : `${step > 0 ? "+" : "-"}${Math.abs(step)} kcal (${base + step})`;
+          ? `Default (${base})`
+          : `${step > 0 ? "+" : "-"}${Math.abs(step)} (${base + step})`;
       });
     }
     document.querySelectorAll("form").forEach((form) => {
