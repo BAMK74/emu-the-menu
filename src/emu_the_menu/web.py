@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
 from emu_the_menu.countries import COUNTRIES
@@ -19,6 +20,8 @@ from emu_the_menu.units import IncompatibleUnitError, known_units
 _TEMPLATES = Jinja2Templates(directory=Path(__file__).parent / "templates")
 _BLANK_FORM = {
     "barcode": "",
+    "auto_ingredient": "",
+    "auto_quantity": "",
     "ingredient": "",
     "quantity": "",
     "unit": "g",
@@ -42,6 +45,15 @@ def _unit_warning(
     }
 
 
+def _forget_previous_lookup(form: dict) -> None:
+    """Clear the name and quantity an earlier lookup filled in, unless the user changed them."""
+    if form["ingredient"] == form["auto_ingredient"]:
+        form["ingredient"] = ""
+    if form["quantity"] == form["auto_quantity"]:
+        form["quantity"] = ""
+    form["auto_ingredient"] = form["auto_quantity"] = ""
+
+
 def create_app(
     db_path: str | Path | None = None,
     today: Callable[[], date] = date.today,
@@ -49,6 +61,7 @@ def create_app(
 ) -> FastAPI:
     path = db_path or os.environ.get("EMU_DB", "emu.db")
     app = FastAPI(title="Emu the Menu")
+    app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
     def get_repo() -> Iterator[StockRepository]:
         # One connection per request: sqlite connections are not shared across threads.
@@ -133,6 +146,8 @@ def create_app(
     def look_up_barcode(
         request: Request,
         barcode: str = Form(""),
+        auto_ingredient: str = Form(""),
+        auto_quantity: str = Form(""),
         ingredient: str = Form(""),
         quantity: str = Form(""),
         unit: str = Form(""),
@@ -143,9 +158,15 @@ def create_app(
         no_expiry: str = Form(""),
         repo: StockRepository = Depends(get_repo),
     ):
-        """Fill in the Add form from a barcode. Never changes Stock: the user confirms."""
+        """Fill in the Add form from a barcode. Never changes Stock: the user confirms.
+
+        The name and quantity a lookup fills in are remembered in `auto_*`, so the
+        next lookup can replace them without ever replacing something the user typed.
+        """
         form = {
             "barcode": barcode,
+            "auto_ingredient": auto_ingredient,
+            "auto_quantity": auto_quantity,
             "ingredient": ingredient,
             "quantity": quantity,
             "unit": unit,
@@ -160,24 +181,31 @@ def create_app(
         except ValueError as exc:
             return page(request, repo, form, str(exc))
         except LookupUnavailableError:
+            _forget_previous_lookup(form)
             notice = "Could not reach Open Food Facts. Enter the quantity by hand."
             return page(request, repo, form, notice=notice)
+        _forget_previous_lookup(form)
         if info is None:
             return page(request, repo, form, notice="No product found for that barcode.")
-        if info.name and not ingredient.strip():
-            form["ingredient"] = info.name
+        if info.name and not form["ingredient"].strip():
+            form["ingredient"] = form["auto_ingredient"] = info.name
         found = f"Found {info.name or 'a product'}"
-        if info.quantity:
-            form["quantity"], form["unit"] = f"{info.quantity:g}", info.unit
-            notice = f"{found}: pack size {info.quantity:g} {info.unit}."
-        else:
+        if not info.quantity:
             notice = f"{found}, but it has no pack size listed. Enter the quantity by hand."
+        elif form["quantity"].strip():
+            notice = f"{found}: pack size {info.quantity:g} {info.unit}. Your quantity was kept."
+        else:
+            form["quantity"] = form["auto_quantity"] = f"{info.quantity:g}"
+            form["unit"] = info.unit
+            notice = f"{found}: pack size {info.quantity:g} {info.unit}."
         return page(request, repo, form, notice=f"{notice} Data from Open Food Facts.")
 
     @app.post("/items")
     def add_item(
         request: Request,
         barcode: str = Form(""),
+        auto_ingredient: str = Form(""),
+        auto_quantity: str = Form(""),
         ingredient: str = Form(""),
         quantity: str = Form(""),
         unit: str = Form(""),
@@ -191,6 +219,8 @@ def create_app(
     ):
         form = {
             "barcode": barcode,
+            "auto_ingredient": auto_ingredient,
+            "auto_quantity": auto_quantity,
             "ingredient": ingredient,
             "quantity": quantity,
             "unit": unit,

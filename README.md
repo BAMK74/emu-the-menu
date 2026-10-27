@@ -17,7 +17,7 @@ uv run ruff format .
 
 ## Status
 
-Slice 1: Stock core (Ingredient, Stock Item, Location, unit conversion). Login, Recipes and Menu generation come later.
+Slice 1 is done: Stock (add, edit, delete, expiry and shelf life), a household country setting, and barcode lookup through Open Food Facts with photo scanning. Login, Recipes and Menu generation come later. See [docs/HANDOFF.md](docs/HANDOFF.md).
 
 ## Licence
 

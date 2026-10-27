@@ -118,3 +118,25 @@ def test_an_unknown_barcode_is_not_cached(repo):
     find_product(BARCODE, repo, fetch)
     find_product(BARCODE, repo, fetch)
     assert len(fetch.calls) == 2
+
+
+@pytest.mark.parametrize(
+    ("quantity", "expected"),
+    [
+        (566.9904625, 567),  # 20 oz converted to grams
+        (4258.584, 4259),  # 144 fl oz converted to millilitres
+        (415, 415),
+        (10.4, 10),
+        (1.5, 1.5),
+        (0.254, 0.25),
+        (9.999, 10),
+    ],
+)
+def test_pack_sizes_are_rounded_to_a_sensible_precision(repo, quantity, expected):
+    fetch = FakeFetch(found(product_quantity=quantity, product_quantity_unit="g"))
+    assert find_product(BARCODE, repo, fetch).quantity == expected
+
+
+def test_a_pack_size_that_rounds_to_nothing_is_left_blank(repo):
+    fetch = FakeFetch(found(product_quantity=0.004, product_quantity_unit="g"))
+    assert find_product(BARCODE, repo, fetch).quantity is None

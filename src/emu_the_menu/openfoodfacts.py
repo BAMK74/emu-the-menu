@@ -83,6 +83,11 @@ def find_product(
     return info
 
 
+def _round_pack_size(quantity: float) -> float:
+    """Whole numbers from 10 up, two decimals below, so 20 oz reads 567 g and not 566.99 g."""
+    return float(round(quantity)) if quantity >= 10 else round(quantity, 2)
+
+
 def _pack_size(product: dict) -> tuple[float | None, str | None]:
     """The Pack size as (quantity, unit), from the numeric fields or else the text."""
     quantity, unit = product.get("product_quantity"), product.get("product_quantity_unit")
@@ -90,6 +95,7 @@ def _pack_size(product: dict) -> tuple[float | None, str | None]:
         quantity, unit = None, None
     if quantity is None and (match := _QUANTITY_TEXT.fullmatch(product.get("quantity") or "")):
         quantity, unit = float(match.group(1).replace(",", ".")), match.group(2)
+    quantity = _round_pack_size(quantity) if isinstance(quantity, int | float) else None
     if not quantity or quantity <= 0 or not unit:
         return None, None
     try:

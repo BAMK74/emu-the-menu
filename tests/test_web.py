@@ -411,3 +411,95 @@ def test_adding_stock_never_calls_the_lookup(client, off):
         },
     )
     assert off.calls == []
+
+
+def test_the_zxing_library_is_served_from_the_app(client):
+    response = client.get("/static/zxing.min.js")
+    assert response.status_code == 200
+    assert "javascript" in response.headers["content-type"]
+    assert "BrowserMultiFormatReader" in response.text
+
+
+def test_the_add_form_can_scan_a_barcode_from_a_photo(client):
+    page = client.get("/").text
+    assert '<script src="/static/zxing.min.js"></script>' in page
+    assert re.search(r'<input[^>]*type="file"[^>]*capture="environment"', page)
+    assert 'id="scan-button"' in page
+    assert 'accept="image/*"' in page
+
+
+def second_scan(client, off, response, **fields):
+    """Scan a second product after the first one filled in Penne, 500 g."""
+    off.response = response
+    return lookup(
+        client,
+        barcode="4006381333931",
+        ingredient="Penne",
+        quantity="500",
+        unit="g",
+        auto_ingredient="Penne",
+        auto_quantity="500",
+        **fields,
+    )
+
+
+def field_value(page, name):
+    match = re.search(rf'name="{name}"[^>]*?value="([^"]*)"', page, re.S)
+    return match.group(1) if match else None
+
+
+def test_a_lookup_remembers_which_fields_it_filled_in(client, off):
+    off.response = penne()
+    page = lookup(client).text
+    assert field_value(page, "auto_ingredient") == "Penne"
+    assert field_value(page, "auto_quantity") == "500"
+
+
+def test_scanning_a_second_product_replaces_the_first_ones_details(client, off):
+    page = second_scan(client, off, penne(product_name="Fusilli", product_quantity=250)).text
+    assert field_value(page, "ingredient") == "Fusilli"
+    assert field_value(page, "quantity") == "250"
+    assert field_value(page, "auto_ingredient") == "Fusilli"
+
+
+def test_a_name_typed_after_the_first_scan_is_kept_on_the_second(client, off):
+    off.response = penne(product_name="Fusilli")
+    response = lookup(
+        client, barcode="4006381333931", ingredient="my pasta", auto_ingredient="Penne"
+    )
+    assert field_value(response.text, "ingredient") == "my pasta"
+    assert field_value(response.text, "auto_ingredient") == ""
+
+
+def test_a_quantity_edited_after_the_first_scan_is_kept_on_the_second(client, off):
+    off.response = penne(product_quantity=250)
+    response = lookup(client, barcode="4006381333931", quantity="3", auto_quantity="500")
+    assert field_value(response.text, "quantity") == "3"
+
+
+def test_scanning_an_unknown_product_clears_the_first_ones_details(client, off):
+    page = second_scan(client, off, {"status": 0}).text
+    assert field_value(page, "ingredient") == ""
+    assert field_value(page, "quantity") == ""
+    assert "No product found" in page
+
+
+def test_scanning_a_product_without_a_pack_size_clears_the_old_quantity(client, off):
+    page = second_scan(client, off, {"status": 1, "product": {"product_name": "Fusilli"}}).text
+    assert field_value(page, "ingredient") == "Fusilli"
+    assert field_value(page, "quantity") == ""
+
+
+def test_an_unreachable_service_clears_the_first_ones_details(client, off):
+    off.error = OSError("offline")
+    page = second_scan(client, off, None).text
+    assert field_value(page, "ingredient") == ""
+    assert field_value(page, "quantity") == ""
+
+
+def test_a_bad_barcode_keeps_the_form_as_it_was(client, off):
+    response = lookup(
+        client, barcode="abc", ingredient="Penne", quantity="500", auto_ingredient="Penne"
+    )
+    assert response.status_code == 400
+    assert field_value(response.text, "ingredient") == "Penne"
