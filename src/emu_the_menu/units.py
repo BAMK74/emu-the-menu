@@ -74,3 +74,17 @@ def convert(quantity: float, from_unit: str, to_unit: str) -> float:
     if from_base != to_base_unit:
         raise IncompatibleUnitError(f"cannot convert {from_unit!r} to {to_unit!r}")
     return quantity * from_factor / to_factor
+
+
+def display_quantity(quantity: float, base: BaseUnit) -> tuple[float, str]:
+    """A stored quantity in the unit people read, such as 1000 g as 1 kg.
+
+    Grams and millilitres switch to kilograms and litres from 1000 up. Values are
+    rounded to three decimals, which hides floating-point noise.
+    """
+    quantity = round(quantity, 3)
+    if base is BaseUnit.GRAM and quantity >= 1000:
+        return round(quantity / 1000, 3), "kg"
+    if base is BaseUnit.MILLILITRE and quantity >= 1000:
+        return round(quantity / 1000, 3), "l"
+    return quantity, base.value

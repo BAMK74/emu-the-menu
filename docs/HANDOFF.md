@@ -36,19 +36,23 @@ Emu the Menu is a self-hosted household app. It tracks what is in the fridge, fr
 - `src/emu_the_menu/web.py` and `templates/index.html`: FastAPI and Jinja Stock page (add, set quantity, delete, list by expiry) with plain POST-redirect-GET forms. Tests in `tests/test_web.py`.
 - Project scaffold: `pyproject.toml` pinned to Python 3.13, `uv.lock`, `.gitignore`, `.gitattributes` (LF line endings) and `README.md`.
 - `src/emu_the_menu/units.py` and `stock.py`: the pure stock rules, with docstrings that define the behaviour.
-- `tests/test_units.py`, `tests/test_stock.py`, `tests/test_repository.py`, `tests/test_shelf_life.py`, `tests/test_openfoodfacts.py` and `tests/test_web.py`: 175 tests, all passing.
+- `tests/test_units.py`, `tests/test_stock.py`, `tests/test_repository.py`, `tests/test_shelf_life.py`, `tests/test_openfoodfacts.py` and `tests/test_web.py`: 189 tests, all passing.
 
-**Raspberry Pi** (`pi-host`, Tailscale IP 100.64.0.1, SSH user `pi-user`, key login works):
+**Raspberry Pi** (`pi-host`, Tailscale IP 100.64.0.1, SSH user `pi-user`, logged in with Tailscale SSH):
 
 - Debian 13 (trixie), aarch64, Python 3.13.5, 2 GB RAM, 29 GB microSD that still holds the OS.
 - A Samsung 840 EVO 250 GB SSD on USB is formatted ext4 (label `emu`) and mounted at `/mnt/emu` through `/etc/fstab` by UUID, with `noatime,nofail`. Folders `/mnt/emu/db`, `/mnt/emu/uploads` and `/mnt/emu/backups` are owned by `pi-user`.
-- `git` is installed. `uv` and `tesseract` are not.
+- `git` is installed, and `tesseract` is not. It also runs AdGuard Home (ports 53, 80, 443, 3000), Docker, NordVPN and Tailscale, which together use most of the 766 MB in use. Port 8000 is free.
+- **Emu is deployed** and running as the systemd service `emu-the-menu` (the unit is saved in `deploy/emu-the-menu.service`). It runs as `pi-user` from `~/emu-the-menu`, with the database at `/mnt/emu/db/emu.db`, and starts at boot. It waits for the SSD mount (`RequiresMountsFor`) so data never lands on the SD card. It listens on `100.64.0.1:8000` only, so it is reachable from Tailscale devices and not from the home network. It uses about 61 MB. The Pi's database started empty.
+- `uv` is installed for `pi-user` only, at `~/.local/bin/uv`, and the code was cloned over a read-only GitHub deploy key (`~/.ssh/emu_deploy_key`, host alias `github-emu`, titled "pi-host (read-only)" in the repo's deploy keys).
+- **To update the Pi**, run from this PC: `ssh pi-user@100.64.0.1 "cd ~/emu-the-menu && git pull && ~/.local/bin/uv sync --no-dev && sudo systemctl restart emu-the-menu"`. Tailscale SSH may ask for a browser approval link first, which only Kevin can give. Logs are in `journalctl -u emu-the-menu`.
+- SSH from this PC needs no key because Tailscale checks the identity. This PC's `known_hosts` holds the Pi's ed25519 host key (`SHA256:(removed)`), which Kevin checked against the Pi itself.
 
 **This PC:** `uv` is installed. `gh` (GitHub CLI) is installed and signed in as BAMK74.
 
 ## In progress
 
-Nothing. Slice 1 is done, including SQLite storage and the Stock web forms, with `uv run pytest` passing all 175 tests on Python 3.13 and `ruff` clean. Claude wrote the implementations at Kevin's request.
+Nothing. Slice 1 is done, including SQLite storage and the Stock web forms, with `uv run pytest` passing all 189 tests on Python 3.13 and `ruff` clean. Claude wrote the implementations at Kevin's request.
 
 Choices to know about: 1 tsp = 5 ml, 1 tbsp = 15 ml, 1 cup = 240 ml. `reduce_stock` uses the earliest expiry first, with no-expiry items last. Ingredient names are stored lowercased and stripped. Quantities are floats, and amounts below 1e-9 count as zero. Mixing unit families for one Ingredient raises `IncompatibleUnitError`, in both `add_stock` and `reduce_stock`.
 
@@ -68,6 +72,7 @@ Add form, as tried on a phone:
 - Scanning a second product: a lookup remembers what it filled in (hidden `auto_ingredient` and `auto_quantity`) and replaces exactly those on the next scan. A name or quantity the user typed or edited is kept. An unknown barcode, an unreachable service or a product with no pack size clears the leftovers. A malformed barcode changes nothing.
 - Pack sizes are rounded: whole numbers from 10 up and two decimals below, so 20 oz reads 567 g and not 566.99 g.
 - Open Food Facts coverage varies. Kevin found that some products are not on the site, which is expected, and the form says "No product found" so the details can be typed by hand.
+- Quantities are stored in g and ml, and shown in the larger unit from 1000 up through `display_quantity` in `units.py` (1000 g reads 1 kg, 2500 ml reads 2.5 l, counts never change). The Set box on each item shows the same value and unit.
 - Layout is a narrow centred card on phones and a roomier one from 640px, with dark mode.
 
 `uv` is at `%LOCALAPPDATA%\Microsoft\WinGet\Links\uv.exe` and may not be on PATH in every shell.
@@ -75,10 +80,9 @@ Add form, as tried on a phone:
 ## Next steps
 
 1. **Live camera scanning.** Waiting on Kevin enabling HTTPS for the tailnet (Tailscale admin console, DNS page, Enable HTTPS), which he will do later. Enabling it publishes the tailnet and machine names in public certificate logs, which Kevin was told. Then serve the app with `tailscale serve`, add a live camera view with ZXing's `decodeFromVideoDevice` that only appears when `window.isSecureContext` is true, and test it on the phone. Scanning by photo already works over HTTP. Consider a built-in produce table for typical amounts (1 bunch of kale), since no reputable online source was found.
-2. **Deploy to the Pi.** Install `uv` there (it installs without root), pull from GitHub, and run as a systemd service. Find out what is already using about 900 MB of RAM first.
-3. **Slice 2 (household).** Household login, Eaters, Categories and the Adult/Teen/Child permissions.
-4. **Later slices.** Recipes, then Menu generation, Occasions and weather, then the Shopping List, then barcode scanning and OCR.
-5. **Housekeeping.** Reboot the Pi once to confirm `/mnt/emu` mounts on its own. Set up the nightly backup, ideally copying off the Pi. Add the Scan term and the fridge-photo idea to the glossary and ADR 0003 if you want them recorded.
+2. **Slice 2 (household).** Eaters, Categories, allergies, dislikes and calorie goals come first, because Menus are sized and filtered per person. Suggested: leave login and the Adult/Teen/Child permissions until later, since Tailscale already gates access, to reach Menus sooner.
+3. **Later slices, in dependency order.** Recipes (ingredients, quantities, calories, weather tags), then Menu generation (hard rules for allergies, Shopping Allowance and Cooldown, then the weighted score, starting with calorie fit and expiring Stock), then Occasions and weather (needs a household town, not only the country), then the Shopping List, then OCR.
+4. **Housekeeping.** Reboot the Pi once to confirm `/mnt/emu` and the `emu-the-menu` service come back on their own (it briefly takes down AdGuard Home, so choose a quiet moment). Set up the nightly backup, ideally copying off the Pi. Add the Scan term and the fridge-photo idea to the glossary and ADR 0003 if you want them recorded.
 
 ## Reference
 

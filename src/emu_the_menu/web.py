@@ -15,9 +15,10 @@ from emu_the_menu.openfoodfacts import Fetch, LookupUnavailableError, find_produ
 from emu_the_menu.repository import ItemNotFoundError, StockRepository
 from emu_the_menu.shelf_life import ShelfLife, ShelfLifeUnit
 from emu_the_menu.stock import Location
-from emu_the_menu.units import IncompatibleUnitError, known_units
+from emu_the_menu.units import IncompatibleUnitError, display_quantity, known_units
 
 _TEMPLATES = Jinja2Templates(directory=Path(__file__).parent / "templates")
+_TEMPLATES.env.globals["display_quantity"] = display_quantity
 _BLANK_FORM = {
     "barcode": "",
     "auto_ingredient": "",

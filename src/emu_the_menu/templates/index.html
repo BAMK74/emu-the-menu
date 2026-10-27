@@ -189,16 +189,17 @@
   <ul>
     {% for item in items %}
     <li>
+      {% set shown_quantity, shown_unit = display_quantity(item.quantity, item.base_unit) %}
       <strong>{{ item.ingredient }}</strong>
-      {{ "%g"|format(item.quantity) }} {{ item.base_unit.value }}
+      {{ "%g"|format(shown_quantity) }} {{ shown_unit }}
       <div class="meta">{{ item.location.value }} &middot;
         {% if item.expires_on %}expires {{ item.expires_on.strftime("%d/%m/%Y") }}{% else %}no expiry{% endif %}</div>
       <div class="actions">
         <form method="post" action="/items/{{ item.id }}/quantity">
           <input name="quantity" type="number" step="any" min="0" inputmode="decimal"
-                 aria-label="New quantity" value="{{ "%g"|format(item.quantity) }}" required>
+                 aria-label="New quantity" value="{{ "%g"|format(shown_quantity) }}" required>
           <select name="unit" aria-label="Unit">
-            {% for u in units %}<option value="{{ u }}" {{ "selected" if u == item.base_unit.value }}>{{ u }}</option>{% endfor %}
+            {% for u in units %}<option value="{{ u }}" {{ "selected" if u == shown_unit }}>{{ u }}</option>{% endfor %}
           </select>
           <button type="submit">Set</button>
         </form>

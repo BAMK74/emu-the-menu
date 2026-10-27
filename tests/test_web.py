@@ -503,3 +503,33 @@ def test_a_bad_barcode_keeps_the_form_as_it_was(client, off):
     )
     assert response.status_code == 400
     assert field_value(response.text, "ingredient") == "Penne"
+
+
+def list_item_html(client, name):
+    """The list entry for one ingredient."""
+    page = client.get("/").text.split("<ul>")[1]
+    return next(li for li in page.split("<li>") if f"<strong>{name}</strong>" in li)
+
+
+def test_a_thousand_grams_is_shown_as_a_kilogram(client):
+    add(client, "flour", "1000", "g")
+    entry = list_item_html(client, "flour")
+    assert "1 kg" in entry
+    assert "1000 g" not in entry
+
+
+def test_setting_one_kilogram_shows_one_kilogram(client, db_path):
+    add(client, "flour", "500", "g")
+    [item] = stored(db_path)
+    client.post(f"/items/{item.id}/quantity", data={"quantity": "1", "unit": "kg"})
+    entry = list_item_html(client, "flour")
+    assert "1 kg" in entry
+    assert '<option value="kg" selected>kg</option>' in entry
+    assert 'value="1"' in entry
+
+
+def test_millilitres_are_shown_as_litres_and_small_amounts_stay_small(client):
+    add(client, "milk", "2500", "ml", "fridge")
+    add(client, "flour", "250", "g")
+    assert "2.5 l" in list_item_html(client, "milk")
+    assert "250 g" in list_item_html(client, "flour")

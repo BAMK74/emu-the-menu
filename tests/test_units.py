@@ -6,6 +6,7 @@ from emu_the_menu.units import (
     UnknownUnitError,
     base_unit_for,
     convert,
+    display_quantity,
     to_base,
 )
 
@@ -91,3 +92,28 @@ def test_convert_across_families_is_rejected():
 def test_incompatible_unit_error_is_a_value_error():
     assert issubclass(IncompatibleUnitError, ValueError)
     assert issubclass(UnknownUnitError, ValueError)
+
+
+@pytest.mark.parametrize(
+    ("quantity", "base", "expected"),
+    [
+        (1000, BaseUnit.GRAM, (1, "kg")),
+        (1500, BaseUnit.GRAM, (1.5, "kg")),
+        (1234, BaseUnit.GRAM, (1.234, "kg")),
+        (2500, BaseUnit.MILLILITRE, (2.5, "l")),
+        (1000, BaseUnit.MILLILITRE, (1, "l")),
+        (999, BaseUnit.GRAM, (999, "g")),
+        (250, BaseUnit.MILLILITRE, (250, "ml")),
+        (0, BaseUnit.GRAM, (0, "g")),
+        (1500, BaseUnit.COUNT, (1500, "count")),
+        (999.9996, BaseUnit.GRAM, (1, "kg")),
+    ],
+)
+def test_display_quantity_uses_the_larger_unit_from_1000_up(quantity, base, expected):
+    assert display_quantity(quantity, base) == expected
+
+
+def test_display_quantity_gives_a_unit_the_forms_understand():
+    for base in BaseUnit:
+        unit = display_quantity(5000, base)[1]
+        assert base_unit_for(unit) == base
