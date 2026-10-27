@@ -18,6 +18,18 @@ _Avoid_: Diner, user, member
 Man, Woman, Teen or Child. Gives an Eater a default calorie goal that can be overridden.
 _Avoid_: Type, role, group
 
+**Calorie goal**:
+The daily energy target of an Eater, in kcal. It defaults from the Eater's Category and can be overridden.
+_Avoid_: Diet, budget, target
+
+**Allergy**:
+A food an Eater must never be served. Menus treat it as a hard exclusion.
+_Avoid_: Intolerance, restriction
+
+**Dislike**:
+A food an Eater would rather avoid. Menus treat it as a soft penalty when ranking Recipes.
+_Avoid_: Preference, hate
+
 ### Food
 
 **Ingredient**:

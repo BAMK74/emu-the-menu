@@ -282,14 +282,36 @@ def test_the_stock_page_links_to_settings(client):
     assert 'href="/settings"' in client.get("/").text
 
 
-def test_settings_open_as_an_overlay_on_the_stock_page(client):
-    page = client.get("/").text
-    assert '<dialog id="settings-dialog"' in page
-    assert 'name="country"' in page.split('<dialog id="settings-dialog"')[1]
-    assert '<input type="hidden" name="next" value="/">' in page
+def test_every_page_has_the_settings_overlay_and_link(client):
+    for path in ("/", "/eaters"):
+        page = client.get(path).text
+        assert '<dialog id="settings-dialog"' in page
+        assert 'id="settings-link"' in page
 
 
-def test_saving_from_the_overlay_returns_to_the_stock_page(client, db_path):
+def test_the_settings_page_itself_has_no_overlay(client):
+    assert "<dialog" not in client.get("/settings").text
+
+
+def test_the_settings_panel_is_a_fragment_holding_the_form(client):
+    response = client.get("/settings/panel", params={"next": "/"})
+    assert response.status_code == 200
+    assert "<html" not in response.text
+    assert 'name="country"' in response.text
+    assert '<input type="hidden" name="next" value="/">' in response.text
+
+
+def test_the_settings_panel_remembers_which_page_to_return_to(client):
+    page = client.get("/settings/panel", params={"next": "/eaters"}).text
+    assert '<input type="hidden" name="next" value="/eaters">' in page
+
+
+@pytest.mark.parametrize("target", ["//evil.example", "https://evil.example", "/items", ""])
+def test_the_settings_panel_ignores_other_return_addresses(client, target):
+    assert 'name="next"' not in client.get("/settings/panel", params={"next": target}).text
+
+
+def test_saving_from_the_overlay_returns_to_the_page_you_were_on(client, db_path):
     response = client.post("/settings", data={"country": "NZ", "next": "/"})
     assert response.status_code == 303
     assert response.headers["location"] == "/?saved=1"
@@ -298,16 +320,21 @@ def test_saving_from_the_overlay_returns_to_the_stock_page(client, db_path):
     assert "Settings saved" in client.get("/?saved=1").text
     assert "Settings saved" not in client.get("/").text
 
+    response = client.post("/settings", data={"country": "AU", "next": "/eaters"})
+    assert response.headers["location"] == "/eaters?saved=1"
+    assert "Settings saved" in client.get("/eaters?saved=1").text
+    assert "Settings saved" not in client.get("/eaters").text
+
 
 @pytest.mark.parametrize("target", ["//evil.example", "https://evil.example", "/items"])
-def test_the_overlay_cannot_redirect_anywhere_but_the_stock_page(client, target):
+def test_saving_cannot_redirect_anywhere_but_a_known_page(client, target):
     response = client.post("/settings", data={"country": "NZ", "next": target})
     assert response.headers["location"] == "/settings?saved=1"
 
 
-def test_the_overlay_shows_the_saved_country(client):
+def test_the_panel_shows_the_saved_country(client):
     client.post("/settings", data={"country": "AU"})
-    page = client.get("/").text.split('<dialog id="settings-dialog"')[1]
+    page = client.get("/settings/panel", params={"next": "/"}).text
     assert '<option value="AU" selected>Australia</option>' in page
 
 
@@ -566,9 +593,9 @@ def test_exports_are_never_cached(client, path):
     assert client.get(path).headers["cache-control"] == "no-store"
 
 
-def test_settings_offer_both_downloads_in_the_overlay_and_on_the_page(client):
-    overlay = client.get("/").text.split('<dialog id="settings-dialog"')[1]
-    for page in (overlay, client.get("/settings").text):
+def test_settings_offer_both_downloads_in_the_panel_and_on_the_page(client):
+    panel = client.get("/settings/panel", params={"next": "/"}).text
+    for page in (panel, client.get("/settings").text):
         assert 'href="/export.db.gz"' in page
         assert 'href="/export.json"' in page
 
@@ -624,7 +651,7 @@ def test_the_last_backup_is_shown_and_an_old_one_is_flagged(
     assert ("stale" in css) is stale
 
 
-def test_the_backup_status_is_also_in_the_overlay(backup_client, backup_dir):
+def test_the_backup_status_is_also_in_the_panel(backup_client, backup_dir):
     (backup_dir / "emu-2026-10-26.db.gz").write_bytes(b"x")
-    overlay = backup_client.get("/").text.split('<dialog id="settings-dialog"')[1]
-    assert "Last nightly backup: today" in " ".join(overlay.split())
+    panel = backup_client.get("/settings/panel", params={"next": "/"}).text
+    assert "Last nightly backup: today" in " ".join(panel.split())

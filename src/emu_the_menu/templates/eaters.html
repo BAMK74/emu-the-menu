@@ -1,0 +1,87 @@
+{% extends "base.html" %}
+{% block title %}Emu the Menu - Eaters{% endblock %}
+{% block heading %}Eaters{% endblock %}
+{% block content %}
+  {% if error %}<p class="error" role="alert">error: {{ error }}</p>{% endif %}
+
+  <form class="add" method="post" action="/eaters">
+    <label>Name
+      <input name="name" value="{{ form.name }}" maxlength="40" autocomplete="off" required>
+    </label>
+    <div class="pair">
+      <label>Category
+        <select name="category">
+          {% for c in categories %}<option value="{{ c.value }}"{{ " selected" if c.value == form.category }}>{{ c.value }}</option>{% endfor %}
+        </select>
+      </label>
+      <label>Calorie goal (a day)
+        <input name="calorie_goal" inputmode="numeric" placeholder="default" autocomplete="off"
+               value="{{ form.calorie_goal }}">
+      </label>
+    </div>
+    <label>Allergies
+      <input name="allergies" placeholder="peanuts, shellfish" autocomplete="off"
+             value="{{ form.allergies }}">
+    </label>
+    <label>Dislikes
+      <input name="dislikes" placeholder="olives, mushrooms" autocomplete="off"
+             value="{{ form.dislikes }}">
+    </label>
+    <p class="hint">Allergies are never suggested. Dislikes are avoided when there is a choice. Leave the calorie goal blank to use the category's default.</p>
+    <button type="submit">Add eater</button>
+  </form>
+
+  {% if eaters %}
+  <ul>
+    {% for eater in eaters %}
+    <li>
+      <strong>{{ eater.name }}</strong> <span class="tag">{{ eater.category.value }}</span>
+      <div class="meta">{{ eater.calorie_goal }} kcal a day ({{ "custom" if eater.has_custom_goal else "default" }})</div>
+      {% if eater.allergies %}<div class="meta">Allergies: {{ eater.allergies|join(", ") }}</div>{% endif %}
+      {% if eater.dislikes %}<div class="meta">Dislikes: {{ eater.dislikes|join(", ") }}</div>{% endif %}
+      <details>
+        <summary>Edit</summary>
+        <form class="add edit" method="post" action="/eaters/{{ eater.id }}">
+          <label>Name
+            <input name="name" value="{{ eater.name }}" maxlength="40" autocomplete="off" required>
+          </label>
+          <div class="pair">
+            <label>Category
+              <select name="category">
+                {% for c in categories %}<option value="{{ c.value }}"{{ " selected" if c == eater.category }}>{{ c.value }}</option>{% endfor %}
+              </select>
+            </label>
+            <label>Calorie goal
+              <input name="calorie_goal" inputmode="numeric" autocomplete="off"
+                     placeholder="{{ eater.default_calorie_goal }}"
+                     value="{{ eater.calorie_goal_override or "" }}">
+            </label>
+          </div>
+          <label>Allergies
+            <input name="allergies" autocomplete="off" value="{{ eater.allergies|join(", ") }}">
+          </label>
+          <label>Dislikes
+            <input name="dislikes" autocomplete="off" value="{{ eater.dislikes|join(", ") }}">
+          </label>
+          <button type="submit">Save</button>
+        </form>
+        <form method="post" action="/eaters/{{ eater.id }}/delete" data-confirm="Remove {{ eater.name }}?">
+          <button class="quiet" type="submit">Remove</button>
+        </form>
+      </details>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">No one yet. Add the people you cook for.</p>
+  {% endif %}
+
+  <script>
+    // Removing someone asks first.
+    document.querySelectorAll("form[data-confirm]").forEach((form) => {
+      form.addEventListener("submit", (event) => {
+        if (!confirm(form.dataset.confirm)) event.preventDefault();
+      });
+    });
+  </script>
+{% endblock %}

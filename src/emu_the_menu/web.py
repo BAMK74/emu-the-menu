@@ -9,18 +9,21 @@ from pathlib import Path
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
 
 from emu_the_menu.backup import BackupError, latest_backup, snapshot_gz
 from emu_the_menu.countries import COUNTRIES
+from emu_the_menu.eaters import EaterRepository
 from emu_the_menu.openfoodfacts import Fetch, LookupUnavailableError, find_product, http_fetch
 from emu_the_menu.repository import ItemNotFoundError, StockRepository
 from emu_the_menu.shelf_life import ShelfLife, ShelfLifeUnit
 from emu_the_menu.stock import Location
-from emu_the_menu.units import IncompatibleUnitError, display_quantity, known_units
+from emu_the_menu.templating import TEMPLATES as _TEMPLATES
+from emu_the_menu.units import IncompatibleUnitError, known_units
+from emu_the_menu.web_eaters import create_router as create_eaters_router
+from emu_the_menu.web_eaters import export_eaters
 
-_TEMPLATES = Jinja2Templates(directory=Path(__file__).parent / "templates")
-_TEMPLATES.env.globals["display_quantity"] = display_quantity
+# Pages the Settings overlay may send you back to after saving.
+_RETURN_PAGES = ("/", "/eaters")
 _BLANK_FORM = {
     "barcode": "",
     "auto_ingredient": "",
@@ -66,6 +69,7 @@ def create_app(
     path = db_path or os.environ.get("EMU_DB", "emu.db")
     backup_dir = backup_dir or os.environ.get("EMU_BACKUP_DIR")
     app = FastAPI(title="Emu the Menu")
+    app.include_router(create_eaters_router(path))
     app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
     def get_repo() -> Iterator[StockRepository]:
@@ -116,10 +120,6 @@ def create_app(
                 "error": error,
                 "warning": warning,
                 "notice": notice,
-                "countries": COUNTRIES,
-                "country": repo.household_country(),
-                "saved": request.query_params.get("saved") == "1",
-                "backup": backup_status(),
             },
             status_code=400 if error else 409 if warning else 200,
         )
@@ -142,6 +142,20 @@ def create_app(
             status_code=400 if error else 200,
         )
 
+    @app.get("/settings/panel", response_class=HTMLResponse)
+    def settings_panel(request: Request, next: str = "", repo: StockRepository = Depends(get_repo)):
+        """The settings form and backup section alone, for the overlay on any page."""
+        return _TEMPLATES.TemplateResponse(
+            request,
+            "_settings_panel.html",
+            {
+                "countries": COUNTRIES,
+                "country": repo.household_country(),
+                "backup": backup_status(),
+                "next_url": next if next in _RETURN_PAGES else None,
+            },
+        )
+
     @app.get("/settings", response_class=HTMLResponse)
     def settings(request: Request, repo: StockRepository = Depends(get_repo)):
         return settings_page(request, repo)
@@ -157,9 +171,10 @@ def create_app(
             repo.set_household_country(country)
         except ValueError as exc:
             return settings_page(request, repo, str(exc))
-        # Only the Stock page may be returned to, so this cannot redirect elsewhere.
+        # Only known pages may be returned to, so this cannot redirect elsewhere.
         return RedirectResponse(
-            "/?saved=1" if next == "/" else "/settings?saved=1", status_code=303
+            f"{next}?saved=1" if next in _RETURN_PAGES else "/settings?saved=1",
+            status_code=303,
         )
 
     def download(content: bytes | str, media_type: str, filename: str) -> Response:
@@ -181,6 +196,8 @@ def create_app(
             "exported_on": today().isoformat(),
             **repo.export_data(),
         }
+        with EaterRepository(path) as eaters:
+            data["eaters"] = export_eaters(eaters.list())
         body = json.dumps(data, indent=2, ensure_ascii=False)
         return download(body, "application/json", f"emu-{today().isoformat()}.json")
 

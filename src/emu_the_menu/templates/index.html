@@ -1,8 +1,6 @@
 {% extends "base.html" %}
 {% block title %}Emu the Menu - Stock{% endblock %}
-{% block nav %}<a id="settings-link" href="/settings">Settings</a>{% endblock %}
 {% block content %}
-  {% if saved %}<p class="saved" role="status">Settings saved.</p>{% endif %}
 
   {% if error %}<p class="error" role="alert">error: {{ error }}</p>{% endif %}
   {% if notice %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
@@ -74,12 +72,6 @@
     </fieldset>
     <button type="submit">Add to stock</button>
   </form>
-  <dialog id="settings-dialog" aria-label="Settings">
-    <h2>Settings</h2>
-    {% set next_url = "/" %}
-    {% include "_settings_form.html" %}
-    {% include "_backup_section.html" %}
-  </dialog>
   <script src="/static/zxing.min.js"></script>
   <script>
     const $ = (id) => document.getElementById(id);
@@ -137,19 +129,6 @@
         showScanMessage("Could not read a barcode from that photo. Try again closer, in good light, with the bars filling the photo, or type the number.");
       } finally {
         event.target.value = "";
-      }
-    });
-
-    // Settings open as an overlay; without scripting the link goes to the Settings page.
-    const settingsDialog = $("settings-dialog");
-    $("settings-link").addEventListener("click", (event) => {
-      if (typeof settingsDialog.showModal !== "function") return;
-      event.preventDefault();
-      settingsDialog.showModal();
-    });
-    settingsDialog.addEventListener("click", (event) => {
-      if (event.target === settingsDialog || event.target.closest("[data-close-dialog]")) {
-        settingsDialog.close();
       }
     });
 

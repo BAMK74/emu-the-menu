@@ -113,6 +113,14 @@
     dialog h2 { font-size: 1.1rem; margin: 0 0 .8rem; }
     dialog form.add { border: 0; padding: 0; margin: 0; background: none; }
     .buttons { display: flex; gap: .6rem; }
+    .tag {
+      font-size: .75rem; color: var(--muted); border: 1px solid var(--line);
+      border-radius: 999px; padding: .05rem .5rem; margin-left: .3rem; text-transform: capitalize;
+    }
+    details { margin-top: .5rem; }
+    details summary { cursor: pointer; color: var(--muted); font-size: .85rem; }
+    details form.edit { margin: .6rem 0; padding: 0; border: 0; background: none; }
+    details > form + form { margin-top: .4rem; }
     .backup { margin-top: 1.1rem; padding-top: .9rem; border-top: 1px solid var(--line); }
     .backup h3 { font-size: .8rem; margin: 0 0 .5rem; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
     .backup p { margin: 0 0 .5rem; font-size: .9rem; }
@@ -156,9 +164,42 @@
 <main>
   <nav>
     <h1 class="current">{% block heading %}Stock{% endblock %}</h1>
-    {% block nav %}<a href="/">Stock</a><a href="/settings">Settings</a>{% endblock %}
+    {% block nav %}<a href="/">Stock</a><a href="/eaters">Eaters</a><a id="settings-link" href="/settings">Settings</a>{% endblock %}
   </nav>
+  {% block saved_banner %}{% if request.query_params.get("saved") == "1" %}<p class="saved" role="status">Settings saved.</p>{% endif %}{% endblock %}
   {% block content %}{% endblock %}
+  {% block settings_overlay %}
+  <dialog id="settings-dialog" aria-label="Settings">
+    <h2>Settings</h2>
+    <div id="settings-panel"></div>
+  </dialog>
+  <script>
+    // Settings open as an overlay on every page. The panel is fetched when it is opened, so
+    // pages do not carry settings data. Without scripting, or if the fetch fails, the link
+    // simply goes to the Settings page.
+    (function () {
+      const dialog = document.getElementById("settings-dialog");
+      const link = document.getElementById("settings-link");
+      const panel = document.getElementById("settings-panel");
+      if (!dialog || !link || typeof dialog.showModal !== "function") return;
+      link.addEventListener("click", async (event) => {
+        event.preventDefault();
+        try {
+          const url = "/settings/panel?next=" + encodeURIComponent(window.location.pathname);
+          const response = await fetch(url);
+          if (!response.ok) throw new Error("HTTP " + response.status);
+          panel.innerHTML = await response.text();
+          dialog.showModal();
+        } catch (error) {
+          window.location.href = link.href;
+        }
+      });
+      dialog.addEventListener("click", (event) => {
+        if (event.target === dialog || event.target.closest("[data-close-dialog]")) dialog.close();
+      });
+    })();
+  </script>
+  {% endblock %}
 </main>
 </body>
 </html>
