@@ -1,15 +1,17 @@
 """Web forms for Stock: add, adjust, delete, and a list sorted by expiry."""
 
+import json
 import os
 from collections.abc import Callable, Iterator
 from datetime import date
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 
+from emu_the_menu.backup import BackupError, latest_backup, snapshot_gz
 from emu_the_menu.countries import COUNTRIES
 from emu_the_menu.openfoodfacts import Fetch, LookupUnavailableError, find_product, http_fetch
 from emu_the_menu.repository import ItemNotFoundError, StockRepository
@@ -59,8 +61,10 @@ def create_app(
     db_path: str | Path | None = None,
     today: Callable[[], date] = date.today,
     fetch_product: Fetch = http_fetch,
+    backup_dir: str | Path | None = None,
 ) -> FastAPI:
     path = db_path or os.environ.get("EMU_DB", "emu.db")
+    backup_dir = backup_dir or os.environ.get("EMU_BACKUP_DIR")
     app = FastAPI(title="Emu the Menu")
     app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
@@ -68,6 +72,19 @@ def create_app(
         # One connection per request: sqlite connections are not shared across threads.
         with StockRepository(path) as repo:
             yield repo
+
+    def backup_status() -> dict:
+        """What Settings says about the nightly backup, flagging an old or missing one."""
+        if not backup_dir:
+            return {"text": "Nightly backups are not set up here.", "stale": False}
+        newest = latest_backup(backup_dir)
+        if newest is None:
+            return {"text": "No nightly backup yet. Check the Pi.", "stale": True}
+        age = max((today() - newest).days, 0)
+        if age > 2:
+            return {"text": f"Last nightly backup was {age} days ago. Check the Pi.", "stale": True}
+        when = "today" if age == 0 else "yesterday" if age == 1 else f"{age} days ago"
+        return {"text": f"Last nightly backup: {when}.", "stale": False}
 
     def page(
         request: Request,
@@ -102,6 +119,7 @@ def create_app(
                 "countries": COUNTRIES,
                 "country": repo.household_country(),
                 "saved": request.query_params.get("saved") == "1",
+                "backup": backup_status(),
             },
             status_code=400 if error else 409 if warning else 200,
         )
@@ -119,6 +137,7 @@ def create_app(
                 "country": repo.household_country(),
                 "saved": request.query_params.get("saved") == "1",
                 "error": error,
+                "backup": backup_status(),
             },
             status_code=400 if error else 200,
         )
@@ -142,6 +161,40 @@ def create_app(
         return RedirectResponse(
             "/?saved=1" if next == "/" else "/settings?saved=1", status_code=303
         )
+
+    def download(content: bytes | str, media_type: str, filename: str) -> Response:
+        return Response(
+            content,
+            media_type=media_type,
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Cache-Control": "no-store",
+            },
+        )
+
+    @app.get("/export.json")
+    def export_json(repo: StockRepository = Depends(get_repo)):
+        """A readable copy of the ingredients and stock."""
+        data = {
+            "app": "emu-the-menu",
+            "format": 1,
+            "exported_on": today().isoformat(),
+            **repo.export_data(),
+        }
+        body = json.dumps(data, indent=2, ensure_ascii=False)
+        return download(body, "application/json", f"emu-{today().isoformat()}.json")
+
+    @app.get("/export.db.gz")
+    def export_database(repo: StockRepository = Depends(get_repo)):
+        """A fresh copy of the whole database, restorable like a nightly backup.
+
+        Opening the repository above creates the database on a first-ever request.
+        """
+        try:
+            packed = snapshot_gz(path)
+        except BackupError as exc:
+            raise HTTPException(500, str(exc)) from exc
+        return download(packed, "application/gzip", f"emu-{today().isoformat()}.db.gz")
 
     @app.post("/lookup")
     def look_up_barcode(

@@ -244,3 +244,41 @@ def test_an_unknown_country_is_rejected(repo):
     with pytest.raises(ValueError, match="country"):
         repo.set_household_country("ZZ")
     assert repo.household_country() is None
+
+
+def test_export_data_lists_everything_in_a_readable_form(repo):
+    repo.set_household_country("AU")
+    repo.add(
+        "Spinach", 2, "bunch", Location.FRIDGE, SOON, shelf_life=ShelfLife(1, ShelfLifeUnit.WEEK)
+    )
+    repo.add("flour", 1.5, "kg", Location.PANTRY)
+    data = repo.export_data()
+    assert data["household"] == {"country": "AU"}
+    assert data["stock_items"] == [
+        {
+            "ingredient": "spinach",
+            "quantity": 2,
+            "base_unit": "count",
+            "location": "fridge",
+            "expires_on": "2026-10-28",
+        },
+        {
+            "ingredient": "flour",
+            "quantity": 1500,
+            "base_unit": "g",
+            "location": "pantry",
+            "expires_on": None,
+        },
+    ]
+    spinach = next(i for i in data["ingredients"] if i["name"] == "spinach")
+    assert spinach["shelf_life"] == {"amount": 1, "unit": "weeks"}
+    assert spinach["last_entry"] == {"quantity": 2, "unit": "bunch"}
+
+
+def test_export_data_of_an_empty_database(repo):
+    data = repo.export_data()
+    assert (data["ingredients"], data["stock_items"], data["household"]) == (
+        [],
+        [],
+        {"country": None},
+    )

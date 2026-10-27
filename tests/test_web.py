@@ -1,3 +1,4 @@
+import gzip
 import json
 import re
 from datetime import date
@@ -533,3 +534,97 @@ def test_millilitres_are_shown_as_litres_and_small_amounts_stay_small(client):
     add(client, "flour", "250", "g")
     assert "2.5 l" in list_item_html(client, "milk")
     assert "250 g" in list_item_html(client, "flour")
+
+
+# --- exports and the backup status --------------------------------------------------------
+
+
+def test_the_json_export_downloads_everything(client):
+    add(client, "flour", "1.5", "kg", "pantry")
+    response = client.get("/export.json")
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("application/json")
+    assert response.headers["content-disposition"] == 'attachment; filename="emu-2026-10-26.json"'
+    data = response.json()
+    assert data["exported_on"] == "2026-10-26"
+    assert [(i["ingredient"], i["quantity"]) for i in data["stock_items"]] == [("flour", 1500)]
+
+
+def test_the_database_export_is_a_restorable_backup(client, tmp_path):
+    add(client, "flour", "500", "g", "pantry")
+    response = client.get("/export.db.gz")
+    assert response.status_code == 200
+    assert response.headers["content-disposition"] == 'attachment; filename="emu-2026-10-26.db.gz"'
+    restored = tmp_path / "restored.db"
+    restored.write_bytes(gzip.decompress(response.content))
+    with StockRepository(restored) as repo:
+        assert [(i.ingredient, i.quantity) for i in repo.list_items()] == [("flour", 500)]
+
+
+@pytest.mark.parametrize("path", ["/export.json", "/export.db.gz"])
+def test_exports_are_never_cached(client, path):
+    assert client.get(path).headers["cache-control"] == "no-store"
+
+
+def test_settings_offer_both_downloads_in_the_overlay_and_on_the_page(client):
+    overlay = client.get("/").text.split('<dialog id="settings-dialog"')[1]
+    for page in (overlay, client.get("/settings").text):
+        assert 'href="/export.db.gz"' in page
+        assert 'href="/export.json"' in page
+
+
+@pytest.fixture
+def backup_dir(tmp_path):
+    folder = tmp_path / "backups"
+    folder.mkdir()
+    return folder
+
+
+@pytest.fixture
+def backup_client(db_path, off, backup_dir):
+    app = create_app(
+        db_path, today=lambda: date(2026, 10, 26), fetch_product=off, backup_dir=backup_dir
+    )
+    return TestClient(app, follow_redirects=False)
+
+
+def backup_status(client):
+    page = client.get("/settings").text
+    match = re.search(r'<p class="(backup-status[^"]*)"[^>]*>(.*?)</p>', page, re.S)
+    return match.group(1), " ".join(match.group(2).split())
+
+
+def test_without_a_backup_folder_the_page_says_backups_are_not_set_up(client):
+    css, text = backup_status(client)
+    assert "stale" not in css
+    assert "not set up" in text
+
+
+def test_a_folder_with_no_backups_is_a_warning(backup_client):
+    css, text = backup_status(backup_client)
+    assert "stale" in css
+    assert "No nightly backup yet" in text
+
+
+@pytest.mark.parametrize(
+    ("backup_day", "text", "stale"),
+    [
+        (date(2026, 10, 26), "Last nightly backup: today", False),
+        (date(2026, 10, 25), "Last nightly backup: yesterday", False),
+        (date(2026, 10, 24), "Last nightly backup: 2 days ago", False),
+        (date(2026, 10, 22), "Last nightly backup was 4 days ago. Check the Pi.", True),
+    ],
+)
+def test_the_last_backup_is_shown_and_an_old_one_is_flagged(
+    backup_client, backup_dir, backup_day, text, stale
+):
+    (backup_dir / f"emu-{backup_day.isoformat()}.db.gz").write_bytes(b"x")
+    css, shown = backup_status(backup_client)
+    assert text in shown
+    assert ("stale" in css) is stale
+
+
+def test_the_backup_status_is_also_in_the_overlay(backup_client, backup_dir):
+    (backup_dir / "emu-2026-10-26.db.gz").write_bytes(b"x")
+    overlay = backup_client.get("/").text.split('<dialog id="settings-dialog"')[1]
+    assert "Last nightly backup: today" in " ".join(overlay.split())

@@ -14,6 +14,7 @@ import re
 import shutil
 import sqlite3
 import sys
+import tempfile
 from datetime import date
 from pathlib import Path
 
@@ -67,22 +68,41 @@ def _copy_database(source: Path, destination: Path) -> None:
         writer.close()
 
 
+def _dated_backups(folder: Path) -> dict[Path, date]:
+    """The files in `folder` named like Emu backups, with the date in each name."""
+    found: dict[Path, date] = {}
+    if folder.is_dir():
+        for path in folder.iterdir():
+            if match := _NAME.fullmatch(path.name):
+                try:
+                    found[path] = date(*(int(part) for part in match.groups()))
+                except ValueError:
+                    continue
+    return found
+
+
+def latest_backup(folder: str | Path) -> date | None:
+    """The date of the newest backup in `folder`, or None if there are none."""
+    return max(_dated_backups(Path(folder)).values(), default=None)
+
+
+def snapshot_gz(source: str | Path) -> bytes:
+    """A fresh, consistent, compressed copy of the database, for downloading."""
+    source = Path(source)
+    if not source.is_file():
+        raise BackupError(f"database not found: {source}")
+    with tempfile.TemporaryDirectory() as scratch:
+        copy = Path(scratch) / "snapshot.db"
+        _copy_database(source, copy)
+        return gzip.compress(copy.read_bytes())
+
+
 def prune_backups(folder: str | Path, today: date) -> None:
     """Keep the last 14 days and the first backup of each of the last 6 months.
 
     Files that are not named like Emu backups are never touched.
     """
-    folder = Path(folder)
-    if not folder.is_dir():
-        return
-    backups: dict[Path, date] = {}
-    for path in folder.iterdir():
-        if match := _NAME.fullmatch(path.name):
-            try:
-                backups[path] = date(*(int(part) for part in match.groups()))
-            except ValueError:
-                continue
-
+    backups = _dated_backups(Path(folder))
     keep = {path for path, day in backups.items() if (today - day).days < _KEEP_DAYS}
     year, month = today.year, today.month
     for _ in range(_KEEP_MONTHS):

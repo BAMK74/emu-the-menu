@@ -203,6 +203,33 @@ class StockRepository:
                 (info.barcode, info.name, info.quantity, info.unit),
             )
 
+    def export_data(self) -> dict:
+        """Everything the user entered, as plain data for a readable JSON export."""
+        return {
+            "household": {"country": self.household_country()},
+            "ingredients": [
+                {
+                    "name": i.name,
+                    "base_unit": i.base_unit.value,
+                    "shelf_life": i.shelf_life
+                    and {"amount": i.shelf_life.amount, "unit": i.shelf_life.unit.value},
+                    "last_entry": i.last_entry
+                    and {"quantity": i.last_entry.quantity, "unit": i.last_entry.unit},
+                }
+                for i in self.ingredients()
+            ],
+            "stock_items": [
+                {
+                    "ingredient": item.ingredient,
+                    "quantity": item.quantity,
+                    "base_unit": item.base_unit.value,
+                    "location": item.location.value,
+                    "expires_on": item.expires_on.isoformat() if item.expires_on else None,
+                }
+                for item in self.list_items()
+            ],
+        }
+
     def household_country(self) -> str | None:
         """The ISO country code the Household lives in, or None if not set yet."""
         row = self._db.execute("SELECT value FROM settings WHERE key = 'country'").fetchone()

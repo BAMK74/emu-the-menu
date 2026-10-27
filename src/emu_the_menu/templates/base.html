@@ -113,6 +113,16 @@
     dialog h2 { font-size: 1.1rem; margin: 0 0 .8rem; }
     dialog form.add { border: 0; padding: 0; margin: 0; background: none; }
     .buttons { display: flex; gap: .6rem; }
+    .backup { margin-top: 1.1rem; padding-top: .9rem; border-top: 1px solid var(--line); }
+    .backup h3 { font-size: .8rem; margin: 0 0 .5rem; color: var(--muted); text-transform: uppercase; letter-spacing: .03em; }
+    .backup p { margin: 0 0 .5rem; font-size: .9rem; }
+    .backup .stale { color: var(--danger); font-weight: 600; }
+    .downloads { display: grid; gap: .5rem; margin-bottom: .5rem; }
+    .downloads a {
+      display: block; text-align: center; padding: .6rem; border: 1px solid var(--line);
+      border-radius: var(--radius); color: var(--text); text-decoration: none; font-size: .9rem;
+    }
+    .downloads a:hover { border-color: var(--accent); color: var(--accent); }
     .buttons button:first-child { flex: 1; }
     .saved { color: var(--accent); margin: 0 0 .8rem; font-size: .9rem; }
     .hint { color: var(--muted); font-size: .8rem; margin: 0; }

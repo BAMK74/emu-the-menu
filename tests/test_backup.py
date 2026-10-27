@@ -4,7 +4,13 @@ from datetime import date
 
 import pytest
 
-from emu_the_menu.backup import BackupError, backup_database, prune_backups
+from emu_the_menu.backup import (
+    BackupError,
+    backup_database,
+    latest_backup,
+    prune_backups,
+    snapshot_gz,
+)
 from emu_the_menu.repository import StockRepository
 from emu_the_menu.stock import Location
 
@@ -162,3 +168,32 @@ def test_a_backup_run_prunes_old_ones(source, backups):
         "emu-2026-10-20.db.gz",
         "emu-2026-10-27.db.gz",
     ]
+
+
+def test_a_snapshot_is_a_restorable_database_in_memory(source, tmp_path):
+    packed = snapshot_gz(source)
+    restored = tmp_path / "restored.db"
+    restored.write_bytes(gzip.decompress(packed))
+    with StockRepository(restored) as repo:
+        assert len(repo.list_items()) == 2
+
+
+def test_a_snapshot_of_a_missing_database_is_an_error(tmp_path):
+    with pytest.raises(BackupError, match="not found"):
+        snapshot_gz(tmp_path / "nothing.db")
+
+
+def test_the_latest_backup_is_the_newest_by_date(backups):
+    make(backups, date(2026, 10, 20), date(2026, 10, 26), date(2026, 10, 24))
+    assert latest_backup(backups) == date(2026, 10, 26)
+
+
+def test_there_is_no_latest_backup_in_an_empty_or_missing_folder(backups, tmp_path):
+    assert latest_backup(backups) is None
+    assert latest_backup(tmp_path / "missing") is None
+
+
+def test_the_latest_backup_ignores_files_that_are_not_backups(backups):
+    (backups / "notes.txt").write_text("x")
+    make(backups, date(2026, 10, 1))
+    assert latest_backup(backups) == date(2026, 10, 1)
