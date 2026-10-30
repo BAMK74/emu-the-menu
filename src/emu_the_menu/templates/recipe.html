@@ -35,7 +35,7 @@
         {% for a in facts.allergens %}<span class="chip chip-allergen">{{ a.short_label }}</span>{% endfor %}
       {% endif %}
     </p>
-    {% if not facts.is_checked %}<p class="hint">Not looked at yet: {{ facts.unchecked|join(", ") }}. Allergens and diets are unknown until <a href="/ingredients?show=unchecked">they are reviewed</a>.</p>{% endif %}
+    {% if not facts.is_checked %}<p class="hint">Not looked at yet: {{ facts.unchecked|join(", ") }}. Allergens and diets are unknown until <a href="/ingredients/review?recipe={{ recipe.id }}">you check the {{ facts.unchecked|length }} ingredient{{ "" if facts.unchecked|length == 1 else "s" }}</a>.</p>{% endif %}
     <p class="hint">Calories, allergens and diets come from the ingredients. Emu the Menu cannot check them for you, so always read the label. <a href="/disclaimer">Read the disclaimer</a>.</p>
   </div>
   {% endif %}

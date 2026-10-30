@@ -8,10 +8,12 @@ suggestion means nothing, and an allergen can hide in an ingredient whose name g
 """
 
 import re
+import unicodedata
 from dataclasses import dataclass
 
 from emu_the_menu.allergens import Allergen
 from emu_the_menu.food_groups import FoodGroup
+from emu_the_menu.names import stem
 from emu_the_menu.units import BaseUnit
 
 _MAX_KCAL = {BaseUnit.GRAM: 950, BaseUnit.MILLILITRE: 950, BaseUnit.COUNT: 3000}
@@ -83,6 +85,7 @@ _RULES: list[_Rule] = [
     ),
     _rule(
         "salmon tuna cod haddock trout mackerel sardine anchovy anchovie herring fish seafood"
+        " worcestershire"
         " plaice pollock tilapia halibut",
         (FoodGroup.FISH,),
         (Allergen.FISH,),
@@ -97,7 +100,8 @@ _RULES: list[_Rule] = [
     ),
     _rule(
         "milk cheese cheddar mozzarella parmesan feta ricotta mascarpone gouda brie cream yoghurt"
-        " yogurt butter ghee buttermilk quark skyr",
+        " yogurt butter ghee buttermilk quark skyr parmigiano reggiano pecorino halloumi paneer"
+        " gruyere emmental edam",
         (FoodGroup.DAIRY,),
         (Allergen.MILK,),
         _NOT_DAIRY,
@@ -106,6 +110,7 @@ _RULES: list[_Rule] = [
     _rule("honey", (FoodGroup.HONEY,)),
     _rule(
         "wheat barley rye spelt semolina couscous bulgur pasta spaghetti penne macaroni noodle"
+        " fettuccine linguine tagliatelle lasagne lasagna rigatoni fusilli farfalle orzo"
         " bread breadcrumb seitan",
         (),
         (Allergen.GLUTEN,),
@@ -117,7 +122,36 @@ _RULES: list[_Rule] = [
     _rule("mustard", (), (Allergen.MUSTARD,)),
     _rule("celery celeriac", (), (Allergen.CELERY,)),
     _rule("lupin", (), (Allergen.LUPIN,)),
+    # Typical contents of common foods. Only hints: the person still ticks what is really in it.
+    _rule(
+        "flour",
+        (),
+        (Allergen.GLUTEN,),
+        frozenset(
+            "corn rice almond coconut gluten chickpea cassava tapioca potato buckwheat".split()
+        ),
+    ),
+    _rule("oat oats", (), (Allergen.GLUTEN,), frozenset({"gluten"})),
+    _rule("granola muesli cereal cracker biscuit malt", (), (Allergen.GLUTEN,)),
+    _rule(
+        "wine vinegar balsamic sherry sulphite raisin sultana prune",
+        (),
+        (Allergen.SULPHITES,),
+    ),
+    _rule(
+        "mayonnaise mayo meringue custard",
+        (FoodGroup.EGGS,),
+        (Allergen.EGGS,),
+        frozenset({"vegan"}),
+    ),
+    _rule("stock broth bouillon", (), (Allergen.CELERY,)),
+    _rule("hummus", (), (Allergen.SESAME,)),
 ]
+
+
+def _ascii(name: str) -> str:
+    """The name in lower case without accents, so "jalapeño" is read as "jalapeno"."""
+    return unicodedata.normalize("NFKD", name).encode("ascii", "ignore").decode().lower()
 
 
 def suggest_tags(name: str) -> Suggestion:
@@ -125,7 +159,7 @@ def suggest_tags(name: str) -> Suggestion:
 
     Matches whole words only, so "ham" is not found in "hamper". Only a hint to check.
     """
-    words = {_stem(w) for w in re.findall(r"[a-z]+", name.lower())}
+    words = {_stem(w) for w in re.findall(r"[a-z]+", _ascii(name))}
     groups: set[FoodGroup] = set()
     allergens: set[Allergen] = set()
     for keywords, rule_groups, rule_allergens, unless in _RULES:
@@ -135,3 +169,99 @@ def suggest_tags(name: str) -> Suggestion:
     return Suggestion(
         tuple(g for g in FoodGroup if g in groups), tuple(a for a in Allergen if a in allergens)
     )
+
+
+# --- is this ingredient plainly harmless? ------------------------------------------------------
+
+PLAIN = "plain"
+NEEDS_LOOK = "needs-look"
+
+# Single unprocessed plant foods, spices and basics. A name made only of these words (and the
+# describing words below) is shown as plain-looking, so many can be confirmed in one go. This is
+# only a way to sort a long list: a person still confirms every one, and it is deliberately short.
+# Anything with a word not on the list needs a look, and so does every hint of an allergen.
+_PLAIN_FOODS = frozenset(
+    """
+    onion garlic carrot tomato potato cucumber spinach lettuce romaine kale cabbage broccoli
+    cauliflower zucchini courgette pepper capsicum aubergine eggplant beet beetroot radish leek
+    shallot scallion mushroom corn pea bean chickpea lentil quinoa rice avocado lemon lime apple
+    banana pear peach orange berry strawberry blueberry raspberry grape pineapple mango melon
+    olive pumpkin squash ginger basil parsley cilantro coriander mint thyme rosemary oregano sage
+    dill chive bay cumin paprika cinnamon turmeric nutmeg clove cayenne chili chilli salt sugar
+    water oil juice zest vegetable sunflower canola rapeseed seed asparagus
+    jasmine basmati long grain steamed uncooked cranberry date fig cherry plum apricot grapefruit
+    kiwi watermelon kidney pinto cannellini haricot vert chile jalapeno serrano fresno habanero
+    iceberg sprout choy bok pak chard collard microgreen russet yukon piper maris wedge strip
+    chia flax flaxseed meal kalamata nicoise heirloom med eating sum bundle rainbow roasted
+    toasted salted unsalted lacinato flat thai beluga kernel reserved cob on caraway smoked bird
+    birds eye herb fruit caster baking soda bi carb bicarbonate pie
+    """.split()
+)
+_PLAIN_WORDS = frozenset(
+    """
+    fresh dried frozen ground chopped diced sliced minced grated shredded crushed whole raw
+    cooked ripe large small medium baby cherry roma red green yellow white black brown purple
+    sweet hot bell extra virgin sea kosher fine flaky freshly cracked flake leaf leaves head bunch
+    sprig stem peeled pitted packed organic english or and of a the ice granulated
+    """.split()
+)
+_PLAIN_VOCABULARY = _PLAIN_FOODS | _PLAIN_WORDS | frozenset({"slice", "pepper"})
+
+
+def _singulars(word: str) -> set[str]:
+    """The ways a plural can be written in the singular, so "limes" finds "lime"."""
+    forms = {word}
+    if word.endswith("s"):
+        forms.add(word[:-1])
+    if word.endswith("es"):
+        forms.add(word[:-2])
+    if word.endswith("ies"):
+        forms.add(word[:-3] + "y")
+    return forms
+
+
+def _is_plain_word(word: str) -> bool:
+    return bool(_singulars(word) & _PLAIN_VOCABULARY)
+
+
+_PROCESSED = frozenset(
+    stem(w)
+    for w in """
+    sauce stock broth bouillon paste mix seasoning blend dressing mayonnaise mayo mustard ketchup
+    vinegar bread pasta noodle flour cereal granola muesli cracker chip tortilla sausage
+    chocolate cocoa candy syrup jam wine beer spread margarine powder extract
+    """.split()
+)
+
+
+@dataclass(frozen=True)
+class Judgement:
+    kind: str  # PLAIN or NEEDS_LOOK
+    reason: str = ""  # why it needs a look
+
+
+def judge(name: str) -> Judgement:
+    """Sort an Ingredient name into plain-looking or needing a look, with the reason.
+
+    Plain means every word is a basic plant food or a word that only describes it. It is never
+    plain when the name hints at a food group or allergen. A guess from the name, not a check.
+    """
+    raw = re.findall(r"[a-z]+", re.sub(r"\([^)]*\)", " ", _ascii(name)))
+    words = [stem(w) for w in raw]
+    hint = suggest_tags(name)
+    if hint.food_groups or hint.allergens:
+        tags = [g.short_label.lower() for g in hint.food_groups]
+        tags += [a.short_label.lower() for a in hint.allergens if a.short_label.lower() not in tags]
+        reason = "the name suggests " + ", ".join(tags)
+        if _PROCESSED & set(words):
+            reason += "; a processed food, so read the label"
+        return Judgement(NEEDS_LOOK, reason)
+    if set(words) == {"oil"}:
+        return Judgement(NEEDS_LOOK, "an unspecified oil, which could be peanut or sesame")
+    if raw and all(_is_plain_word(w) for w in raw):
+        return Judgement(PLAIN)
+    if _PROCESSED & set(words):
+        return Judgement(
+            NEEDS_LOOK, "a processed food, where hidden allergens are possible: read the label"
+        )
+    return Judgement(NEEDS_LOOK, "not recognised as a plain food")

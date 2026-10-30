@@ -78,8 +78,19 @@ def create_router(db_path: str | Path, fetch_product: Fetch = http_fetch) -> API
         return TEMPLATES.TemplateResponse(
             request,
             "ingredients.html",
-            {"ingredients": shown, "summary": summary, "show": show},
+            {
+                "ingredients": shown,
+                "summary": summary,
+                "show": show,
+                "tidy_plan": repo.tidy_plan(),
+            },
         )
+
+    @router.post("/ingredients/tidy")
+    def tidy(repo: StockRepository = Depends(get_repo)):
+        """Merge ingredients that are one food written two ways and give each a plain name."""
+        repo.tidy()
+        return RedirectResponse("/ingredients", status_code=303)
 
     @router.get("/ingredients/{ingredient_id}/panel", response_class=HTMLResponse)
     def panel(request: Request, ingredient_id: int, repo: StockRepository = Depends(get_repo)):

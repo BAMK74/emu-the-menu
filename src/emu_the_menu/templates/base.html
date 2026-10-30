@@ -160,6 +160,13 @@
     fieldset.lines legend { padding: 0; margin-bottom: .3rem; }
     .recipe-facts { margin-bottom: 1rem; }
     .verdicts { margin-top: .5rem; }
+    .review-row { border: 1px solid var(--line); border-radius: var(--radius); padding: .6rem .8rem; margin: .6rem 0; display: grid; gap: .4rem; }
+    .row-head { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+    .row-head .looks-right { margin-left: auto; display: flex; align-items: center; gap: .35rem; font-size: .85rem; }
+    .row-kcal { font-size: .78rem; }
+    .row-kcal input { max-width: 9rem; }
+    .pager { display: flex; gap: 1rem; align-items: center; font-size: .85rem; }
+    form.review-plain, form.review-rows { margin-top: 1rem; }
     .menu-days { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: .8rem; margin-top: 1rem; }
     .day { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: .8rem; }
     .day h3 { margin: 0 0 .5rem; font-size: 1rem; }
@@ -176,6 +183,7 @@
     a.button { display: inline-block; text-decoration: none; padding: .55rem 1rem; border-radius: .5rem; border: 1px solid var(--line); color: var(--text); text-align: center; }
     .danger-zone { margin-top: 1rem; }
     .hint a, .empty a { color: var(--accent); }
+    :where(main) a:where(:not([class])) { color: var(--accent); }
     a.chip { text-decoration: none; }
     a.chip:hover { filter: brightness(1.2); }
     a.chip[aria-current="true"] { outline: 2px solid currentColor; outline-offset: 1px; }

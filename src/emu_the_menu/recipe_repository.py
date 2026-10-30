@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
 
+from emu_the_menu.names import canonical_name
 from emu_the_menu.recipes import (
     MealType,
     Weather,
@@ -156,7 +157,7 @@ class RecipeRepository:
         servings = parse_servings(str(servings))
         meals = parse_meal_types(m.value for m in meal_types)
         tags = parse_tags(",".join(tags))
-        amounts = _merged(lines)
+        amounts = _merged(self._canonical_lines(lines))
         source = clean_source(source_url)
         try:
             with self._db:
@@ -195,6 +196,21 @@ class RecipeRepository:
                 raise ValueError(f"You already have a recipe called {name}") from None
             raise
         return recipe_id
+
+    def _canonical_lines(self, lines: Sequence[LineInput]) -> list[LineInput]:
+        """The lines with each Ingredient named as one already stored, where it is the same food.
+
+        "extra-virgin olive oil" becomes "extra virgin olive oil" and "sea salt" becomes "salt" if
+        those exist in the same kind of unit, so one food is never stored twice.
+        """
+        kinds = dict(self._db.execute("SELECT name, base_unit FROM ingredients"))
+        canonical: list[LineInput] = []
+        for name, quantity, unit in lines:
+            family = base_unit_for(unit).value
+            chosen = canonical_name(name, kinds, family)
+            kinds.setdefault(chosen, family)
+            canonical.append((chosen, quantity, unit))
+        return canonical
 
     def _ingredient_id(self, name: str, base: BaseUnit) -> int:
         """The id of an Ingredient, creating it (unreviewed) if it is new.

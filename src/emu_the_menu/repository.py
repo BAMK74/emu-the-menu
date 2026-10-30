@@ -14,6 +14,7 @@ from emu_the_menu.allergens import Allergen, parse_allergens
 from emu_the_menu.countries import COUNTRIES
 from emu_the_menu.food_groups import FoodGroup, parse_food_groups
 from emu_the_menu.ingredients import check_kcal, kcal_basis
+from emu_the_menu.names import canonical_name, clean_name, name_key
 from emu_the_menu.openfoodfacts import ProductInfo
 from emu_the_menu.shelf_life import ShelfLife, ShelfLifeUnit
 from emu_the_menu.stock import Location, StockItem, add_stock, reduce_stock, sort_by_expiry
@@ -149,6 +150,7 @@ class StockRepository:
         `shelf_life` if given, each replacing any earlier one. Nothing is remembered
         if the add fails.
         """
+        ingredient = self._canonical(ingredient, unit)
         self._apply(
             lambda items: add_stock(items, ingredient, quantity, unit, location, expires_on)
         )
@@ -167,6 +169,7 @@ class StockRepository:
 
     def use(self, ingredient: str, quantity: float, unit: str) -> None:
         """Deduct Stock, earliest expiry first. Changes nothing if there is not enough."""
+        ingredient = self._canonical(ingredient, unit)
         self._apply(lambda items: reduce_stock(items, ingredient, quantity, unit))
 
     def set_quantity(self, item_id: int, quantity: float, unit: str) -> None:
@@ -223,12 +226,144 @@ class StockRepository:
         Ingredient is unknown.
         """
         base = base_unit_for(unit)
+        ingredient = self._canonical(ingredient)
         with self._db:
             self._db.execute(
                 "UPDATE ingredients SET kcal = CASE WHEN base_unit = ? THEN kcal END,"
                 " base_unit = ?, last_quantity = NULL, last_unit = NULL WHERE name = ?",
                 (base.value, base.value, ingredient.strip().lower()),
             )
+
+    def _canonical(self, name: str, unit: str | None = None) -> str:
+        """The name an Ingredient is stored under, reusing one that is the same food."""
+        kinds = dict(self._db.execute("SELECT name, base_unit FROM ingredients"))
+        return canonical_name(name, kinds, base_unit_for(unit).value if unit else None)
+
+    def twin_groups(self) -> list[list[Ingredient]]:
+        """Groups of Ingredients that are one food written two ways, in the same kind of unit.
+
+        Such as "extra virgin olive oil" and "extra-virgin olive oil", or salt and sea salt.
+        """
+        groups: dict[tuple[str, str], list[Ingredient]] = {}
+        for ingredient in self.ingredients():
+            key = (name_key(ingredient.name), ingredient.base_unit.value)
+            groups.setdefault(key, []).append(ingredient)
+        return [group for group in groups.values() if len(group) > 1]
+
+    def merge_ingredients(self, keep_id: int, drop_id: int) -> None:
+        """Make `drop_id` part of `keep_id` and delete the duplicate.
+
+        Its Recipe lines and Stock move over, adding up where a Recipe had both. What was
+        ticked on either is combined, so every allergen and food group of both is kept and the
+        result is reviewed if either was. Raises IncompatibleUnitError if they are stored in
+        different kinds of unit.
+        """
+        keep, drop = self.get_ingredient(keep_id), self.get_ingredient(drop_id)
+        if keep is None or drop is None:
+            raise IngredientNotFoundError(keep_id if keep is None else drop_id)
+        if keep.base_unit is not drop.base_unit:
+            raise IncompatibleUnitError(f"{keep.name} and {drop.name} use different units")
+        with self._db:
+            has_recipes = self._db.execute(
+                "SELECT 1 FROM sqlite_master WHERE name = 'recipe_lines'"
+            ).fetchone()
+            if has_recipes:
+                lines = self._db.execute(
+                    "SELECT recipe_id, quantity FROM recipe_lines WHERE ingredient_id = ?",
+                    (drop_id,),
+                ).fetchall()
+                for recipe_id, quantity in lines:
+                    both = self._db.execute(
+                        "SELECT 1 FROM recipe_lines WHERE recipe_id = ? AND ingredient_id = ?",
+                        (recipe_id, keep_id),
+                    ).fetchone()
+                    if both:
+                        self._db.execute(
+                            "UPDATE recipe_lines SET quantity = quantity + ?"
+                            " WHERE recipe_id = ? AND ingredient_id = ?",
+                            (quantity, recipe_id, keep_id),
+                        )
+                        self._db.execute(
+                            "DELETE FROM recipe_lines WHERE recipe_id = ? AND ingredient_id = ?",
+                            (recipe_id, drop_id),
+                        )
+                    else:
+                        self._db.execute(
+                            "UPDATE recipe_lines SET ingredient_id = ?"
+                            " WHERE recipe_id = ? AND ingredient_id = ?",
+                            (keep_id, recipe_id, drop_id),
+                        )
+            self._db.execute(
+                "UPDATE stock_items SET ingredient_id = ? WHERE ingredient_id = ?",
+                (keep_id, drop_id),
+            )
+            for table, column in (
+                ("ingredient_food_groups", "food_group"),
+                ("ingredient_allergens", "allergen"),
+            ):
+                self._db.execute(
+                    f"INSERT OR IGNORE INTO {table} (ingredient_id, {column})"
+                    f" SELECT ?, {column} FROM {table} WHERE ingredient_id = ?",
+                    (keep_id, drop_id),
+                )
+            self._db.execute(
+                "UPDATE ingredients SET"
+                " kcal = COALESCE(kcal, (SELECT kcal FROM ingredients WHERE id = ?)),"
+                " reviewed = MAX(reviewed, (SELECT reviewed FROM ingredients WHERE id = ?)),"
+                " shelf_life_amount = COALESCE(shelf_life_amount,"
+                "   (SELECT shelf_life_amount FROM ingredients WHERE id = ?)),"
+                " shelf_life_unit = COALESCE(shelf_life_unit,"
+                "   (SELECT shelf_life_unit FROM ingredients WHERE id = ?))"
+                " WHERE id = ?",
+                (drop_id, drop_id, drop_id, drop_id, keep_id),
+            )
+            self._db.execute("DELETE FROM ingredients WHERE id = ?", (drop_id,))
+
+    def tidy_plan(self) -> list[tuple[list[Ingredient], str]]:
+        """What tidying would do: groups of Ingredients that are one food, each with the plain
+        name it would end up under.
+
+        A group of one is only there if its name would be cleaned. A name is left alone if the
+        clean name is already used by an Ingredient that is stored in another kind of unit.
+        """
+        everything = self.ingredients()
+        groups: dict[tuple[str, str], list[Ingredient]] = {}
+        for ingredient in everything:
+            key = (name_key(ingredient.name), ingredient.base_unit.value)
+            groups.setdefault(key, []).append(ingredient)
+        plan = []
+        claimed: set[str] = set()  # names a group in this plan has already been given
+        for members in groups.values():
+            members.sort(key=lambda i: (len(i.name), i.id))
+            target = clean_name(members[0].name)
+            in_group = {m.id for m in members}
+            taken = any(i.name.lower() == target and i.id not in in_group for i in everything)
+            if taken or target in claimed:
+                target = members[0].name
+            claimed.add(target.lower())
+            if len(members) == 1 and members[0].name == target:
+                continue
+            plan.append((members, target))
+        return plan
+
+    def tidy(self) -> int:
+        """Merge Ingredients that are one food and give each its plain name.
+
+        Returns how many groups were changed. Allergens and food groups ticked on any of the
+        merged Ingredients are kept (see `merge_ingredients`).
+        """
+        plan = self.tidy_plan()
+        for members, target in plan:
+            keep = next((m for m in members if m.name == target), min(members, key=lambda i: i.id))
+            for other in members:
+                if other.id != keep.id:
+                    self.merge_ingredients(keep.id, other.id)
+            if keep.name != target:
+                with self._db:
+                    self._db.execute(
+                        "UPDATE ingredients SET name = ? WHERE id = ?", (target, keep.id)
+                    )
+        return len(plan)
 
     def delete(self, item_id: int) -> None:
         with self._db:

@@ -1,0 +1,101 @@
+{% extends "base.html" %}
+{% block title %}Emu the Menu - Review ingredients{% endblock %}
+{% block heading %}Review ingredients{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+  {% if error %}<p class="error" role="alert">error: {{ error }}</p>{% endif %}
+  {% if done %}<p class="saved" role="status">Saved {{ done }} ingredient{{ "" if done == 1 else "s" }}.</p>{% endif %}
+  {% if recipe %}<p class="summary"><span class="chip chip-new">Checking: {{ recipe.name }}</span><a class="chip" href="/ingredients/review">Show every ingredient</a></p>{% endif %}
+
+  {% if not left %}
+  <p class="empty">Everything is reviewed. <a href="/ingredients">Back to the ingredients</a>.</p>
+  {% else %}
+  <div class="warning-note" role="note">
+    <p><strong>You are the safety check.</strong> Nothing here is saved until you confirm it, and ticks from the name are only guesses. Tick every allergen and food group an ingredient contains, including hidden ones (soy sauce has soy). Emu the Menu cannot check this for you, so always read the label. <a href="/disclaimer">Read the disclaimer</a>.</p>
+  </div>
+
+  <p class="summary">
+    <span class="chip chip-soon">{{ left }} left to review</span>
+    <span class="chip">{{ plain_count }} look plain</span>
+    {% if group_count %}<span class="chip">{{ group_count }} in groups</span>{% endif %}
+    <a class="chip chip-soon" href="/ingredients/review?{% if recipe %}recipe={{ recipe.id }}&amp;{% endif %}show=risky"{% if show == "risky" %} aria-current="true"{% endif %}>{{ look_count }} need a look</a>
+    {% if show == "risky" %}<a class="chip" href="/ingredients/review{% if recipe %}?recipe={{ recipe.id }}{% endif %}">Show the plain ones too</a>{% endif %}
+  </p>
+
+  {% if plain %}
+  <form class="add review-plain" method="post" action="/ingredients/review">
+    <input type="hidden" name="show" value="{{ show }}">
+    <input type="hidden" name="recipe" value="{{ recipe.id if recipe else "" }}">
+    <h2>Plain-looking ({{ plain|length }})</h2>
+    <p class="hint">Single plant foods and basics by name. Look the list over and untick anything you are not sure about. Confirming saves them as: no allergens, no food groups. Packaging can differ from the name, so check the label for anything you are unsure of.</p>
+    <div class="checks">
+      {% for i, used in plain %}<label><input type="checkbox" name="plain" value="{{ i.id }}"{{ " checked" if i.id in ticked_plain }}> {{ i.name }}</label>{% endfor %}
+    </div>
+    <div class="buttons"><button type="submit">Confirm the ticked plain ones</button></div>
+  </form>
+  {% endif %}
+
+  {% for g in groups %}
+  <form class="add review-group" method="post" action="/ingredients/review">
+    <input type="hidden" name="show" value="{{ show }}">
+    <input type="hidden" name="recipe" value="{{ recipe.id if recipe else "" }}">
+    {% for v in g.food_groups %}<input type="hidden" name="grp_fg" value="{{ v }}">{% endfor %}
+    {% for v in g.allergens %}<input type="hidden" name="grp_al" value="{{ v }}">{% endfor %}
+    <h2>Probably {{ g.labels|join(", ") }} ({{ g.members|length }})</h2>
+    <p class="hint">The names suggest these contain {{ g.labels|join(", ") }}. Untick any that do not, such as a vegan version. Confirming saves them as containing: {{ g.labels|join(", ") }}. Check the label if you are unsure.</p>
+    <div class="checks">
+      {% for i, used in g.members %}<label><input type="checkbox" name="grp" value="{{ i.id }}"{{ " checked" if ticked_group is none or i.id in ticked_group }}> {{ i.name }}</label>{% endfor %}
+    </div>
+    <div class="buttons"><button type="submit">Confirm the ticked ones</button></div>
+  </form>
+  {% endfor %}
+
+  {% if rows %}
+  <form class="add review-rows" method="post" action="/ingredients/review">
+    <input type="hidden" name="show" value="{{ show }}">
+    <input type="hidden" name="page" value="{{ page }}">
+    <input type="hidden" name="recipe" value="{{ recipe.id if recipe else "" }}">
+    <h2>One by one ({{ rows|length }}{% if pages > 1 %} on this page{% endif %})</h2>
+    <p class="hint">These need your eyes: the name does not say enough. Pills ticked from the name are only guesses. Change anything that is wrong, tick <strong>Looks right</strong> for the rows you have checked, then save. Rows you leave unticked stay unchecked. Calories are optional here.</p>
+    {% for r in rows %}
+    {% set i = r.ingredient %}
+    <div class="review-row">
+      <div class="row-head">
+        <strong class="row-name">{{ i.name }}</strong>
+        <span class="chip chip-soon">{{ r.reason }}</span>
+        <span class="hint">used in {{ r.used }} recipe{{ "" if r.used == 1 else "s" }}</span>
+        <label class="looks-right"><input type="checkbox" name="confirm" value="{{ i.id }}"{{ " checked" if r.confirmed }}> Looks right</label>
+      </div>
+      <div class="checks">
+        {% for g in food_group_choices %}<label title="{{ g.label }}"><input type="checkbox" name="fg_{{ i.id }}" value="{{ g.value }}"{{ " checked" if g.value in r.groups }}> {{ g.short_label }}</label>{% endfor %}
+      </div>
+      <div class="checks">
+        {% for a in allergen_choices %}<label title="{{ a.label }}"><input type="checkbox" name="al_{{ i.id }}" value="{{ a.value }}"{{ " checked" if a.value in r.allergens }}> {{ a.short_label }}</label>{% endfor %}
+      </div>
+      <label class="row-kcal">Calories {{ kcal_basis(i.base_unit) }} (kcal)
+        <input name="kcal_{{ i.id }}" inputmode="decimal" autocomplete="off" placeholder="optional" value="{{ r.kcal }}">
+      </label>
+    </div>
+    {% endfor %}
+    <div class="buttons"><button type="submit">Save the rows I ticked</button></div>
+    {% if pages > 1 %}
+    <p class="pager">
+      {% if page > 1 %}<a href="/ingredients/review?{% if recipe %}recipe={{ recipe.id }}&amp;{% endif %}{% if show %}show={{ show }}&amp;{% endif %}page={{ page - 1 }}">Previous</a>{% endif %}
+      Page {{ page }} of {{ pages }}
+      {% if page < pages %}<a href="/ingredients/review?{% if recipe %}recipe={{ recipe.id }}&amp;{% endif %}{% if show %}show={{ show }}&amp;{% endif %}page={{ page + 1 }}">Next</a>{% endif %}
+    </p>
+    {% endif %}
+  </form>
+  {% endif %}
+  <p><a href="/ingredients">Back to the ingredients</a></p>
+  <script>
+    // Changing anything in a row means you have looked at it, so tick its Looks right box.
+    document.querySelectorAll(".review-row").forEach((row) => {
+      const box = row.querySelector("[name=confirm]");
+      row.addEventListener("input", (event) => {
+        if (event.target !== box) box.checked = true;
+      });
+    });
+  </script>
+  {% endif %}
+{% endblock %}

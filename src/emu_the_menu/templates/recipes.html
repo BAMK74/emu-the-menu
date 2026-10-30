@@ -45,7 +45,7 @@
         </div>
         {% endif %}
         {% if r.source_url %}<p class="hint">From <a href="{{ r.source_url }}" target="_blank" rel="noopener noreferrer">{{ r.source_host }}</a></p>{% endif %}
-        {% if not f.is_checked %}<p class="hint">Not looked at yet: {{ f.unchecked|join(", ") }}. Allergens and diets are unknown until <a href="/ingredients?show=unchecked">they are reviewed</a>.</p>{% endif %}
+        {% if not f.is_checked %}<p class="hint">Not looked at yet: {{ f.unchecked|join(", ") }}. Allergens and diets are unknown until <a href="/ingredients/review?recipe={{ r.id }}">you check the {{ f.unchecked|length }} ingredient{{ "" if f.unchecked|length == 1 else "s" }}</a>.</p>{% endif %}
       </li>
       {% endfor %}
     </ul>
