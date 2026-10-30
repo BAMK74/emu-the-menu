@@ -60,6 +60,7 @@
       <div class="checks">
         {% for m in meal_choices %}<label><input type="checkbox" name="meal_types" value="{{ m.value }}"{{ " checked" if m.value in form.meal_types }}> {{ m.label }}</label>{% endfor %}
       </div>
+      <p class="hint">A snack recipe can be planned for the morning, afternoon or evening snack.</p>
     </fieldset>
     <fieldset class="lines">
       <legend>Ingredients</legend>

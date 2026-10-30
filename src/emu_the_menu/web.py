@@ -30,6 +30,7 @@ from emu_the_menu.web_disclaimer import create_router as create_disclaimer_route
 from emu_the_menu.web_eaters import create_router as create_eaters_router
 from emu_the_menu.web_eaters import export_eaters
 from emu_the_menu.web_ingredients import create_router as create_ingredients_router
+from emu_the_menu.web_menu import create_router as create_menu_router
 from emu_the_menu.web_recipes import create_router as create_recipes_router
 
 # Pages the Settings overlay may send you back to after saving.
@@ -84,6 +85,7 @@ def create_app(
     app.include_router(create_eaters_router(path))
     app.include_router(create_ingredients_router(path, fetch_product))
     app.include_router(create_recipes_router(path, fetch_recipe_page))
+    app.include_router(create_menu_router(path, today))
     app.include_router(create_disclaimer_router(path, today))
     app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 

@@ -160,6 +160,17 @@
     fieldset.lines legend { padding: 0; margin-bottom: .3rem; }
     .recipe-facts { margin-bottom: 1rem; }
     .verdicts { margin-top: .5rem; }
+    .menu-days { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: .8rem; margin-top: 1rem; }
+    .day { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: .8rem; }
+    .day h3 { margin: 0 0 .5rem; font-size: 1rem; }
+    .meal { padding: .5rem 0; border-top: 1px solid var(--line); }
+    .meal:first-of-type { border-top: 0; }
+    .meal p { margin: 0; }
+    .meal-type { font-size: .72rem; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+    .meal-recipe a { font-weight: 600; text-decoration: none; color: var(--text); }
+    .meal-empty { font-size: .85rem; color: var(--muted); }
+    .portions { display: flex; flex-direction: column; gap: .1rem; margin-top: .25rem; font-size: .8rem; color: var(--muted); }
+    .shopping { margin-top: 1.2rem; }
     .verdict { margin: .25rem 0 0; font-size: .8rem; }
     .verdict.blocked { color: var(--danger); }
     a.button { display: inline-block; text-decoration: none; padding: .55rem 1rem; border-radius: .5rem; border: 1px solid var(--line); color: var(--text); text-align: center; }
@@ -340,7 +351,7 @@
       <span>Emu the Menu</span>
     </a>
     <nav aria-label="Main">
-      {% block nav %}<a href="/"{% if request.url.path == "/" %} aria-current="page"{% endif %}>Stock</a><a href="/recipes"{% if request.url.path.startswith("/recipes") %} aria-current="page"{% endif %}>Recipes</a><a href="/ingredients"{% if request.url.path.startswith("/ingredients") %} aria-current="page"{% endif %}>Ingredients</a><a href="/eaters"{% if request.url.path == "/eaters" %} aria-current="page"{% endif %}>Eaters</a><a id="settings-link" href="/settings"{% if request.url.path == "/settings" %} aria-current="page"{% endif %}>Settings</a>{% endblock %}
+      {% block nav %}<a href="/"{% if request.url.path == "/" %} aria-current="page"{% endif %}>Stock</a><a href="/menu"{% if request.url.path == "/menu" %} aria-current="page"{% endif %}>Menu</a><a href="/recipes"{% if request.url.path.startswith("/recipes") %} aria-current="page"{% endif %}>Recipes</a><a href="/ingredients"{% if request.url.path.startswith("/ingredients") %} aria-current="page"{% endif %}>Ingredients</a><a href="/eaters"{% if request.url.path == "/eaters" %} aria-current="page"{% endif %}>Eaters</a><a id="settings-link" href="/settings"{% if request.url.path == "/settings" %} aria-current="page"{% endif %}>Settings</a>{% endblock %}
     </nav>
   </div>
 </header>

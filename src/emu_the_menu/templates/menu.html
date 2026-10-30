@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Emu the Menu - Menu{% endblock %}
+{% block heading %}Menu{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+  <div class="warning-note" role="note">
+    <p><strong>Suggestions, not advice.</strong> Every suggestion has passed the allergy and diet checks for the people ticked, but Emu the Menu cannot check what a product really contains, so always read the label of everything you cook with. A recipe marked "Not checked" has an ingredient nobody has reviewed. Portions are a rough guide from calorie goals, not medical or dietary advice. <a href="/disclaimer">Read the disclaimer</a>.</p>
+  </div>
+
+  {% if not eaters %}
+  <p class="empty">Add the people you cook for on the <a href="/eaters">Eaters</a> page first, then Emu the Menu can plan for them.</p>
+  {% else %}
+  {% if error %}<p class="error" role="alert">error: {{ error }}</p>{% endif %}
+  <form class="add menu-form" method="get" action="/menu">
+    <input type="hidden" name="go" value="1">
+    <input type="hidden" name="seed" value="{{ form.seed }}">
+    <div class="pair">
+      <label>Starting
+        <input name="start" type="date" value="{{ form.start }}" required>
+      </label>
+      <label>Days
+        <input name="days" type="number" min="1" max="{{ max_days }}" step="1" inputmode="numeric" value="{{ form.days }}" required>
+      </label>
+    </div>
+    <fieldset class="allergens">
+      <legend>Meals</legend>
+      <div class="checks">
+        {% for m in meal_choices %}<label><input type="checkbox" name="meal_types" value="{{ m.value }}"{{ " checked" if m.value in form.meal_types }}> {{ m.label }}</label>{% endfor %}
+      </div>
+    </fieldset>
+    <fieldset class="allergens">
+      <legend>Who is eating</legend>
+      <div class="checks">
+        {% for e in eaters %}<label><input type="checkbox" name="eater" value="{{ e.id }}"{{ " checked" if e.id in form.eaters }}> {{ e.name }}</label>{% endfor %}
+      </div>
+    </fieldset>
+    <div class="pair">
+      <label>Shopping allowance
+        <input name="allowance" type="number" min="0" max="50" step="1" inputmode="numeric" value="{{ form.allowance }}">
+        <small>Ingredients not in stock that the whole menu may need</small>
+      </label>
+      <label>Cooldown (days)
+        <input name="cooldown" type="number" min="0" max="60" step="1" inputmode="numeric" value="{{ form.cooldown }}">
+        <small>Days before a recipe may come back</small>
+      </label>
+    </div>
+    <div class="buttons">
+      <button type="submit">Plan the menu</button>
+      {% if reshuffle %}<a class="button quiet" href="{{ reshuffle }}">Reshuffle</a>{% endif %}
+    </div>
+  </form>
+
+  {% if days_shown %}
+  <section class="results menu-days" aria-label="Planned meals">
+    {% for day, meals in days_shown %}
+    <div class="day">
+      <h3>{{ label(day) }}</h3>
+      {% for meal, unchecked in meals %}
+      <div class="meal">
+        <p class="meal-type">{{ meal.slot.label }}</p>
+        {% if meal.recipe %}
+        <p class="meal-recipe"><a href="/recipes/{{ meal.recipe.id }}">{{ meal.recipe.name }}</a></p>
+        <div class="portions">
+          {% for p in meal.portions %}<span class="portion"><strong>{{ p.eater.name }}</strong> {{ "%g"|format(p.servings) }} serving{{ "" if p.servings == 1 else "s" }} {% if p.kcal is not none %}{{ "%d"|format(p.kcal|round) }} kcal{% else %}calories unknown{% endif %}</span>{% endfor %}
+        </div>
+        <p class="hint">Cook {{ "%g"|format(meal.total_servings) }} servings ({{ "%g"|format(meal.scale|round(2)) }}× the recipe).</p>
+        {% if unchecked %}<p class="hint">Not checked: {{ unchecked|join(", ") }}. Allergens and food groups are unknown until <a href="/ingredients?show=unchecked">they are reviewed</a>.</p>{% endif %}
+        {% else %}
+        <p class="meal-empty">{{ meal.reason }}</p>
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% endfor %}
+  </section>
+
+  <section class="shopping" aria-label="Shopping list">
+    <h2>Shopping list</h2>
+    {% if shopping %}
+    <p>{% for i in shopping %}<span class="chip chip-none">{{ i.name }}</span> {% endfor %}</p>
+    <p class="hint">Ingredients the recipes above need that are not in stock. Amounts are not totalled yet. Always read the label.</p>
+    {% else %}
+    <p class="hint">Nothing to buy: everything is in stock. Always read the label.</p>
+    {% endif %}
+  </section>
+  {% endif %}
+  {% endif %}
+{% endblock %}
