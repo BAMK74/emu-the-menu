@@ -64,6 +64,7 @@ _units("cup cups", "cup")
 _units("oz ounce ounces", "g", 28.35)
 _units("lb lbs pound pounds", "g", 453.6)
 _units("clove cloves slice slices piece pieces stick sticks", "count")
+_units("ear ears stem stems stalk stalks rib ribs bundle bundles", "count")
 _units("bunch bunches", "bunch")
 _units("head heads", "head")
 _CONTAINERS = frozenset("can cans tin tins jar jars pack packs packet packets bag bags".split())
@@ -71,10 +72,22 @@ _CONTAINERS |= frozenset("bottle bottles package packages box boxes".split())
 # Amounts that cannot be turned into a number, so the line is left for a person.
 _VAGUE = frozenset("pinch pinches dash dashes handful handfuls splash sprig sprigs knob".split())
 _SIZES = frozenset("small medium large big".split())
+# Words that describe the measure rather than the food: "2 heaped tablespoons yoghurt".
+_MODIFIERS = frozenset("heaped heaping scant level generous rounded packed lightly tightly".split())
 
 _NUMBER = r"\d+\s+\d+/\d+|\d+/\d+|\d+(?:[.,]\d+)?"
 _START = re.compile(rf"(?P<q>{_NUMBER})(?:\s*(?:-|–|to)\s*(?:{_NUMBER}))?\s*", re.I)
-_PAREN = re.compile(r"\(([^)]*)\)")
+# A size written before a container, such as "15-ounce can", "400g tin" or "6-inch tortillas".
+_INNER = re.compile(rf"(?P<q>{_NUMBER})\s*-?\s*(?P<u>[a-zA-Z]+)\.?\s*")
+_HEADING = re.compile(
+    r"^(?:optional|recommended|any of the following|for|to serve|garnish)[a-z ]*:\s*", re.I
+)
+_MAX_NAME = 60
+# A word that comes before the amount: "scant 1/2 tsp", "about 2 cups".
+_LEAD_WORD = re.compile(
+    r"^(?:scant|about|approx\.?|approximately|roughly|generous|heaped|heaping)\s+(?=\d|[½⅓⅔¼¾⅛])",
+    re.I,
+)
 
 
 def _number(text: str) -> float:
@@ -88,16 +101,44 @@ def _number(text: str) -> float:
     return float(text.replace(",", "."))
 
 
+def _strip_brackets(text: str) -> str:
+    """Remove bracketed notes, even nested or left unclosed, and the marks sites add."""
+    previous = None
+    while previous != text:
+        previous, text = text, re.sub(r"\([^()]*\)", " ", text)
+    return re.sub(r"[()*$]", "", text)
+
+
+def _drop_alternative_amount(text: str) -> str:
+    """Drop the second way of writing an amount: "250g / 10 oz pasta" leaves "pasta"."""
+    text = text.strip()
+    if not text.startswith("/"):
+        return text
+    text = text[1:].strip()
+    if match := _START.match(text):
+        rest = text[match.end() :]
+        first = rest.split()[0].lower().rstrip(".") if rest.split() else ""
+        if first in _UNITS or first in _CONTAINERS:
+            return rest.split(None, 1)[1] if len(rest.split(None, 1)) > 1 else ""
+        return rest
+    return text
+
+
 def _clean_name(text: str) -> str:
-    text = re.split(r",| - | – |;| plus ", _PAREN.sub(" ", text))[0]
-    words = re.sub(
-        r"\s+(to|for)\s+(taste|serve|serving|garnish|decorate)\b.*", "", text.lower()
-    ).split()
-    while words and words[0] in {"of", "a", "an"}:
+    text = _drop_alternative_amount(_strip_brackets(text))
+    text = re.split(r",| - | – |;| plus | \+ ", text)[0]
+    text = re.sub(r"\s+(to|for)\s+(taste|serve|serving|garnish|decorate)\b.*", "", text.lower())
+    words = text.split()
+    while words and words[0] in {"of", "a", "an", "each"}:
         words.pop(0)
-    while words and words[0] in _SIZES:
+    while words and (words[0] in _SIZES or words[0].startswith("medium-to")):
         words.pop(0)
-    return " ".join(words)
+    if "garlic" in words:  # "garlic cloves", "clove of garlic"
+        words = [w for w in words if w not in {"clove", "cloves", "of"}]
+    name = " ".join(words)
+    if len(name) > _MAX_NAME:
+        name = name[:_MAX_NAME].rsplit(" ", 1)[0]
+    return name
 
 
 def parse_ingredient_line(text: str) -> IngredientLine:
@@ -106,6 +147,8 @@ def parse_ingredient_line(text: str) -> IngredientLine:
     text = " ".join(text.split())
     for symbol, fraction in _FRACTIONS.items():
         text = re.sub(rf"(\d){symbol}", rf"\1 {fraction}", text).replace(symbol, fraction)
+    text = _HEADING.sub("", text)
+    text = _LEAD_WORD.sub("", text)
     match = _START.match(text)
     if not match:
         # "a pinch of saffron", "salt to taste": no number, so nothing to measure.
@@ -117,23 +160,38 @@ def parse_ingredient_line(text: str) -> IngredientLine:
         )
     amount = _number(match.group("q"))
     rest = text[match.end() :]
-    inner = None
-    if paren := re.match(r"\(([^)]*)\)\s*", rest):
-        inner, rest = paren.group(1), rest[paren.end() :]
+    measure = None  # the size of one container, when the line says so
+    if paren := re.match(r"\(([^()]*)\)\s*", rest):
+        measure, rest = _measure(paren.group(1)), rest[paren.end() :]
+    rest = re.sub(r"^x\s*(?=\d)", "", rest)  # "2 x 400g tins"
+    if measure is None and (inner := _INNER.match(rest)):
+        word = inner.group("u").lower()
+        if word == "inch":  # "6-inch tortillas": the size is not an amount
+            rest = rest[inner.end() :]
+        elif word in _UNITS and _UNITS[word][0] != "count":
+            measure = (
+                _scaled(_number(inner.group("q")), _UNITS[word][1]),
+                _UNITS[word][0],
+            )
+            rest = rest[inner.end() :]
     words = rest.split()
+    while words and words[0].lower() in _MODIFIERS:
+        words.pop(0)
     first = words[0].lower().rstrip(".") if words else ""
     if first in _VAGUE:
         return IngredientLine(raw, _clean_name(" ".join(words[1:])), None, None)
     if first in _CONTAINERS:
         name = _clean_name(" ".join(words[1:]))
-        measured = _measure(inner) if inner else None
-        if measured:
-            return _line(raw, name, amount * measured[0], measured[1])
+        if measure:
+            return _line(raw, name, amount * measure[0], measure[1])
         return _line(raw, name, amount, "count")
     if first in _UNITS:
         unit, factor = _UNITS[first]
-        return _line(raw, _clean_name(" ".join(words[1:])), _scaled(amount, factor), unit)
-    return _line(raw, _clean_name(rest), amount, "count")  # "3 eggs", "1 onion"
+        rest_words = words[1:]
+        if rest_words and rest_words[0].lower().rstrip(".") in _CONTAINERS:
+            rest_words = rest_words[1:]  # "15 oz can black beans"
+        return _line(raw, _clean_name(" ".join(rest_words)), _scaled(amount, factor), unit)
+    return _line(raw, _clean_name(" ".join(words)), amount, "count")  # "3 eggs", "1 onion"
 
 
 def _scaled(amount: float, factor: float) -> float:

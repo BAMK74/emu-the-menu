@@ -198,3 +198,64 @@ def test_amounts_keep_their_decimals_when_no_conversion_is_needed():
 def test_a_plus_clause_is_not_part_of_the_name():
     line = parse_ingredient_line("1 tbsp sunflower oil plus a little extra for frying")
     assert line.name == "sunflower oil"
+
+
+# --- lines as real recipe sites write them ------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text, name, quantity, unit",
+    [
+        ("250g / 10 oz dried fettuccine", "dried fettuccine", 250, "g"),
+        ("125 ml / 1/2 cup heavy cream", "heavy cream", 125, "ml"),
+        ("1 15-ounce can chickpeas, drained", "chickpeas", 425.2, "g"),
+        ("1 15oz. can black beans", "black beans", 425.2, "g"),
+        ("15 oz. can black beans", "black beans", 425.2, "g"),
+        ("1 x 400g tin of cannellini beans", "cannellini beans", 400, "g"),
+        ("2 x 400g tins of chopped tomatoes", "chopped tomatoes", 800, "g"),
+        ("8 6-inch corn tortillas", "corn tortillas", 8, "count"),
+        ("2 heaped tablespoons natural yoghurt", "natural yoghurt", 2, "tbsp"),
+        ("1 heaping tsp dijon mustard", "dijon mustard", 1, "tsp"),
+        ("1 lightly packed cup chopped baby spinach", "chopped baby spinach", 1, "cup"),
+        ("4 ears corn", "corn", 4, "count"),
+        ("2 stems choy sum", "choy sum", 2, "count"),
+        ("3 garlic cloves, minced", "garlic", 3, "count"),
+        ("2 cloves of garlic", "garlic", 2, "count"),
+        ("1 medium-to-large clove garlic", "garlic", 1, "count"),
+        ("2 tbsp oil ((or any neutral oil))", "oil", 2, "tbsp"),
+        ("1 cup cheddar cheese ($1.25)", "cheddar cheese", 1, "cup"),
+        ("1 tbsp sugar )", "sugar", 1, "tbsp"),
+        ("2 tbsp soy sauce*", "soy sauce", 2, "tbsp"),
+        ("optional: 1 tablespoon paprika", "paprika", 1, "tbsp"),
+        ("3 tbsp cornflour / corn starch + 2 tbsp water", "cornflour / corn starch", 3, "tbsp"),
+        ("1 cup unsweetened almond milk (or milk of choice)", "unsweetened almond milk", 1, "cup"),
+    ],
+)
+def test_lines_as_real_sites_write_them_are_read(text, name, quantity, unit):
+    line = parse_ingredient_line(text)
+    assert line.name == name
+    assert line.quantity == pytest.approx(quantity, abs=0.1)
+    assert line.unit == unit
+
+
+def test_a_heading_prefix_is_dropped_but_a_line_without_an_amount_stays_unreadable():
+    line = parse_ingredient_line("Optional garnish: crumbled feta cheese")
+    assert not line.readable and line.name == "crumbled feta cheese"
+
+
+def test_no_name_ever_has_stray_brackets_stars_or_prices():
+    for text in ["1 cup rice )", "1 cup rice ((cooked))", "1 cup rice*", "1 cup rice ($0.40)"]:
+        name = parse_ingredient_line(text).name
+        assert not set(name) & set("()*$"), (text, name)
+
+
+def test_a_very_long_junk_name_is_cut_short():
+    text = "1 cup " + "something very long " * 10
+    assert len(parse_ingredient_line(text).name) <= 60
+
+
+def test_a_word_before_the_number_does_not_hide_the_amount():
+    line = parse_ingredient_line("Scant ½ teaspoon fine-grain sea salt")
+    assert (line.name, line.quantity, line.unit) == ("fine-grain sea salt", 0.5, "tsp")
+    line = parse_ingredient_line("about 2 cups milk")
+    assert (line.name, line.quantity, line.unit) == ("milk", 2, "cup")
