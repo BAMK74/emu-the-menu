@@ -5,6 +5,23 @@
 {% block content %}
   {% if error %}<p class="error" role="alert">error: {{ error }}</p>{% endif %}
 
+  {% if not recipe %}
+  <form class="add import" method="post" action="/recipes/import">
+    <label>Import from a web address
+      <input name="url" type="url" inputmode="url" autocomplete="off" placeholder="https://..." value="{{ import_url }}">
+      <small>Paste the address of a recipe page. Emu the Menu reads the name, servings and ingredients, and fills in the form below for you to check. It does not copy the method.</small>
+    </label>
+    <button class="quiet" type="submit">Import</button>
+  </form>
+  {% endif %}
+  {% if imported %}
+  <div class="warning-note" role="note">
+    <p><strong>Imported from {{ imported.host }}.</strong> Check every ingredient and quantity before saving: they were read from free text and can be wrong. Nothing is saved yet.{% if not imported.servings_found %} The page gave no number of servings, so check that too.{% endif %}</p>
+    {% if imported.unreadable %}<p>Add a quantity for these lines, or clear the row to leave it out:</p>
+    <ul>{% for line in imported.unreadable %}<li>{{ line }}</li>{% endfor %}</ul>{% endif %}
+  </div>
+  {% endif %}
+
   {% if facts %}
   <div class="recipe-facts">
     <p class="summary">
@@ -24,6 +41,7 @@
   {% endif %}
 
   <form class="add" method="post" action="{{ "/recipes/%d"|format(recipe.id) if recipe else "/recipes" }}">
+    <input type="hidden" name="source_url" value="{{ form.source_url }}">
     <label>Name
       <input name="name" value="{{ form.name }}" maxlength="80" autocomplete="off" required>
     </label>
@@ -62,6 +80,7 @@
       <button id="add-line" type="button" class="quiet" hidden>Add another ingredient</button>
       <p class="hint">For the whole recipe, not per serving. New ingredients are added to the Ingredients page, where you tick their allergens and calories.</p>
     </fieldset>
+    {% if form.source_url %}<p class="hint">Source: <a href="{{ form.source_url }}" target="_blank" rel="noopener noreferrer">{{ form.source_url|truncate(70) }}</a></p>{% endif %}
     <label>Tags (optional)
       <input name="tags" placeholder="festive, quick" autocomplete="off" value="{{ form.tags }}">
       <small>Separate with commas or semicolons, like festive, quick</small>

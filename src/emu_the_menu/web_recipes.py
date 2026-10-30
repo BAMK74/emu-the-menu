@@ -5,12 +5,20 @@ Recipe containing an Ingredient nobody has reviewed says "not checked", never "s
 """
 
 import re
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from emu_the_menu.page_fetch import PageUnavailableError, UnsafeAddressError, fetch_page
+from emu_the_menu.recipe_import import (
+    NoRecipeFoundError,
+    extract_recipe,
+    match_ingredient,
+    parse_ingredient_line,
+)
 from emu_the_menu.recipe_repository import (
     LineInput,
     Recipe,
@@ -57,7 +65,9 @@ def read_lines(
     return lines, typed
 
 
-def create_router(db_path: str | Path) -> APIRouter:
+def create_router(
+    db_path: str | Path, fetch_recipe_page: Callable[[str], str] = fetch_page
+) -> APIRouter:
     router = APIRouter()
 
     def get_repo() -> Iterator[RecipeRepository]:
@@ -78,6 +88,7 @@ def create_router(db_path: str | Path) -> APIRouter:
             "meal_types": ["dinner"],
             "weather": "any",
             "tags": "",
+            "source_url": "",
             "lines": [],
         }
 
@@ -94,10 +105,19 @@ def create_router(db_path: str | Path) -> APIRouter:
             "meal_types": [m.value for m in recipe.meal_types],
             "weather": recipe.weather.value,
             "tags": ", ".join(recipe.tags),
+            "source_url": recipe.source_url or "",
             "lines": lines,
         }
 
-    def page(request: Request, form: dict, recipe: Recipe | None, error=None, status=200):
+    def page(
+        request: Request,
+        form: dict,
+        recipe: Recipe | None,
+        error=None,
+        status=200,
+        imported: dict | None = None,
+        import_url: str = "",
+    ):
         # Always leave a few blank rows to type into, even without scripting.
         shown = list(form["lines"]) + [{"ingredient": "", "quantity": "", "unit": "g"}] * 3
         return TEMPLATES.TemplateResponse(
@@ -112,6 +132,8 @@ def create_router(db_path: str | Path) -> APIRouter:
                 "units": known_units(),
                 "suggestions": ingredient_names(),
                 "facts": facts(recipe) if recipe else None,
+                "imported": imported,
+                "import_url": import_url,
             },
             status_code=status,
         )
@@ -134,6 +156,7 @@ def create_router(db_path: str | Path) -> APIRouter:
         ingredient: list[str],
         quantity: list[str],
         unit: list[str],
+        source_url: str,
     ):
         typed = {
             "name": name,
@@ -141,6 +164,7 @@ def create_router(db_path: str | Path) -> APIRouter:
             "meal_types": meal_types,
             "weather": weather,
             "tags": tags,
+            "source_url": source_url,
             "lines": [],
         }
         recipe = repo.get(recipe_id) if recipe_id is not None else None
@@ -155,9 +179,9 @@ def create_router(db_path: str | Path) -> APIRouter:
                 lines,
             )
             if recipe_id is None:
-                repo.add(*args)
+                repo.add(*args, source_url=source_url)
             else:
-                repo.update(recipe_id, *args)
+                repo.update(recipe_id, *args, source_url=source_url)
         except RecipeNotFoundError:
             raise HTTPException(404, "No such recipe") from None
         except (ValueError, UnknownUnitError) as exc:
@@ -179,6 +203,48 @@ def create_router(db_path: str | Path) -> APIRouter:
     def new(request: Request):
         return page(request, blank_form(), None)
 
+    @router.post("/recipes/import")
+    def import_recipe(request: Request, url: str = Form("")):
+        """Fill in the form from a recipe web page. Nothing is saved until a person saves."""
+        url = url.strip()
+        blank = blank_form()
+        if not url:
+            return page(request, blank, None, "Enter the web address of a recipe", 400)
+        try:
+            imported = extract_recipe(fetch_recipe_page(url))
+        except UnsafeAddressError as exc:
+            return page(request, blank, None, str(exc), 400, import_url=url)
+        except PageUnavailableError as exc:
+            return page(request, blank, None, str(exc), 502, import_url=url)
+        except NoRecipeFoundError as exc:
+            return page(request, blank, None, str(exc), 400, import_url=url)
+        known = ingredient_names()
+        rows, unreadable = [], []
+        for text in imported.lines:
+            line = parse_ingredient_line(text)
+            name = match_ingredient(line.name, known)
+            if line.readable:
+                rows.append(
+                    {"ingredient": name, "quantity": f"{line.quantity:g}", "unit": line.unit}
+                )
+            else:
+                unreadable.append(text)
+                rows.append({"ingredient": name, "quantity": "", "unit": "g"})
+        form = {
+            **blank,
+            "name": imported.name,
+            "servings": str(imported.servings or blank["servings"]),
+            "tags": ", ".join(imported.tags),
+            "source_url": url,
+            "lines": rows,
+        }
+        info = {
+            "host": urlsplit(url).hostname,
+            "unreadable": unreadable,
+            "servings_found": imported.servings is not None,
+        }
+        return page(request, form, None, imported=info)
+
     @router.post("/recipes")
     def create(
         request: Request,
@@ -190,11 +256,12 @@ def create_router(db_path: str | Path) -> APIRouter:
         ingredient: list[str] = Form([]),
         quantity: list[str] = Form([]),
         unit: list[str] = Form([]),
+        source_url: str = Form(""),
         repo: RecipeRepository = Depends(get_repo),
     ):
         return save(
             request, repo, None, name, servings, meal_types, weather, tags, ingredient,
-            quantity, unit,
+            quantity, unit, source_url,
         )  # fmt: skip
 
     @router.get("/recipes/{recipe_id}", response_class=HTMLResponse)
@@ -214,12 +281,13 @@ def create_router(db_path: str | Path) -> APIRouter:
         ingredient: list[str] = Form([]),
         quantity: list[str] = Form([]),
         unit: list[str] = Form([]),
+        source_url: str = Form(""),
         repo: RecipeRepository = Depends(get_repo),
     ):
         find(repo, recipe_id)
         return save(
             request, repo, recipe_id, name, servings, meal_types, weather, tags, ingredient,
-            quantity, unit,
+            quantity, unit, source_url,
         )  # fmt: skip
 
     @router.post("/recipes/{recipe_id}/delete")

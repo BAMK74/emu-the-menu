@@ -1,3 +1,5 @@
+import sqlite3
+
 import pytest
 
 from emu_the_menu.food_groups import FoodGroup
@@ -199,3 +201,58 @@ def test_export_lists_recipes_with_their_lines(repo):
         {"ingredient": "rice", "quantity": 200, "unit": "g"},
         {"ingredient": "tomatoes", "quantity": 4, "unit": "count"},
     ]
+
+
+# --- where a recipe came from -----------------------------------------------------------------
+
+
+def with_source(repo, url, name="Soup"):
+    return repo.add(
+        name, 2, (MealType.DINNER,), Weather.ANY, (), [("rice", 1, "g")], source_url=url
+    )
+
+
+def test_a_recipe_remembers_the_address_it_came_from(repo):
+    recipe_id = with_source(repo, " https://example.com/soup ")
+    assert repo.get(recipe_id).source_url == "https://example.com/soup"
+
+
+def test_a_recipe_without_a_source_has_none(repo):
+    assert repo.get(add(repo)).source_url is None
+    assert repo.get(with_source(repo, "  ", "Other")).source_url is None
+
+
+@pytest.mark.parametrize(
+    "url", ["javascript:alert(1)", "ftp://example.com", "example.com", "https://" + "x" * 600]
+)
+def test_a_source_must_be_a_web_address(repo, url):
+    with pytest.raises(ValueError, match="web address"):
+        with_source(repo, url)
+    assert repo.recipes() == []
+
+
+def test_updating_can_change_or_clear_the_source(repo):
+    recipe_id = with_source(repo, "https://example.com/a")
+    args = ("Soup", 2, (MealType.DINNER,), Weather.ANY, (), [("rice", 1, "g")])
+    repo.update(recipe_id, *args, source_url="https://example.com/b")
+    assert repo.get(recipe_id).source_url == "https://example.com/b"
+    repo.update(recipe_id, *args)
+    assert repo.get(recipe_id).source_url is None
+
+
+def test_the_export_includes_the_source(repo):
+    with_source(repo, "https://example.com/soup")
+    assert repo.export_data()[0]["source_url"] == "https://example.com/soup"
+
+
+def test_an_older_database_gains_the_source_column(db_path):
+    db = sqlite3.connect(db_path)
+    db.executescript(
+        "CREATE TABLE recipes (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE COLLATE NOCASE,"
+        " servings INTEGER NOT NULL, weather TEXT NOT NULL DEFAULT 'any');"
+    )
+    db.commit()
+    db.close()
+    with RecipeRepository(db_path) as repo:
+        recipe_id = with_source(repo, "https://example.com/soup")
+        assert repo.get(recipe_id).source_url == "https://example.com/soup"

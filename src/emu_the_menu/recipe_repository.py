@@ -4,6 +4,7 @@ import sqlite3
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from pathlib import Path
+from urllib.parse import urlsplit
 
 from emu_the_menu.recipes import (
     MealType,
@@ -22,7 +23,8 @@ CREATE TABLE IF NOT EXISTS recipes (
     id       INTEGER PRIMARY KEY,
     name     TEXT NOT NULL UNIQUE COLLATE NOCASE,
     servings INTEGER NOT NULL CHECK (servings >= 1),
-    weather  TEXT NOT NULL DEFAULT 'any'
+    weather  TEXT NOT NULL DEFAULT 'any',
+    source_url TEXT
 );
 CREATE TABLE IF NOT EXISTS recipe_meal_types (
     recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
@@ -64,6 +66,26 @@ class Recipe:
     weather: Weather
     tags: tuple[str, ...]
     lines: tuple[RecipeLine, ...]
+    source_url: str | None = None  # the web page it was imported from or copied from
+
+    @property
+    def source_host(self) -> str | None:
+        return urlsplit(self.source_url).hostname if self.source_url else None
+
+
+MAX_SOURCE_LENGTH = 500
+
+
+def clean_source(url: str | None) -> str | None:
+    """A web address to remember, or None if blank. Raises ValueError unless it is http or https."""
+    url = (url or "").strip()
+    if not url:
+        return None
+    if len(url) > MAX_SOURCE_LENGTH or urlsplit(url).scheme not in ("http", "https"):
+        raise ValueError("The source must be a web address starting with http:// or https://")
+    if not urlsplit(url).hostname:
+        raise ValueError("The source must be a web address starting with http:// or https://")
+    return url
 
 
 LineInput = tuple[str, float, str]  # ingredient name, quantity, unit as typed
@@ -76,6 +98,10 @@ class RecipeRepository:
         self._db = sqlite3.connect(path)
         self._db.execute("PRAGMA foreign_keys = ON")
         self._db.executescript(_SCHEMA)
+        columns = {row[1] for row in self._db.execute("PRAGMA table_info(recipes)")}
+        if "source_url" not in columns:
+            with self._db:
+                self._db.execute("ALTER TABLE recipes ADD COLUMN source_url TEXT")
 
     def __enter__(self) -> "RecipeRepository":
         return self
@@ -97,12 +123,13 @@ class RecipeRepository:
         weather: Weather,
         tags: Iterable[str],
         lines: Sequence[LineInput],
+        source_url: str | None = None,
     ) -> int:
         """Save a new Recipe and return its id.
 
         Nothing is saved, not even new Ingredients, if anything is wrong.
         """
-        return self._save(None, name, servings, meal_types, weather, tags, lines)
+        return self._save(None, name, servings, meal_types, weather, tags, lines, source_url)
 
     def update(
         self,
@@ -113,9 +140,10 @@ class RecipeRepository:
         weather: Weather,
         tags: Iterable[str],
         lines: Sequence[LineInput],
+        source_url: str | None = None,
     ) -> None:
         """Replace everything about a Recipe. Nothing changes if anything is wrong."""
-        self._save(recipe_id, name, servings, meal_types, weather, tags, lines)
+        self._save(recipe_id, name, servings, meal_types, weather, tags, lines, source_url)
 
     def delete(self, recipe_id: int) -> None:
         """Delete a Recipe. Its Ingredients stay."""
@@ -123,23 +151,26 @@ class RecipeRepository:
             if not self._db.execute("DELETE FROM recipes WHERE id = ?", (recipe_id,)).rowcount:
                 raise RecipeNotFoundError(recipe_id)
 
-    def _save(self, recipe_id, name, servings, meal_types, weather, tags, lines) -> int:
+    def _save(self, recipe_id, name, servings, meal_types, weather, tags, lines, source_url) -> int:
         name = clean_recipe_name(name)
         servings = parse_servings(str(servings))
         meals = parse_meal_types(m.value for m in meal_types)
         tags = parse_tags(",".join(tags))
         amounts = _merged(lines)
+        source = clean_source(source_url)
         try:
             with self._db:
                 if recipe_id is None:
                     recipe_id = self._db.execute(
-                        "INSERT INTO recipes (name, servings, weather) VALUES (?, ?, ?)",
-                        (name, servings, weather.value),
+                        "INSERT INTO recipes (name, servings, weather, source_url)"
+                        " VALUES (?, ?, ?, ?)",
+                        (name, servings, weather.value, source),
                     ).lastrowid
                 else:
                     changed = self._db.execute(
-                        "UPDATE recipes SET name = ?, servings = ?, weather = ? WHERE id = ?",
-                        (name, servings, weather.value, recipe_id),
+                        "UPDATE recipes SET name = ?, servings = ?, weather = ?, source_url = ?"
+                        " WHERE id = ?",
+                        (name, servings, weather.value, source, recipe_id),
                     ).rowcount
                     if not changed:
                         raise RecipeNotFoundError(recipe_id)
@@ -208,9 +239,10 @@ class RecipeRepository:
                 parse_weather(weather),
                 tuple(tags.get(rid, ())),
                 tuple(lines.get(rid, ())),
+                source_url,
             )
-            for rid, name, servings, weather in self._db.execute(
-                "SELECT id, name, servings, weather FROM recipes ORDER BY name"
+            for rid, name, servings, weather, source_url in self._db.execute(
+                "SELECT id, name, servings, weather, source_url FROM recipes ORDER BY name"
             )
         ]
 
@@ -221,6 +253,7 @@ class RecipeRepository:
                 "servings": r.servings,
                 "meal_types": [m.value for m in r.meal_types],
                 "weather": r.weather.value,
+                "source_url": r.source_url,
                 "tags": list(r.tags),
                 "lines": [
                     {

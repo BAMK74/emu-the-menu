@@ -19,6 +19,7 @@ from emu_the_menu.eaters import (
     parse_calorie_goal,
 )
 from emu_the_menu.openfoodfacts import Fetch, LookupUnavailableError, find_product, http_fetch
+from emu_the_menu.page_fetch import fetch_page
 from emu_the_menu.recipe_repository import RecipeRepository
 from emu_the_menu.repository import ItemNotFoundError, StockRepository
 from emu_the_menu.shelf_life import ShelfLife, ShelfLifeUnit
@@ -74,6 +75,7 @@ def create_app(
     today: Callable[[], date] = date.today,
     fetch_product: Fetch = http_fetch,
     backup_dir: str | Path | None = None,
+    fetch_recipe_page: Callable[[str], str] = fetch_page,
 ) -> FastAPI:
     path = db_path or os.environ.get("EMU_DB", "emu.db")
     backup_dir = backup_dir or os.environ.get("EMU_BACKUP_DIR")
@@ -81,7 +83,7 @@ def create_app(
     app.state.db_path = path  # read by the shared templates, for the disclaimer banner
     app.include_router(create_eaters_router(path))
     app.include_router(create_ingredients_router(path, fetch_product))
-    app.include_router(create_recipes_router(path))
+    app.include_router(create_recipes_router(path, fetch_recipe_page))
     app.include_router(create_disclaimer_router(path, today))
     app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 

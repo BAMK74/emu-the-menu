@@ -36,6 +36,7 @@
             {% for a in f.allergens %}<span class="chip chip-allergen">{{ a.short_label }}</span>{% endfor %}
           {% endif %}
         </div>
+        {% if r.source_url %}<p class="hint">From <a href="{{ r.source_url }}" target="_blank" rel="noopener noreferrer">{{ r.source_host }}</a></p>{% endif %}
         {% if not f.is_checked %}<p class="hint">Not looked at yet: {{ f.unchecked|join(", ") }}. Allergens and diets are unknown until <a href="/ingredients?show=unchecked">they are reviewed</a>.</p>{% endif %}
       </li>
       {% endfor %}
