@@ -375,3 +375,60 @@ def test_the_json_export_includes_the_ingredient_details(client, db_path):
         ["celery"],
         True,
     )
+
+
+# --- the overview chips filter the list -------------------------------------------------------
+
+
+def listed(client, query=""):
+    page = client.get("/ingredients" + query).text
+    return re.findall(r'<a class="card-link"[^>]*><strong>([^<]+)</strong>', page)
+
+
+def filter_setup(client, db_path):
+    for name in ("chicken", "rice", "milk"):
+        stock(client, name)
+    save(client, ingredient(db_path, "rice").id, "360")
+
+
+def test_the_without_calories_chip_links_to_a_filtered_list(client, db_path):
+    filter_setup(client, db_path)
+    page = client.get("/ingredients").text
+    assert 'href="/ingredients?show=no-calories"' in page
+    assert 'href="/ingredients?show=unchecked"' in page
+
+
+def test_filtering_by_no_calories_lists_only_those_ingredients(client, db_path):
+    filter_setup(client, db_path)
+    assert sorted(listed(client, "?show=no-calories")) == ["chicken", "milk"]
+
+
+def test_filtering_by_not_checked_lists_only_unreviewed_ingredients(client, db_path):
+    filter_setup(client, db_path)
+    save(client, ingredient(db_path, "milk").id, "", allergens=["milk"])
+    assert sorted(listed(client, "?show=unchecked")) == ["chicken"]
+
+
+def test_an_unknown_filter_shows_everything(client, db_path):
+    filter_setup(client, db_path)
+    assert sorted(listed(client, "?show=nonsense")) == ["chicken", "milk", "rice"]
+
+
+def test_the_overview_still_counts_everything_while_filtered(client, db_path):
+    filter_setup(client, db_path)
+    page = text_of(client.get("/ingredients?show=no-calories").text)
+    assert "3 ingredients 2 without calories 2 not checked yet" in page
+
+
+def test_the_active_filter_is_marked_and_its_chip_clears_it(client, db_path):
+    filter_setup(client, db_path)
+    page = client.get("/ingredients?show=no-calories").text
+    assert re.search(r'<a [^>]*aria-current="true"[^>]*>2 without calories</a>', page)
+    assert re.search(r'<a [^>]*href="/ingredients"[^>]*aria-current="true"', page)
+
+
+def test_a_filter_with_no_matches_says_so(client, db_path):
+    stock(client, "rice")
+    save(client, ingredient(db_path, "rice").id, "360")
+    page = text_of(client.get("/ingredients?show=no-calories").text)
+    assert "Nothing to show" in page

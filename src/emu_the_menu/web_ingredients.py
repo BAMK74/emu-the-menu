@@ -61,15 +61,24 @@ def create_router(db_path: str | Path, fetch_product: Fetch = http_fetch) -> API
         }
 
     @router.get("/ingredients", response_class=HTMLResponse)
-    def ingredients(request: Request, repo: StockRepository = Depends(get_repo)):
+    def ingredients(request: Request, show: str = "", repo: StockRepository = Depends(get_repo)):
         found = repo.ingredients()
         summary = {
             "total": len(found),
             "no_calories": sum(1 for i in found if i.kcal is None),
             "unchecked": sum(1 for i in found if not i.reviewed),
         }
+        # The overview chips filter the list. Anything unrecognised shows everything.
+        if show == "no-calories":
+            shown = [i for i in found if i.kcal is None]
+        elif show == "unchecked":
+            shown = [i for i in found if not i.reviewed]
+        else:
+            show, shown = "", found
         return TEMPLATES.TemplateResponse(
-            request, "ingredients.html", {"ingredients": found, "summary": summary}
+            request,
+            "ingredients.html",
+            {"ingredients": shown, "summary": summary, "show": show},
         )
 
     @router.get("/ingredients/{ingredient_id}/panel", response_class=HTMLResponse)

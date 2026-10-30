@@ -10,7 +10,7 @@
   <section class="results" aria-label="Ingredients">
     <div class="results-head">
       <h2>All ingredients</h2>
-      {% if summary.total %}<p class="summary"><span class="chip">{{ summary.total }} ingredient{{ "" if summary.total == 1 else "s" }}</span>{% if summary.no_calories %}<span class="chip chip-soon">{{ summary.no_calories }} without calories</span>{% endif %}{% if summary.unchecked %}<span class="chip chip-soon">{{ summary.unchecked }} not checked yet</span>{% endif %}</p>
+      {% if summary.total %}<p class="summary"><a class="chip" href="/ingredients"{% if not show %} aria-current="true"{% endif %}>{{ summary.total }} ingredient{{ "" if summary.total == 1 else "s" }}</a>{% if summary.no_calories %}<a class="chip chip-soon" href="{{ '/ingredients' if show == 'no-calories' else '/ingredients?show=no-calories' }}"{% if show == "no-calories" %} aria-current="true"{% endif %}>{{ summary.no_calories }} without calories</a>{% endif %}{% if summary.unchecked %}<a class="chip chip-soon" href="{{ '/ingredients' if show == 'unchecked' else '/ingredients?show=unchecked' }}"{% if show == "unchecked" %} aria-current="true"{% endif %}>{{ summary.unchecked }} not checked yet</a>{% endif %}</p>
       <em class="hint">Click an ingredient to edit it.</em>{% endif %}
     </div>
     {% if ingredients %}
@@ -30,6 +30,8 @@
       </li>
       {% endfor %}
     </ul>
+    {% elif show %}
+    <p class="empty">Nothing to show with this filter. <a href="/ingredients">Show all ingredients</a>.</p>
     {% else %}
     <p class="empty">No ingredients yet. They appear here when you start adding stock.</p>
     {% endif %}

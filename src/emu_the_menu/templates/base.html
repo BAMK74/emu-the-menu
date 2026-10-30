@@ -153,6 +153,9 @@
     button.danger:hover { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); }
     .results-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem 1rem; margin-bottom: .7rem; }
     .results-head h2 { font-size: 1.05rem; margin: 0; }
+    a.chip { text-decoration: none; }
+    a.chip:hover { filter: brightness(1.2); }
+    a.chip[aria-current="true"] { outline: 2px solid currentColor; outline-offset: 1px; }
     .summary { margin: 0; display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
 
     .notice {
