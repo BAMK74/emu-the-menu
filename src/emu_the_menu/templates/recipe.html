@@ -1,0 +1,95 @@
+{% extends "base.html" %}
+{% block title %}Emu the Menu - {{ recipe.name if recipe else "New recipe" }}{% endblock %}
+{% block heading %}{{ recipe.name if recipe else "New recipe" }}{% endblock %}
+{% block main_class %}reading{% endblock %}
+{% block content %}
+  {% if error %}<p class="error" role="alert">error: {{ error }}</p>{% endif %}
+
+  {% if facts %}
+  <div class="recipe-facts">
+    <p class="summary">
+      {% if facts.calories_per_serving is not none %}<span class="chip">{{ "%d"|format(facts.calories_per_serving|round) }} kcal per serving</span>{% else %}<span class="chip chip-soon">Calories unknown{% if facts.without_calories %}: {{ facts.without_calories|join(", ") }}{% endif %}</span>{% endif %}
+      {% if facts.is_checked %}
+        {% for a in facts.allergens %}<span class="chip chip-allergen">{{ a.short_label }}</span>{% endfor %}
+        {% if not facts.allergens %}<span class="chip chip-none">No allergens ticked</span>{% endif %}
+        {% for d in facts.diets %}<span class="chip chip-ok">{{ d.label }}</span>{% endfor %}
+      {% else %}
+        <span class="chip chip-soon">Not checked</span>
+        {% for a in facts.allergens %}<span class="chip chip-allergen">{{ a.short_label }}</span>{% endfor %}
+      {% endif %}
+    </p>
+    {% if not facts.is_checked %}<p class="hint">Not looked at yet: {{ facts.unchecked|join(", ") }}. Allergens and diets are unknown until <a href="/ingredients?show=unchecked">they are reviewed</a>.</p>{% endif %}
+    <p class="hint">Calories, allergens and diets come from the ingredients. Emu the Menu cannot check them for you, so always read the label. <a href="/disclaimer">Read the disclaimer</a>.</p>
+  </div>
+  {% endif %}
+
+  <form class="add" method="post" action="{{ "/recipes/%d"|format(recipe.id) if recipe else "/recipes" }}">
+    <label>Name
+      <input name="name" value="{{ form.name }}" maxlength="80" autocomplete="off" required>
+    </label>
+    <div class="pair">
+      <label>Servings
+        <input name="servings" type="number" min="1" max="50" step="1" inputmode="numeric" value="{{ form.servings }}" required>
+      </label>
+      <label>Weather
+        <select name="weather">
+          {% for w in weather_choices %}<option value="{{ w.value }}"{{ " selected" if w.value == form.weather }}>{{ w.label }}</option>{% endfor %}
+        </select>
+      </label>
+    </div>
+    <fieldset class="allergens">
+      <legend>Meal types</legend>
+      <div class="checks">
+        {% for m in meal_choices %}<label><input type="checkbox" name="meal_types" value="{{ m.value }}"{{ " checked" if m.value in form.meal_types }}> {{ m.label }}</label>{% endfor %}
+      </div>
+    </fieldset>
+    <fieldset class="lines">
+      <legend>Ingredients</legend>
+      <datalist id="ingredient-suggestions">
+        {% for name in suggestions %}<option value="{{ name }}">{% endfor %}
+      </datalist>
+      <div id="recipe-lines">
+        {% for line in form.lines %}
+        <div class="recipe-line">
+          <input name="ingredient" list="ingredient-suggestions" autocomplete="off" aria-label="Ingredient" placeholder="Ingredient" value="{{ line.ingredient }}">
+          <input name="quantity" inputmode="decimal" autocomplete="off" aria-label="Quantity" placeholder="Quantity" value="{{ line.quantity }}">
+          <select name="unit" aria-label="Unit">
+            {% for u in units %}<option value="{{ u }}"{{ " selected" if u == line.unit }}>{{ u }}</option>{% endfor %}
+          </select>
+        </div>
+        {% endfor %}
+      </div>
+      <button id="add-line" type="button" class="quiet" hidden>Add another ingredient</button>
+      <p class="hint">For the whole recipe, not per serving. New ingredients are added to the Ingredients page, where you tick their allergens and calories.</p>
+    </fieldset>
+    <label>Tags (optional)
+      <input name="tags" placeholder="festive, quick" autocomplete="off" value="{{ form.tags }}">
+      <small>Separate with commas or semicolons, like festive, quick</small>
+    </label>
+    <div class="buttons">
+      <button type="submit">Save recipe</button>
+      <a class="button quiet" href="/recipes">Cancel</a>
+    </div>
+  </form>
+
+  {% if recipe %}
+  <form class="add danger-zone" method="post" action="/recipes/{{ recipe.id }}/delete">
+    <button class="quiet" type="submit" onclick="return confirm('Delete this recipe? Its ingredients stay.')">Delete recipe</button>
+  </form>
+  {% endif %}
+
+  <script>
+    // More rows on demand. Without scripting there are already a few blank ones.
+    (function () {
+      const button = document.getElementById("add-line");
+      const rows = document.getElementById("recipe-lines");
+      button.hidden = false;
+      button.addEventListener("click", () => {
+        const row = rows.lastElementChild.cloneNode(true);
+        row.querySelectorAll("input").forEach((input) => (input.value = ""));
+        rows.appendChild(row);
+        row.querySelector("input").focus();
+      });
+    })();
+  </script>
+{% endblock %}

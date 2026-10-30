@@ -19,6 +19,7 @@ from emu_the_menu.eaters import (
     parse_calorie_goal,
 )
 from emu_the_menu.openfoodfacts import Fetch, LookupUnavailableError, find_product, http_fetch
+from emu_the_menu.recipe_repository import RecipeRepository
 from emu_the_menu.repository import ItemNotFoundError, StockRepository
 from emu_the_menu.shelf_life import ShelfLife, ShelfLifeUnit
 from emu_the_menu.stock import Location
@@ -28,6 +29,7 @@ from emu_the_menu.web_disclaimer import create_router as create_disclaimer_route
 from emu_the_menu.web_eaters import create_router as create_eaters_router
 from emu_the_menu.web_eaters import export_eaters
 from emu_the_menu.web_ingredients import create_router as create_ingredients_router
+from emu_the_menu.web_recipes import create_router as create_recipes_router
 
 # Pages the Settings overlay may send you back to after saving.
 _RETURN_PAGES = ("/", "/eaters")
@@ -79,6 +81,7 @@ def create_app(
     app.state.db_path = path  # read by the shared templates, for the disclaimer banner
     app.include_router(create_eaters_router(path))
     app.include_router(create_ingredients_router(path, fetch_product))
+    app.include_router(create_recipes_router(path))
     app.include_router(create_disclaimer_router(path, today))
     app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
@@ -268,6 +271,8 @@ def create_app(
                 c.value: kcal for c, kcal in eaters.default_goals().items()
             }
             data["eaters"] = export_eaters(eaters.list())
+        with RecipeRepository(path) as recipes:
+            data["recipes"] = recipes.export_data()
         body = json.dumps(data, indent=2, ensure_ascii=False)
         return download(body, "application/json", f"emu-{today().isoformat()}.json")
 

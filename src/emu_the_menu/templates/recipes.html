@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Emu the Menu - Recipes{% endblock %}
+{% block heading %}Recipes{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+  <div class="warning-note" role="note">
+    <p><strong>Allergens matter.</strong> A recipe's allergens and diets come from its ingredients, and only from what people have ticked on the Ingredients page. Emu the Menu cannot check this for you, so always read the label of every product. A recipe marked "Not checked" has an ingredient nobody has looked at, so nothing is known about it. <a href="/disclaimer">Read the disclaimer</a>.</p>
+  </div>
+
+  <section class="results" aria-label="Recipes">
+    <div class="results-head">
+      <h2>All recipes</h2>
+      <p class="summary"><a class="chip chip-new" href="/recipes/new">New recipe</a></p>
+    </div>
+    {% if recipes %}
+    <ul>
+      {% for r, f in recipes %}
+      <li>
+        <div class="item-head">
+          <a class="card-link" href="/recipes/{{ r.id }}"><strong>{{ r.name }}</strong></a>
+          {% if f.calories_per_serving is not none %}<span class="qty">{{ "%d"|format(f.calories_per_serving|round) }} kcal per serving</span>{% else %}<span class="qty none">Calories unknown</span>{% endif %}
+        </div>
+        <div class="chips">
+          <span class="chip">{{ r.servings }} serving{{ "" if r.servings == 1 else "s" }}</span>
+          {% for m in r.meal_types %}<span class="chip">{{ m.label }}</span>{% endfor %}
+          {% if r.weather.value != "any" %}<span class="chip">{{ r.weather.label }}</span>{% endif %}
+          {% for t in r.tags %}<span class="chip chip-none">{{ t }}</span>{% endfor %}
+        </div>
+        <div class="chips">
+          {% if f.is_checked %}
+            {% for a in f.allergens %}<span class="chip chip-allergen">{{ a.short_label }}</span>{% endfor %}
+            {% if not f.allergens %}<span class="chip chip-none">No allergens ticked</span>{% endif %}
+            {% for d in f.diets %}<span class="chip chip-ok">{{ d.label }}</span>{% endfor %}
+          {% else %}
+            <span class="chip chip-soon">Not checked</span>
+            {% for a in f.allergens %}<span class="chip chip-allergen">{{ a.short_label }}</span>{% endfor %}
+          {% endif %}
+        </div>
+        {% if not f.is_checked %}<p class="hint">Not looked at yet: {{ f.unchecked|join(", ") }}. Allergens and diets are unknown until <a href="/ingredients?show=unchecked">they are reviewed</a>.</p>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty">No recipes yet. <a href="/recipes/new">Add the first one</a>.</p>
+    {% endif %}
+  </section>
+{% endblock %}

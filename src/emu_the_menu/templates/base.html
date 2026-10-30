@@ -153,6 +153,15 @@
     button.danger:hover { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); }
     .results-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: .3rem 1rem; margin-bottom: .7rem; }
     .results-head h2 { font-size: 1.05rem; margin: 0; }
+    .chip-new { background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+    .recipe-line { display: grid; grid-template-columns: 1fr 5.5rem 5rem; gap: .4rem; margin-bottom: .4rem; }
+    .recipe-line input, .recipe-line select { min-width: 0; }
+    fieldset.lines { border: 0; padding: 0; margin: 0; min-width: 0; }
+    fieldset.lines legend { padding: 0; margin-bottom: .3rem; }
+    .recipe-facts { margin-bottom: 1rem; }
+    a.button { display: inline-block; text-decoration: none; padding: .55rem 1rem; border-radius: .5rem; border: 1px solid var(--line); color: var(--text); text-align: center; }
+    .danger-zone { margin-top: 1rem; }
+    .hint a { color: var(--accent); }
     a.chip { text-decoration: none; }
     a.chip:hover { filter: brightness(1.2); }
     a.chip[aria-current="true"] { outline: 2px solid currentColor; outline-offset: 1px; }
@@ -326,7 +335,7 @@
       <span>Emu the Menu</span>
     </a>
     <nav aria-label="Main">
-      {% block nav %}<a href="/"{% if request.url.path == "/" %} aria-current="page"{% endif %}>Stock</a><a href="/ingredients"{% if request.url.path.startswith("/ingredients") %} aria-current="page"{% endif %}>Ingredients</a><a href="/eaters"{% if request.url.path == "/eaters" %} aria-current="page"{% endif %}>Eaters</a><a id="settings-link" href="/settings"{% if request.url.path == "/settings" %} aria-current="page"{% endif %}>Settings</a>{% endblock %}
+      {% block nav %}<a href="/"{% if request.url.path == "/" %} aria-current="page"{% endif %}>Stock</a><a href="/recipes"{% if request.url.path.startswith("/recipes") %} aria-current="page"{% endif %}>Recipes</a><a href="/ingredients"{% if request.url.path.startswith("/ingredients") %} aria-current="page"{% endif %}>Ingredients</a><a href="/eaters"{% if request.url.path == "/eaters" %} aria-current="page"{% endif %}>Eaters</a><a id="settings-link" href="/settings"{% if request.url.path == "/settings" %} aria-current="page"{% endif %}>Settings</a>{% endblock %}
     </nav>
   </div>
 </header>
