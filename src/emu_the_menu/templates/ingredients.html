@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Emu the Menu - Ingredients{% endblock %}
+{% block heading %}Ingredients{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+  <div class="warning-note" role="note">
+    <p><strong>Allergens matter.</strong> Tick every allergen an ingredient contains, including hidden ones (soy sauce has soy). Emu the Menu cannot check this for you, so always read the label. An ingredient marked "Not checked yet" has not been looked at by anyone, so nothing is known about it. <a href="/disclaimer">Read the disclaimer</a>.</p>
+  </div>
+
+  <section class="results" aria-label="Ingredients">
+    <div class="results-head">
+      <h2>All ingredients</h2>
+      {% if summary.total %}<p class="summary"><span class="chip">{{ summary.total }} ingredient{{ "" if summary.total == 1 else "s" }}</span>{% if summary.no_calories %}<span class="chip chip-soon">{{ summary.no_calories }} without calories</span>{% endif %}{% if summary.unchecked %}<span class="chip chip-soon">{{ summary.unchecked }} not checked yet</span>{% endif %}</p>
+      <em class="hint">Click an ingredient to edit it.</em>{% endif %}
+    </div>
+    {% if ingredients %}
+    <ul>
+      {% for i in ingredients %}
+      <li>
+        <div class="item-head">
+          <a class="card-link" href="/ingredients/{{ i.id }}" data-panel="/ingredients/{{ i.id }}/panel"><strong>{{ i.name }}</strong></a>
+          {% if i.kcal is not none %}<span class="qty">{{ "%g"|format(i.kcal) }} kcal</span>{% else %}<span class="qty none">No calories yet</span>{% endif %}
+        </div>
+        <div class="chips">
+          {% if i.kcal is not none %}<span class="chip">{{ kcal_basis(i.base_unit) }}</span>{% endif %}
+          {% for g in i.food_groups %}<span class="chip">{{ g.short_label }}</span>{% endfor %}
+          {% for a in i.allergens %}<span class="chip chip-allergen">{{ a.short_label }}</span>{% endfor %}
+          {% if not i.reviewed %}<span class="chip chip-soon">Not checked yet</span>{% elif not i.allergens %}<span class="chip chip-none">No allergens ticked</span>{% endif %}
+        </div>
+      </li>
+      {% endfor %}
+    </ul>
+    {% else %}
+    <p class="empty">No ingredients yet. They appear here when you start adding stock.</p>
+    {% endif %}
+  </section>
+
+  <dialog id="ingredient-dialog" aria-label="Edit ingredient">
+    <div id="ingredient-panel"></div>
+  </dialog>
+  <script>
+    // Click an ingredient to edit it in a popup. The form is fetched when it opens, so it always
+    // shows the ingredient as it is now. Without scripting the link opens the same form as a page.
+    (function () {
+      const dialog = document.getElementById("ingredient-dialog");
+      const panel = document.getElementById("ingredient-panel");
+      document.addEventListener("click", async (event) => {
+        const card = event.target.closest(".results li");
+        const link = card && card.querySelector("a.card-link");
+        if (!link || typeof dialog.showModal !== "function") return;
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+        event.preventDefault();
+        try {
+          const response = await fetch(link.dataset.panel);
+          if (!response.ok) throw new Error("HTTP " + response.status);
+          panel.innerHTML = await response.text();
+          dialog.showModal();
+        } catch (error) {
+          window.location.href = link.href;
+        }
+      });
+      dialog.addEventListener("click", (event) => {
+        if (event.target === dialog || event.target.closest("[data-close-dialog]")) dialog.close();
+      });
+    })();
+  </script>
+{% endblock %}

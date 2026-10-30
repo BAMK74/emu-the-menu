@@ -6,6 +6,7 @@ from fastapi import Request
 from fastapi.templating import Jinja2Templates
 
 from emu_the_menu.disclaimer import DISCLAIMER_VERSION
+from emu_the_menu.ingredients import kcal_basis
 from emu_the_menu.repository import StockRepository
 from emu_the_menu.units import display_quantity
 
@@ -25,3 +26,4 @@ TEMPLATES = Jinja2Templates(
     directory=Path(__file__).parent / "templates", context_processors=[_legal_context]
 )
 TEMPLATES.env.globals["display_quantity"] = display_quantity
+TEMPLATES.env.globals["kcal_basis"] = kcal_basis

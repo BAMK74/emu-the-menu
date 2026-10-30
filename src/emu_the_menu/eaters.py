@@ -18,6 +18,7 @@ from enum import StrEnum
 from pathlib import Path
 
 from emu_the_menu.allergens import Allergen, parse_allergens
+from emu_the_menu.food_groups import FoodGroup
 
 
 class Category(StrEnum):
@@ -45,17 +46,6 @@ MAX_NAME_LENGTH = 40
 
 class EaterNotFoundError(LookupError):
     """No Eater has the given id."""
-
-
-class FoodGroup(StrEnum):
-    """What a diet can exclude. Recipes will tag their ingredients with these."""
-
-    MEAT = "meat"  # red meat and cured or processed meat
-    POULTRY = "poultry"
-    FISH = "fish"  # fish and seafood
-    DAIRY = "dairy"
-    EGGS = "eggs"
-    HONEY = "honey"
 
 
 class Diet(StrEnum):

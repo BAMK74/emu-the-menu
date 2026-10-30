@@ -15,7 +15,7 @@ from urllib.request import Request, urlopen
 from emu_the_menu.units import UnknownUnitError, base_unit_for
 
 _URL = "https://world.openfoodfacts.org/api/v2/product/{barcode}?fields={fields}"
-_FIELDS = "code,product_name,quantity,product_quantity,product_quantity_unit"
+_FIELDS = "code,product_name,quantity,product_quantity,product_quantity_unit,nutriments"
 # Open Food Facts asks every app to identify itself with a custom User-Agent.
 _USER_AGENT = "EmuTheMenu/0.1 (household-app; https://github.com/BAMK74/emu-the-menu)"
 _TIMEOUT_SECONDS = 8
@@ -33,6 +33,8 @@ class ProductInfo:
     name: str | None
     quantity: float | None  # the Pack size, in `unit`; None if the product has none we can read
     unit: str | None
+    # Calories per 100 g, or per 100 ml for drinks, as the database lists them. None if not listed.
+    kcal_per_100: float | None = None
 
 
 class ProductCache(Protocol):
@@ -58,17 +60,20 @@ def http_fetch(barcode: str) -> dict:
 
 
 def find_product(
-    barcode: str, cache: ProductCache, fetch: Fetch = http_fetch
+    barcode: str, cache: ProductCache, fetch: Fetch = http_fetch, need_energy: bool = False
 ) -> ProductInfo | None:
     """Look up a barcode, returning None if the product is unknown.
 
     Raises ValueError for text that is not a barcode and LookupUnavailableError
-    when Open Food Facts cannot be reached and the barcode is not cached.
+    when Open Food Facts cannot be reached and the barcode is not cached. With `need_energy`,
+    a cached product that lists no calories is fetched again, in case it has some now.
     """
     barcode = re.sub(r"\s", "", barcode)
     if not _BARCODE.fullmatch(barcode):
         raise ValueError("A barcode is 8 to 14 digits")
-    if cached := cache.cached_product(barcode):
+    if (cached := cache.cached_product(barcode)) and not (
+        need_energy and cached.kcal_per_100 is None
+    ):
         return cached
     try:
         data = fetch(barcode)
@@ -78,9 +83,19 @@ def find_product(
         return None
     product = data.get("product") or {}
     quantity, unit = _pack_size(product)
-    info = ProductInfo(barcode, product.get("product_name") or None, quantity, unit)
+    info = ProductInfo(
+        barcode, product.get("product_name") or None, quantity, unit, _energy(product)
+    )
     cache.cache_product(info)
     return info
+
+
+def _energy(product: dict) -> float | None:
+    """Calories per 100 g (or 100 ml) from the nutriments, or None if missing or not a number."""
+    value = (product.get("nutriments") or {}).get("energy-kcal_100g")
+    if isinstance(value, bool) or not isinstance(value, int | float) or value < 0:
+        return None
+    return round(float(value), 1)
 
 
 def _round_pack_size(quantity: float) -> float:

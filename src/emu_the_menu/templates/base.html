@@ -131,6 +131,9 @@
     .chip-ok { background: var(--ok-bg); color: var(--ok); }
     .chip-soon { background: var(--soon-bg); color: var(--soon); font-weight: 600; }
     .chip-expired { background: var(--danger-bg); color: var(--danger); font-weight: 600; }
+    .chip-allergen { background: var(--danger-bg); color: var(--danger); }
+    li .qty.none { color: var(--muted); font-weight: 400; font-size: .85rem; }
+    .hint.suggested { color: var(--soon); font-weight: 600; }
     .chip-none { background: transparent; color: var(--muted); border: 1px solid var(--line); }
 
     /* A card is one big link to its adjust form. */
@@ -320,7 +323,7 @@
       <span>Emu the Menu</span>
     </a>
     <nav aria-label="Main">
-      {% block nav %}<a href="/"{% if request.url.path == "/" %} aria-current="page"{% endif %}>Stock</a><a href="/eaters"{% if request.url.path == "/eaters" %} aria-current="page"{% endif %}>Eaters</a><a id="settings-link" href="/settings"{% if request.url.path == "/settings" %} aria-current="page"{% endif %}>Settings</a>{% endblock %}
+      {% block nav %}<a href="/"{% if request.url.path == "/" %} aria-current="page"{% endif %}>Stock</a><a href="/ingredients"{% if request.url.path.startswith("/ingredients") %} aria-current="page"{% endif %}>Ingredients</a><a href="/eaters"{% if request.url.path == "/eaters" %} aria-current="page"{% endif %}>Eaters</a><a id="settings-link" href="/settings"{% if request.url.path == "/settings" %} aria-current="page"{% endif %}>Settings</a>{% endblock %}
     </nav>
   </div>
 </header>
@@ -383,6 +386,33 @@
     const date = box.form.querySelector('input[name="expires_on"]');
     date.disabled = box.checked;
     if (box.checked) date.value = "";
+  });
+  // Enter in the barcode box looks it up instead of saving the form.
+  document.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || !event.target.matches("[data-barcode]")) return;
+    event.preventDefault();
+    event.target.form.querySelector("[data-lookup-calories]").click();
+  });
+  // Look up calories from a barcode. It fills in only the calories box and never saves.
+  document.addEventListener("click", async (event) => {
+    const button = event.target.closest("[data-lookup-calories]");
+    if (!button) return;
+    event.preventDefault();
+    const form = button.form;
+    const note = form.querySelector("[data-lookup-note]");
+    note.hidden = false;
+    note.textContent = "Looking up...";
+    try {
+      const response = await fetch(button.dataset.url, {
+        method: "POST",
+        body: new URLSearchParams({ barcode: form.querySelector("[data-barcode]").value }),
+      });
+      const data = await response.json();
+      note.textContent = data.message;
+      if (data.ok) form.querySelector('[name="kcal"]').value = data.kcal;
+    } catch (error) {
+      note.textContent = "Could not look it up. Enter the calories by hand.";
+    }
   });
 </script>
 </body>

@@ -5,12 +5,15 @@ items, applies a rule and writes back only what changed, all in one transaction.
 """
 
 import sqlite3
-from collections.abc import Callable
+from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
+from emu_the_menu.allergens import Allergen, parse_allergens
 from emu_the_menu.countries import COUNTRIES
+from emu_the_menu.food_groups import FoodGroup, parse_food_groups
+from emu_the_menu.ingredients import check_kcal, kcal_basis
 from emu_the_menu.openfoodfacts import ProductInfo
 from emu_the_menu.shelf_life import ShelfLife, ShelfLifeUnit
 from emu_the_menu.stock import Location, StockItem, add_stock, reduce_stock, sort_by_expiry
@@ -24,7 +27,19 @@ CREATE TABLE IF NOT EXISTS ingredients (
     shelf_life_amount INTEGER,
     shelf_life_unit   TEXT,
     last_quantity     REAL,
-    last_unit         TEXT
+    last_unit         TEXT,
+    kcal              REAL,
+    reviewed          INTEGER NOT NULL DEFAULT 0
+);
+CREATE TABLE IF NOT EXISTS ingredient_food_groups (
+    ingredient_id INTEGER NOT NULL REFERENCES ingredients(id) ON DELETE CASCADE,
+    food_group    TEXT NOT NULL,
+    PRIMARY KEY (ingredient_id, food_group)
+);
+CREATE TABLE IF NOT EXISTS ingredient_allergens (
+    ingredient_id INTEGER NOT NULL REFERENCES ingredients(id) ON DELETE CASCADE,
+    allergen      TEXT NOT NULL,
+    PRIMARY KEY (ingredient_id, allergen)
 );
 CREATE TABLE IF NOT EXISTS stock_items (
     id            INTEGER PRIMARY KEY,
@@ -37,7 +52,8 @@ CREATE TABLE IF NOT EXISTS product_cache (
     barcode  TEXT PRIMARY KEY,
     name     TEXT,
     quantity REAL,
-    unit     TEXT
+    unit     TEXT,
+    kcal_100g REAL
 );
 CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
@@ -51,7 +67,13 @@ _ADDED_COLUMNS = {
     "shelf_life_unit": "TEXT",
     "last_quantity": "REAL",
     "last_unit": "TEXT",
+    "kcal": "REAL",
+    "reviewed": "INTEGER NOT NULL DEFAULT 0",
 }
+
+
+class IngredientNotFoundError(LookupError):
+    """No Ingredient has the given id."""
 
 
 class ItemNotFoundError(LookupError):
@@ -72,6 +94,14 @@ class Ingredient:
     base_unit: BaseUnit
     shelf_life: ShelfLife | None = None  # how long it usually keeps, as last entered
     last_entry: LastEntry | None = None
+    id: int | None = None
+    # Calories per 100 g, per 100 ml or per piece (see `kcal_basis`), if known.
+    kcal: float | None = None
+    food_groups: tuple[FoodGroup, ...] = ()
+    allergens: tuple[Allergen, ...] = ()
+    # True once a person has saved this Ingredient's details. Until then nothing is known, and
+    # empty food groups and allergens mean "not checked", not "none".
+    reviewed: bool = False
 
 
 class StockRepository:
@@ -88,6 +118,9 @@ class StockRepository:
             for name, sql_type in _ADDED_COLUMNS.items():
                 if name not in columns:
                     self._db.execute(f"ALTER TABLE ingredients ADD COLUMN {name} {sql_type}")
+            cached = {row[1] for row in self._db.execute("PRAGMA table_info(product_cache)")}
+            if "kcal_100g" not in cached:
+                self._db.execute("ALTER TABLE product_cache ADD COLUMN kcal_100g REAL")
 
     def __enter__(self) -> "StockRepository":
         return self
@@ -185,15 +218,16 @@ class StockRepository:
 
         Quantities already in Stock keep their numbers and are read in the new unit,
         because grams cannot be converted from millilitres. The remembered quantity
-        is forgotten, as its unit may be in the wrong family. Does nothing if the
+        is forgotten, as its unit may be in the wrong family, and so are the calories, which are
+        measured against the old unit. Does nothing if the
         Ingredient is unknown.
         """
         base = base_unit_for(unit)
         with self._db:
             self._db.execute(
-                "UPDATE ingredients SET base_unit = ?, last_quantity = NULL, last_unit = NULL"
-                " WHERE name = ?",
-                (base.value, ingredient.strip().lower()),
+                "UPDATE ingredients SET kcal = CASE WHEN base_unit = ? THEN kcal END,"
+                " base_unit = ?, last_quantity = NULL, last_unit = NULL WHERE name = ?",
+                (base.value, base.value, ingredient.strip().lower()),
             )
 
     def delete(self, item_id: int) -> None:
@@ -203,10 +237,12 @@ class StockRepository:
                 raise ItemNotFoundError(item_id)
 
     def ingredients(self) -> list[Ingredient]:
-        """Every Ingredient ever added, by name, for suggestions."""
+        """Every Ingredient ever added, by name, with what is known about each."""
+        groups = self._tags("ingredient_food_groups", "food_group")
+        allergens = self._tags("ingredient_allergens", "allergen")
         rows = self._db.execute(
-            "SELECT name, base_unit, shelf_life_amount, shelf_life_unit, last_quantity, last_unit"
-            " FROM ingredients ORDER BY name"
+            "SELECT id, name, base_unit, shelf_life_amount, shelf_life_unit, last_quantity,"
+            " last_unit, kcal, reviewed FROM ingredients ORDER BY name"
         )
         return [
             Ingredient(
@@ -214,23 +250,89 @@ class StockRepository:
                 BaseUnit(base_unit),
                 ShelfLife(amount, ShelfLifeUnit(life_unit)) if amount else None,
                 LastEntry(last_quantity, last_unit) if last_unit else None,
+                id=ingredient_id,
+                kcal=kcal,
+                food_groups=parse_food_groups(groups.get(ingredient_id, ())),
+                allergens=parse_allergens(allergens.get(ingredient_id, ())),
+                reviewed=bool(reviewed),
             )
-            for name, base_unit, amount, life_unit, last_quantity, last_unit in rows
+            for (
+                ingredient_id,
+                name,
+                base_unit,
+                amount,
+                life_unit,
+                last_quantity,
+                last_unit,
+                kcal,
+                reviewed,
+            ) in rows
         ]
+
+    def _tags(self, table: str, column: str) -> dict[int, list[str]]:
+        found: dict[int, list[str]] = {}
+        for ingredient_id, value in self._db.execute(
+            f"SELECT ingredient_id, {column} FROM {table}"
+        ):
+            found.setdefault(ingredient_id, []).append(value)
+        return found
+
+    def get_ingredient(self, ingredient_id: int) -> Ingredient | None:
+        return next((i for i in self.ingredients() if i.id == ingredient_id), None)
+
+    def set_ingredient_details(
+        self,
+        ingredient_id: int,
+        kcal: float | None,
+        food_groups: Iterable[FoodGroup] = (),
+        allergens: Iterable[Allergen] = (),
+    ) -> None:
+        """Replace an Ingredient's calories, food groups and allergens.
+
+        Calories are per 100 g, per 100 ml or per piece, depending on how the Ingredient is
+        stored. Nothing is changed if any value is rejected.
+        """
+        ingredient = self.get_ingredient(ingredient_id)
+        if ingredient is None:
+            raise IngredientNotFoundError(ingredient_id)
+        kcal = check_kcal(kcal, ingredient.base_unit)
+        groups = parse_food_groups(FoodGroup(g).value for g in food_groups)
+        found_allergens = parse_allergens(Allergen(a).value for a in allergens)
+        with self._db:
+            self._db.execute(
+                "UPDATE ingredients SET kcal = ?, reviewed = 1 WHERE id = ?", (kcal, ingredient_id)
+            )
+            self._db.execute(
+                "DELETE FROM ingredient_food_groups WHERE ingredient_id = ?", (ingredient_id,)
+            )
+            self._db.execute(
+                "DELETE FROM ingredient_allergens WHERE ingredient_id = ?", (ingredient_id,)
+            )
+            for group in groups:
+                self._db.execute(
+                    "INSERT INTO ingredient_food_groups (ingredient_id, food_group) VALUES (?, ?)",
+                    (ingredient_id, group.value),
+                )
+            for allergen in found_allergens:
+                self._db.execute(
+                    "INSERT INTO ingredient_allergens (ingredient_id, allergen) VALUES (?, ?)",
+                    (ingredient_id, allergen.value),
+                )
 
     def cached_product(self, barcode: str) -> ProductInfo | None:
         """A product found by an earlier barcode lookup."""
         row = self._db.execute(
-            "SELECT name, quantity, unit FROM product_cache WHERE barcode = ?", (barcode,)
+            "SELECT name, quantity, unit, kcal_100g FROM product_cache WHERE barcode = ?",
+            (barcode,),
         ).fetchone()
         return ProductInfo(barcode, *row) if row else None
 
     def cache_product(self, info: ProductInfo) -> None:
         with self._db:
             self._db.execute(
-                "INSERT OR REPLACE INTO product_cache (barcode, name, quantity, unit)"
-                " VALUES (?, ?, ?, ?)",
-                (info.barcode, info.name, info.quantity, info.unit),
+                "INSERT OR REPLACE INTO product_cache (barcode, name, quantity, unit, kcal_100g)"
+                " VALUES (?, ?, ?, ?, ?)",
+                (info.barcode, info.name, info.quantity, info.unit, info.kcal_per_100),
             )
 
     def export_data(self) -> dict:
@@ -245,6 +347,11 @@ class StockRepository:
                     and {"amount": i.shelf_life.amount, "unit": i.shelf_life.unit.value},
                     "last_entry": i.last_entry
                     and {"quantity": i.last_entry.quantity, "unit": i.last_entry.unit},
+                    "kcal": i.kcal,
+                    "kcal_basis": kcal_basis(i.base_unit),
+                    "food_groups": [g.value for g in i.food_groups],
+                    "allergens": [a.value for a in i.allergens],
+                    "reviewed": i.reviewed,
                 }
                 for i in self.ingredients()
             ],

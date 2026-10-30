@@ -140,3 +140,78 @@ def test_pack_sizes_are_rounded_to_a_sensible_precision(repo, quantity, expected
 def test_a_pack_size_that_rounds_to_nothing_is_left_blank(repo):
     fetch = FakeFetch(found(product_quantity=0.004, product_quantity_unit="g"))
     assert find_product(BARCODE, repo, fetch).quantity is None
+
+
+# --- calories per 100 g (or 100 ml) --------------------------------------------------------------
+
+
+def with_energy(value):
+    return found(nutriments={"energy-kcal_100g": value})
+
+
+def test_calories_per_100_are_read_from_the_nutriments(repo):
+    assert find_product(BARCODE, repo, FakeFetch(with_energy(539))).kcal_per_100 == 539.0
+
+
+@pytest.mark.parametrize("value", ["lots", -5, None, True])
+def test_calories_that_make_no_sense_are_left_blank(repo, value):
+    assert find_product(BARCODE, repo, FakeFetch(with_energy(value))).kcal_per_100 is None
+
+
+@pytest.mark.parametrize("nutriments", [None, {}, {"energy-kj_100g": 2252}])
+def test_a_product_with_no_calorie_figure_has_none(repo, nutriments):
+    fetch = FakeFetch(found(nutriments=nutriments))
+    assert find_product(BARCODE, repo, fetch).kcal_per_100 is None
+
+
+def test_calories_are_rounded_to_one_decimal_place(repo):
+    assert find_product(BARCODE, repo, FakeFetch(with_energy(42.26))).kcal_per_100 == 42.3
+
+
+def test_calories_are_cached_with_the_product(repo):
+    find_product(BARCODE, repo, FakeFetch(with_energy(539)))
+    offline = FakeFetch(error=OSError("offline"))
+    assert find_product(BARCODE, repo, offline).kcal_per_100 == 539.0
+    assert offline.calls == []
+
+
+def test_a_cached_product_without_calories_is_fetched_again_when_calories_are_needed(repo):
+    fetch = FakeFetch(found(product_quantity=500, product_quantity_unit="g"))
+    find_product(BARCODE, repo, fetch)  # cached, with no calories
+    fetch.response = with_energy(539)
+    info = find_product(BARCODE, repo, fetch, need_energy=True)
+    assert info.kcal_per_100 == 539.0
+    assert len(fetch.calls) == 2
+    assert repo.cached_product(BARCODE).kcal_per_100 == 539.0  # and now it is cached
+
+
+def test_a_cached_product_with_calories_is_not_fetched_again(repo):
+    fetch = FakeFetch(with_energy(539))
+    find_product(BARCODE, repo, fetch, need_energy=True)
+    find_product(BARCODE, repo, fetch, need_energy=True)
+    assert len(fetch.calls) == 1
+
+
+def test_a_stock_lookup_never_fetches_again_just_for_calories(repo):
+    fetch = FakeFetch(found(product_quantity=500, product_quantity_unit="g"))
+    find_product(BARCODE, repo, fetch)
+    find_product(BARCODE, repo, fetch)
+    assert len(fetch.calls) == 1
+
+
+def test_a_product_cache_from_before_calories_is_upgraded(tmp_path):
+    import sqlite3
+
+    path = tmp_path / "old.db"
+    db = sqlite3.connect(path)
+    db.executescript(
+        "CREATE TABLE product_cache"
+        " (barcode TEXT PRIMARY KEY, name TEXT, quantity REAL, unit TEXT);"
+        "INSERT INTO product_cache VALUES ('3274080005003', 'Penne', 500, 'g');"
+    )
+    db.commit()
+    db.close()
+    with StockRepository(path) as repo:
+        assert repo.cached_product(BARCODE) == ProductInfo(BARCODE, "Penne", 500, "g")
+        find_product(BARCODE, repo, FakeFetch(with_energy(350)), need_energy=True)
+        assert repo.cached_product(BARCODE).kcal_per_100 == 350.0

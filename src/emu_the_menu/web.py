@@ -27,6 +27,7 @@ from emu_the_menu.units import IncompatibleUnitError, display_quantity, known_un
 from emu_the_menu.web_disclaimer import create_router as create_disclaimer_router
 from emu_the_menu.web_eaters import create_router as create_eaters_router
 from emu_the_menu.web_eaters import export_eaters
+from emu_the_menu.web_ingredients import create_router as create_ingredients_router
 
 # Pages the Settings overlay may send you back to after saving.
 _RETURN_PAGES = ("/", "/eaters")
@@ -77,6 +78,7 @@ def create_app(
     app = FastAPI(title="Emu the Menu")
     app.state.db_path = path  # read by the shared templates, for the disclaimer banner
     app.include_router(create_eaters_router(path))
+    app.include_router(create_ingredients_router(path, fetch_product))
     app.include_router(create_disclaimer_router(path, today))
     app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 

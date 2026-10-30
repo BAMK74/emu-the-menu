@@ -1,0 +1,38 @@
+<h2 class="panel-title">{{ ingredient.name|capitalize }}</h2>
+{% if error %}<p class="error" role="alert">error: {{ error }}</p>{% endif %}
+<form class="add" method="post" action="/ingredients/{{ ingredient.id }}">
+  <label>Calories {{ kcal_basis(ingredient.base_unit) }} (kcal)
+    <input name="kcal" inputmode="decimal" autocomplete="off" placeholder="not known yet"
+           value="{{ form.kcal }}">
+  </label>
+  {% if ingredient.base_unit.value != "count" %}
+  <div class="barcode">
+    <label>Barcode (optional)
+      <input data-barcode inputmode="numeric" autocomplete="off">
+    </label>
+    <button type="button" class="quiet" data-lookup-calories data-url="/ingredients/{{ ingredient.id }}/lookup">Look up</button>
+  </div>
+  <p class="hint" data-lookup-note role="status" hidden></p>
+  {% else %}
+  <p class="hint">Counted ingredients have calories per piece, so enter them by hand.</p>
+  {% endif %}
+  {% if suggested %}<p class="hint suggested">Ticked from the name. Check them before saving.</p>{% endif %}
+  <fieldset class="allergens">
+    <legend>Food groups</legend>
+    <div class="checks">
+      {% for g in food_group_choices %}<label title="{{ g.label }}"><input type="checkbox" name="food_groups" value="{{ g.value }}"{{ " checked" if g.value in form.food_groups }}> {{ g.short_label }}</label>{% endfor %}
+    </div>
+    <p class="hint">Diets use these: vegetarians skip meat, poultry and fish and seafood.</p>
+  </fieldset>
+  <fieldset class="allergens">
+    <legend>Allergens</legend>
+    <div class="checks">
+      {% for a in allergen_choices %}<label title="{{ a.label }}"><input type="checkbox" name="allergens" value="{{ a.value }}"{{ " checked" if a.value in form.allergens }}> {{ a.short_label }}</label>{% endfor %}
+    </div>
+    <p class="hint">Tick every allergen this ingredient contains, including hidden ones (soy sauce has soy). Emu the Menu cannot check this for you, so always read the label.</p>
+  </fieldset>
+  <div class="buttons">
+    <button type="submit">Save</button>
+    <button class="quiet" type="button" data-close-dialog>Cancel</button>
+  </div>
+</form>
