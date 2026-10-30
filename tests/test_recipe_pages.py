@@ -65,7 +65,7 @@ def review(db_path, name, kcal=None, groups=(), allergens=()):
 
 def cards(client):
     page = client.get("/recipes").text.split("<ul>")[1]
-    return [li for li in page.split("<li>")[1:]]
+    return [li.split("</li>")[0] for li in page.split("<li>")[1:]]
 
 
 # --- navigation and the empty page ------------------------------------------------------------
