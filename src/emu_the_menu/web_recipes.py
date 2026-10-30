@@ -12,6 +12,7 @@ from urllib.parse import urlsplit
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from emu_the_menu.eaters import EaterRepository
 from emu_the_menu.page_fetch import PageUnavailableError, UnsafeAddressError, fetch_page
 from emu_the_menu.recipe_import import (
     NoRecipeFoundError,
@@ -35,6 +36,7 @@ from emu_the_menu.recipes import (
     parse_weather,
 )
 from emu_the_menu.repository import StockRepository
+from emu_the_menu.suitability import assess
 from emu_the_menu.templating import TEMPLATES
 from emu_the_menu.units import UnknownUnitError, display_quantity, known_units
 
@@ -196,7 +198,13 @@ def create_router(
 
     @router.get("/recipes", response_class=HTMLResponse)
     def recipes(request: Request, repo: RecipeRepository = Depends(get_repo)):
-        shown = [(recipe, facts(recipe)) for recipe in repo.recipes()]
+        with EaterRepository(db_path) as eater_repo:
+            eaters = eater_repo.list()
+        shown = []
+        for recipe in repo.recipes():
+            recipe_facts = facts(recipe)
+            who = [(eater, assess(recipe, recipe_facts, eater)) for eater in eaters]
+            shown.append((recipe, recipe_facts, who))
         return TEMPLATES.TemplateResponse(request, "recipes.html", {"recipes": shown})
 
     @router.get("/recipes/new", response_class=HTMLResponse)

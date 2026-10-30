@@ -299,3 +299,68 @@ def test_new_ingredients_from_a_recipe_appear_on_the_ingredients_page_as_uncheck
     page = text_of(body_of(client.get("/ingredients").text))
     assert "Rice" in page or "rice" in page
     assert "2 not checked yet" in page
+
+
+# --- who can eat it ---------------------------------------------------------------------------
+
+
+def eater(db_path, name="Sam", **kwargs):
+    from emu_the_menu.eaters import Category, EaterRepository
+
+    with EaterRepository(db_path) as repo:
+        repo.add(name, Category.MAN, **kwargs)
+
+
+def verdicts(client):
+    return text_of(cards(client)[0])
+
+
+def test_without_eaters_there_are_no_verdicts(client):
+    create(client)
+    assert "No problem found" not in verdicts(client)
+    assert "Not for" not in verdicts(client)
+
+
+def test_an_eater_with_a_ticked_allergen_is_blocked_with_the_reason(client, db_path):
+    create(client, ingredient=["cheese"], quantity=["50"], unit=["g"])
+    review(db_path, "cheese", 300, [FoodGroup.DAIRY], [Allergen.MILK])
+    eater(db_path, "Sam", allergens=[Allergen.MILK])
+    card = verdicts(client)
+    assert "Not for Sam" in card
+    assert "contains milk (cheese)" in card
+    assert "No problem found for Sam" not in card
+
+
+def test_an_eater_with_nothing_in_the_way_gets_no_problem_found_not_safe(client, db_path):
+    create(client, ingredient=["rice"], quantity=["100"], unit=["g"])
+    review(db_path, "rice", 360)
+    eater(db_path, "Sam")
+    eater(db_path, "Anna")
+    card = verdicts(client)
+    assert "No problem found for Sam, Anna" in card
+    assert not re.search(r"\bsafe\b", card, re.I)
+
+
+def test_an_unchecked_recipe_is_blocked_for_someone_with_allergies(client, db_path):
+    create(client, ingredient=["rice"], quantity=["100"], unit=["g"])
+    eater(db_path, "Sam", allergens=[Allergen.MILK])
+    card = verdicts(client)
+    assert "Not for Sam" in card and "not checked: rice" in card
+
+
+def test_cautions_are_shown_for_eaters_who_are_not_blocked(client, db_path):
+    create(client, ingredient=["rice"], quantity=["100"], unit=["g"])
+    review(db_path, "rice", 360)
+    eater(db_path, "Sam", allergies=["kiwi"])
+    card = verdicts(client)
+    assert "No problem found for Sam" in card
+    assert "check the labels for kiwi" in card
+
+
+def test_dislikes_are_noted_without_blocking(client, db_path):
+    create(client, ingredient=["mushrooms"], quantity=["100"], unit=["g"])
+    review(db_path, "mushrooms", 20)
+    eater(db_path, "Sam", dislikes=["mushroom"])
+    card = verdicts(client)
+    assert "No problem found for Sam" in card
+    assert "mushroom is disliked" in card

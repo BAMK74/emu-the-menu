@@ -14,7 +14,7 @@
     </div>
     {% if recipes %}
     <ul>
-      {% for r, f in recipes %}
+      {% for r, f, who in recipes %}
       <li>
         <div class="item-head">
           <a class="card-link" href="/recipes/{{ r.id }}"><strong>{{ r.name }}</strong></a>
@@ -36,6 +36,14 @@
             {% for a in f.allergens %}<span class="chip chip-allergen">{{ a.short_label }}</span>{% endfor %}
           {% endif %}
         </div>
+        {% if who %}
+        <div class="verdicts">
+          {% for eater, v in who if not v.ok %}<p class="verdict blocked"><strong>Not for {{ eater.name }}:</strong> {{ v.blocked|join("; ") }}</p>{% endfor %}
+          {% set fine = who|selectattr("1.ok")|list %}
+          {% if fine %}<p class="verdict">No problem found for {% for eater, v in fine %}{{ eater.name }}{{ ", " if not loop.last }}{% endfor %}. Always read the label.</p>{% endif %}
+          {% for eater, v in fine %}{% for note in v.cautions + v.soft %}<p class="hint">{{ eater.name }}: {{ note }}</p>{% endfor %}{% endfor %}
+        </div>
+        {% endif %}
         {% if r.source_url %}<p class="hint">From <a href="{{ r.source_url }}" target="_blank" rel="noopener noreferrer">{{ r.source_host }}</a></p>{% endif %}
         {% if not f.is_checked %}<p class="hint">Not looked at yet: {{ f.unchecked|join(", ") }}. Allergens and diets are unknown until <a href="/ingredients?show=unchecked">they are reviewed</a>.</p>{% endif %}
       </li>

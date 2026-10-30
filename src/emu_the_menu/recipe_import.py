@@ -13,6 +13,7 @@ from dataclasses import dataclass
 from html import unescape
 from html.parser import HTMLParser
 
+from emu_the_menu.names import stem
 from emu_the_menu.recipes import MAX_SERVINGS, MAX_TAG_LENGTH, MAX_TAGS
 
 
@@ -158,19 +159,11 @@ def _line(raw: str, name: str, quantity: float, unit: str) -> IngredientLine:
     return IngredientLine(raw, name, round(quantity, 3), unit)
 
 
-def _stem(name: str) -> str:
-    name = name.lower().strip()
-    for ending in ("es", "s"):
-        if name.endswith(ending) and len(name) > len(ending) + 2:
-            return name[: -len(ending)]
-    return name
-
-
 def match_ingredient(written: str, known: list[str]) -> str:
     """The name of a known Ingredient that `written` means, ignoring plurals, else `written`."""
-    wanted = _stem(written)
+    wanted = stem(written)
     for name in known:
-        if name.lower() == written.lower() or _stem(name) == wanted:
+        if name.lower() == written.lower() or stem(name) == wanted:
             return name
     return written
 
