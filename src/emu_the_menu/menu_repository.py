@@ -21,7 +21,9 @@ CREATE TABLE IF NOT EXISTS menus (
     id         INTEGER PRIMARY KEY,
     name       TEXT NOT NULL,
     start_day  TEXT NOT NULL,
-    days       INTEGER NOT NULL
+    days       INTEGER NOT NULL,
+    accepted_on    TEXT,
+    accepted_order INTEGER
 );
 CREATE TABLE IF NOT EXISTS menu_meals (
     id         INTEGER PRIMARY KEY,
@@ -49,6 +51,7 @@ CREATE TABLE IF NOT EXISTS menu_portions (
 );
 """
 
+_MENU_COLUMNS = "SELECT id, name, start_day, days, accepted_on, accepted_order FROM menus"
 _DELETED_RECIPE = "The recipe was deleted"
 
 
@@ -81,6 +84,8 @@ class SavedMenu:
     start: date
     days: int
     meals: tuple[SavedMeal, ...]
+    accepted_on: date | None = None  # set while the Menu is accepted and holds Stock
+    accepted_order: int | None = None  # 1 for the Menu accepted first
 
 
 class MenuRepository:
@@ -91,6 +96,11 @@ class MenuRepository:
         self._db = sqlite3.connect(path)
         self._db.execute("PRAGMA foreign_keys = ON")
         self._db.executescript(_SCHEMA)
+        menu_columns = {row[1] for row in self._db.execute("PRAGMA table_info(menus)")}
+        for column, kind in (("accepted_on", "TEXT"), ("accepted_order", "INTEGER")):
+            if column not in menu_columns:
+                with self._db:
+                    self._db.execute(f"ALTER TABLE menus ADD COLUMN {column} {kind}")
         columns = {row[1] for row in self._db.execute("PRAGMA table_info(menu_meals)")}
         if "short" not in columns:
             with self._db:
@@ -143,13 +153,53 @@ class MenuRepository:
 
     def get(self, menu_id: int) -> SavedMenu | None:
         row = self._db.execute(
-            "SELECT id, name, start_day, days FROM menus WHERE id = ?", (menu_id,)
+            _MENU_COLUMNS + " WHERE id = ?",
+            (menu_id,),
         ).fetchone()
         return self._menu(row) if row else None
 
     def menus(self) -> list[SavedMenu]:
         """Every saved Menu, newest first."""
-        rows = self._db.execute("SELECT id, name, start_day, days FROM menus ORDER BY id DESC")
+        rows = self._db.execute(_MENU_COLUMNS + " ORDER BY id DESC")
+        return [self._menu(row) for row in rows.fetchall()]
+
+    def accept(self, menu_id: int, day: date) -> None:
+        """Accept a Menu: its Meals set aside the Stock they need (see `reserve`).
+
+        Menus are numbered in the order they were accepted, which decides who gets Stock that
+        two of them need. Accepting a Menu that is already accepted changes nothing.
+        """
+        with self._db:
+            row = self._db.execute(
+                "SELECT accepted_order FROM menus WHERE id = ?", (menu_id,)
+            ).fetchone()
+            if row is None:
+                raise MenuNotFoundError(menu_id)
+            if row[0] is not None:
+                return
+            (top,) = self._db.execute(
+                "SELECT COALESCE(MAX(accepted_order), 0) FROM menus"
+            ).fetchone()
+            self._db.execute(
+                "UPDATE menus SET accepted_on = ?, accepted_order = ? WHERE id = ?",
+                (day.isoformat(), top + 1, menu_id),
+            )
+
+    def unaccept(self, menu_id: int) -> None:
+        """Give back the Stock a Menu was holding. Its place in line is forgotten."""
+        with self._db:
+            cursor = self._db.execute(
+                "UPDATE menus SET accepted_on = NULL, accepted_order = NULL WHERE id = ?",
+                (menu_id,),
+            )
+        if cursor.rowcount == 0:
+            raise MenuNotFoundError(menu_id)
+
+    def accepted_menus(self) -> list[SavedMenu]:
+        """The accepted Menus, the one accepted first first."""
+        rows = self._db.execute(
+            _MENU_COLUMNS + " WHERE accepted_order IS NOT NULL ORDER BY accepted_order"
+        )
         return [self._menu(row) for row in rows.fetchall()]
 
     def delete(self, menu_id: int) -> None:
@@ -261,7 +311,7 @@ class MenuRepository:
     # --- reading ------------------------------------------------------------------------------
 
     def _menu(self, row) -> SavedMenu:
-        menu_id, name, start, days = row
+        menu_id, name, start, days, accepted_on, accepted_order = row
         order = {slot.value: n for n, slot in enumerate(Slot)}
         meals = [
             self._meal(m)
@@ -272,7 +322,15 @@ class MenuRepository:
             ).fetchall()
         ]
         meals.sort(key=lambda m: (m.day, order[m.slot.value], m.id))
-        return SavedMenu(menu_id, name, date.fromisoformat(start), days, tuple(meals))
+        return SavedMenu(
+            menu_id,
+            name,
+            date.fromisoformat(start),
+            days,
+            tuple(meals),
+            date.fromisoformat(accepted_on) if accepted_on else None,
+            accepted_order,
+        )
 
     def _meal(self, row) -> SavedMeal:
         meal_id, day, slot, recipe_id, reason, cooked_on, short = row

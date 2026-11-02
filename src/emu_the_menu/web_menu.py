@@ -20,7 +20,7 @@ from emu_the_menu.menu_repository import MenuRepository
 from emu_the_menu.planner import Menu, PlanSettings, Slot, plan
 from emu_the_menu.recipe_repository import RecipeRepository
 from emu_the_menu.recipes import analyse
-from emu_the_menu.repository import StockRepository
+from emu_the_menu.reserve import free_stock
 from emu_the_menu.templating import TEMPLATES
 from emu_the_menu.units import display_quantity
 
@@ -44,16 +44,6 @@ def _whole(text: str, low: int, high: int, message: str) -> int:
 
 def day_label(day: date) -> str:
     return f"{day.strftime('%a')} {day.day} {day.strftime('%b')}"
-
-
-def stock_lots(stock: StockRepository) -> dict[int, list[tuple[float, date | None]]]:
-    """Ingredient id to what is held: (quantity, expiry or None) for each stock item."""
-    ids = {i.name: i.id for i in stock.ingredients()}
-    lots: dict[int, list[tuple[float, date | None]]] = {}
-    for item in stock.list_items():
-        if item.quantity > 0 and item.ingredient in ids:
-            lots.setdefault(ids[item.ingredient], []).append((item.quantity, item.expires_on))
-    return lots
 
 
 def shopping_text(pairs) -> list[str]:
@@ -89,19 +79,16 @@ class PlanRequest:
     cooldown: int
     seed: int
 
-    def run(self, db_path: str | Path) -> Menu:
-        with (
-            RecipeRepository(db_path) as recipes,
-            StockRepository(db_path) as stock,
-            MenuRepository(db_path) as menus,
-        ):
+    def run(self, db_path: str | Path, today: date) -> Menu:
+        """Plan, on the Stock that accepted Menus are not holding."""
+        with RecipeRepository(db_path) as recipes, MenuRepository(db_path) as menus:
             return plan(
                 self.start,
                 self.days,
                 self.slots,
                 recipes.recipes(),
                 self.people,
-                stock_lots(stock),
+                free_stock(db_path, today),
                 seed=self.seed,
                 settings=PlanSettings(self.allowance, self.cooldown),
                 last_served=menus.last_served(),
@@ -212,9 +199,8 @@ def create_router(db_path: str | Path, today=date.today) -> APIRouter:
             )
         except ValueError as exc:
             return answer(str(exc), 400)
-        result = settings.run(db_path)
-        with StockRepository(db_path) as stock:
-            held = stock_lots(stock)
+        result = settings.run(db_path, today())
+        held = free_stock(db_path, today())
         return answer(
             days_shown=days_of(result.meals),
             shopping=shopping_text(shopping_amounts(result.meals, held)),
@@ -242,7 +228,7 @@ def create_router(db_path: str | Path, today=date.today) -> APIRouter:
             )
         except ValueError as exc:
             return HTMLResponse(f"error: {exc}", status_code=400)
-        result = settings.run(db_path)
+        result = settings.run(db_path, today())
         with MenuRepository(db_path) as menus:
             menu_id = menus.save(
                 str(form.get("name", "")), settings.start, settings.days, result, settings.people

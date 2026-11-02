@@ -7,7 +7,7 @@
   <section class="results" aria-label="Saved menus">
     {% for m in menus %}
     <article class="card">
-      <h3><a href="/menus/{{ m.id }}">{{ m.name }}</a></h3>
+      <h3><a href="/menus/{{ m.id }}">{{ m.name }}</a>{% if m.accepted_on %} <span class="chip">Accepted</span>{% endif %}</h3>
       <p class="hint">{{ label(m.start) }}, {{ m.days }} day{{ "" if m.days == 1 else "s" }}, {{ m.meals|length }} meal{{ "" if m.meals|length == 1 else "s" }}</p>
     </article>
     {% endfor %}

@@ -569,3 +569,94 @@ def test_a_gap_meal_still_knows_who_is_at_the_table(client, db_path, kitchen):
     assert "Carrot soup" in text and "Peanut stew" not in text
     forced = client.post(f"/menus/{menu_id}/meals/{gap.id}", data={"recipe": "2"})
     assert forced.status_code == 400
+
+
+# --- accepting a menu -------------------------------------------------------------------------
+
+
+def accepted_state(client, menu_id, action):
+    return client.post(f"/menus/{menu_id}/{action}")
+
+
+def test_a_saved_menu_offers_to_be_accepted(client, db_path, kitchen):
+    location = save(client, kitchen).headers["location"]
+    menu_id, _ = first_meal(db_path, location)
+    html = client.get(location).text
+    assert f'action="/menus/{menu_id}/accept"' in html and "Accept this menu" in html
+
+
+def test_accepting_marks_the_menu_and_offers_to_undo_it(client, db_path, kitchen):
+    location = save(client, kitchen).headers["location"]
+    menu_id, _ = first_meal(db_path, location)
+    response = accepted_state(client, menu_id, "accept")
+    assert response.status_code == 303 and response.headers["location"] == location
+    page = client.get(location).text
+    assert "Accepted Mon 2 Nov" in text_of(page)
+    assert f'action="/menus/{menu_id}/unaccept"' in page
+    assert "Accepted" in text_of(client.get("/menus").text)
+    accepted_state(client, menu_id, "unaccept")
+    assert "Accept this menu" in client.get(location).text
+
+
+def test_accepting_or_unaccepting_an_unknown_menu_is_a_404(client):
+    assert client.post("/menus/99/accept").status_code == 404
+    assert client.post("/menus/99/unaccept").status_code == 404
+
+
+def accepted_with_just_enough_stock(client, db_path, kitchen):
+    location, menu_id, meal, need = cooked_menu(client, db_path, kitchen)
+    stock_carrots(db_path, need + 1)
+    accepted_state(client, menu_id, "accept")
+    return location, menu_id, need
+
+
+def test_an_accepted_menu_keeps_other_menus_from_planning_with_its_stock(client, db_path, kitchen):
+    accepted_with_just_enough_stock(client, db_path, kitchen)
+    query = QUERY.format(eater=kitchen) + "&allowance=0"
+    assert "Shopping Allowance" in text_of(client.get("/menu?" + query).text)
+
+
+def test_unaccepting_or_deleting_lets_the_stock_be_planned_again(client, db_path, kitchen):
+    location, menu_id, _ = accepted_with_just_enough_stock(client, db_path, kitchen)
+    query = QUERY.format(eater=kitchen) + "&allowance=0"
+    accepted_state(client, menu_id, "unaccept")
+    assert "Carrot soup" in text_of(client.get("/menu?" + query).text)
+    accepted_state(client, menu_id, "accept")
+    client.post(f"/menus/{menu_id}/delete")
+    assert "Carrot soup" in text_of(client.get("/menu?" + query).text)
+
+
+def test_another_menu_has_to_buy_what_an_accepted_one_holds(client, db_path, kitchen):
+    _, _, need = accepted_with_just_enough_stock(client, db_path, kitchen)
+    other = save(client, kitchen, name="Other").headers["location"]
+    assert amount_text(need - 1) in text_of(client.get(other).text)
+
+
+def test_the_accepted_menu_itself_has_nothing_to_buy(client, db_path, kitchen):
+    location, _, _ = accepted_with_just_enough_stock(client, db_path, kitchen)
+    assert "Nothing to buy" in text_of(client.get(location).text)
+
+
+def test_a_menu_accepted_later_sees_what_earlier_ones_hold(client, db_path, kitchen):
+    first_location, first_id, need = accepted_with_just_enough_stock(client, db_path, kitchen)
+    second = save(client, kitchen, name="Second").headers["location"]
+    second_id = int(second.rsplit("/", 1)[1])
+    accepted_state(client, second_id, "accept")
+    assert "Nothing to buy" in text_of(client.get(first_location).text)
+    assert amount_text(need - 1) in text_of(client.get(second).text)
+
+
+def test_cooking_an_accepted_meal_still_takes_the_real_stock(client, db_path, kitchen):
+    location, menu_id, need = accepted_with_just_enough_stock(client, db_path, kitchen)
+    with MenuRepository(db_path) as menus:
+        meal = menus.get(menu_id).meals[0]
+    post_to(client, menu_id, meal.id, "cooked")
+    assert carrots_left(db_path) == pytest.approx(1)
+
+
+def test_picking_another_recipe_is_not_blocked_by_the_meal_being_replaced(client, db_path, kitchen):
+    location, menu_id, _ = accepted_with_just_enough_stock(client, db_path, kitchen)
+    add_dinner(db_path, "Pea soup", "peas")
+    with MenuRepository(db_path) as menus:
+        meal = menus.get(menu_id).meals[0]
+    assert post_to(client, menu_id, meal.id, "reshuffle").status_code == 303

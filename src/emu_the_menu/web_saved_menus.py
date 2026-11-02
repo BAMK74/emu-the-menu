@@ -19,18 +19,22 @@ from emu_the_menu.planner import Meal, Portion, choices_for, plan, portions_for
 from emu_the_menu.recipe_repository import RecipeRepository
 from emu_the_menu.recipes import analyse
 from emu_the_menu.repository import StockRepository
+from emu_the_menu.reserve import free_stock, stock_lots
 from emu_the_menu.templating import TEMPLATES
 from emu_the_menu.units import display_quantity
-from emu_the_menu.web_menu import day_label, days_of, shopping_text, stock_lots
+from emu_the_menu.web_menu import day_label, days_of, shopping_text
 
 
-def live_meals(saved: SavedMenu, db_path: str | Path) -> tuple[list[Meal], list]:
-    """The planner's Meals for a saved Menu and the Ingredients still to buy for them."""
+def live_meals(saved: SavedMenu, db_path: str | Path, today: date) -> tuple[list[Meal], list]:
+    """The planner's Meals for a saved Menu and the Ingredients still to buy for them.
+
+    An accepted Menu may use the Stock left after the Menus accepted before it; one that is not
+    accepted may use what no accepted Menu is holding.
+    """
     with EaterRepository(db_path) as eaters, RecipeRepository(db_path) as recipes:
         people = {e.id: e for e in eaters.list()}
         found = {r.id: recipes.get(r.id) for r in recipes.recipes()}
-    with StockRepository(db_path) as stock:
-        held = stock_lots(stock)
+    held = free_stock(db_path, today, before=saved.accepted_order)
     meals = []
     for m in saved.meals:
         recipe = found.get(m.recipe_id) if m.recipe_id is not None else None
@@ -65,7 +69,7 @@ def create_router(db_path: str | Path, today=date.today) -> APIRouter:
             saved = repo.get(menu_id)
         if saved is None:
             raise HTTPException(404, "No such menu")
-        meals, shopping = live_meals(saved, db_path)
+        meals, shopping = live_meals(saved, db_path, today())
         return TEMPLATES.TemplateResponse(
             request,
             "saved_menu.html",
@@ -181,8 +185,7 @@ def create_router(db_path: str | Path, today=date.today) -> APIRouter:
             day_slots = sorted({m.slot for m in saved.meals if m.day == meal.day})
             picked = None
             if diners:
-                with StockRepository(db_path) as stock:
-                    held = stock_lots(stock)
+                held = free_stock(db_path, today(), ignore_meal=meal.id)
                 result = plan(
                     meal.day,
                     1,
@@ -267,6 +270,26 @@ def create_router(db_path: str | Path, today=date.today) -> APIRouter:
         except MenuNotFoundError:
             raise HTTPException(404, "No such meal") from None
         return RedirectResponse(f"/menus/{menu_id}", status_code=303)
+
+    def set_accepted(menu_id: int, accept: bool):
+        try:
+            with MenuRepository(db_path) as repo:
+                if accept:
+                    repo.accept(menu_id, today())
+                else:
+                    repo.unaccept(menu_id)
+        except MenuNotFoundError:
+            raise HTTPException(404, "No such menu") from None
+        return RedirectResponse(f"/menus/{menu_id}", status_code=303)
+
+    @router.post("/menus/{menu_id}/accept")
+    def accept(menu_id: int):
+        """Accept the menu: its meals still to cook set aside the stock they need."""
+        return set_accepted(menu_id, True)
+
+    @router.post("/menus/{menu_id}/unaccept")
+    def unaccept(menu_id: int):
+        return set_accepted(menu_id, False)
 
     @router.post("/menus/{menu_id}/delete")
     def delete(menu_id: int):

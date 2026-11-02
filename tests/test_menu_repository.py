@@ -279,3 +279,75 @@ def test_a_gap_keeps_the_people_at_its_table_with_no_servings(repo, sam):
     empty = Meal(START, Slot.LUNCH, None, reason="none")
     saved = repo.get(repo.save("Gap", START, 1, Menu((empty,), ()), table=[sam]))
     assert [(p.eater_id, p.servings) for p in saved.meals[0].portions] == [(sam.id, 0.0)]
+
+
+# --- accepting a menu -------------------------------------------------------------------------
+
+
+def test_a_new_menu_is_not_accepted(repo, soup, sam):
+    saved = repo.get(repo.save("New", START, 1, one_meal_menu(soup, sam)))
+    assert saved.accepted_on is None and saved.accepted_order is None
+
+
+def test_a_menu_can_be_accepted_and_unaccepted(repo, soup, sam):
+    menu_id = repo.save("Take", START, 1, one_meal_menu(soup, sam))
+    repo.accept(menu_id, COOKED)
+    accepted = repo.get(menu_id)
+    assert accepted.accepted_on == COOKED and accepted.accepted_order == 1
+    repo.unaccept(menu_id)
+    again = repo.get(menu_id)
+    assert again.accepted_on is None and again.accepted_order is None
+
+
+def test_menus_are_numbered_in_the_order_they_were_accepted(repo, soup, sam):
+    first = repo.save("A", START, 1, one_meal_menu(soup, sam))
+    second = repo.save("B", START, 1, one_meal_menu(soup, sam))
+    repo.accept(second, COOKED)
+    repo.accept(first, COOKED)
+    assert [m.id for m in repo.accepted_menus()] == [second, first]
+    assert [repo.get(i).accepted_order for i in (second, first)] == [1, 2]
+
+
+def test_accepting_again_keeps_the_place_in_line(repo, soup, sam):
+    first = repo.save("A", START, 1, one_meal_menu(soup, sam))
+    second = repo.save("B", START, 1, one_meal_menu(soup, sam))
+    repo.accept(first, COOKED)
+    repo.accept(second, COOKED)
+    repo.accept(first, date(2026, 11, 9))
+    assert repo.get(first).accepted_order == 1
+    assert repo.get(first).accepted_on == COOKED
+
+
+def test_a_menu_accepted_after_a_gap_goes_to_the_back(repo, soup, sam):
+    first = repo.save("A", START, 1, one_meal_menu(soup, sam))
+    second = repo.save("B", START, 1, one_meal_menu(soup, sam))
+    repo.accept(first, COOKED)
+    repo.unaccept(first)
+    repo.accept(second, COOKED)
+    repo.accept(first, COOKED)
+    assert [m.id for m in repo.accepted_menus()] == [second, first]
+
+
+def test_accepting_an_unknown_menu_is_reported(repo):
+    with pytest.raises(MenuNotFoundError):
+        repo.accept(99, COOKED)
+    with pytest.raises(MenuNotFoundError):
+        repo.unaccept(99)
+
+
+def test_an_older_database_gains_the_accepted_columns(db_path):
+    import sqlite3
+
+    db = sqlite3.connect(db_path)
+    db.executescript(
+        "CREATE TABLE menus (id INTEGER PRIMARY KEY, name TEXT NOT NULL,"
+        " start_day TEXT NOT NULL, days INTEGER NOT NULL);"
+        "INSERT INTO menus (name, start_day, days) VALUES ('Old', '2026-11-02', 1);"
+    )
+    db.commit()
+    db.close()
+    with MenuRepository(db_path) as repo:
+        [old] = repo.menus()
+        assert old.accepted_on is None
+        repo.accept(old.id, COOKED)
+        assert repo.get(old.id).accepted_order == 1

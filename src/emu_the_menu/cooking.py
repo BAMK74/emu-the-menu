@@ -60,6 +60,13 @@ class Pantry:
             lot[1] is not None and lot[1] <= limit for lot in self._usable(ingredient_id, day)
         )
 
+    def export(self) -> dict[int, list[tuple[float, date | None]]]:
+        """What is left, as lots again (an amount that is not tracked stays unlimited)."""
+        return {
+            ingredient_id: [(lot[0], lot[1]) for lot in lots if lot[0] > _EPSILON]
+            for ingredient_id, lots in self._lots.items()
+        }
+
     def take(self, ingredient_id: int, quantity: float, day: date) -> None:
         remaining = quantity
         for lot in self._usable(ingredient_id, day):
