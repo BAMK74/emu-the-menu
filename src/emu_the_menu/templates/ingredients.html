@@ -7,18 +7,46 @@
     <p><strong>Allergens matter.</strong> Tick every allergen an ingredient contains, including hidden ones (soy sauce has soy). Emu the Menu cannot check this for you, so always read the label. An ingredient marked "Not checked yet" has not been looked at by anyone, so nothing is known about it. <a href="/disclaimer">Read the disclaimer</a>.</p>
   </div>
 
-  {% if tidy_plan %}
+  {% if tidy_plan or split_plan %}
   <form class="warning-note twins" method="post" action="/ingredients/tidy">
-    <p><strong>{{ tidy_plan|length }} ingredient name{{ "" if tidy_plan|length == 1 else "s" }} can be tidied.</strong>
-      Some ingredients are the same food written two ways, and some names carry words that only describe the food ("freshly cracked black pepper" is "black pepper"). Tidying keeps one of each, moves the recipes and stock over, and keeps every allergen and food group ticked on any of them.</p>
+    <input type="hidden" name="selected" value="1">
+    <p><strong>{{ tidy_plan|length + split_plan|length }} ingredient name{{ "" if tidy_plan|length + split_plan|length == 1 else "s" }} can be tidied.</strong>
+      {% if split_plan %}{{ split_plan|length }} name{{ "" if split_plan|length == 1 else "s" }} offer{{ "s" if split_plan|length == 1 }} a choice and {{ "is" if split_plan|length == 1 else "are" }} really more than one ingredient: tidying makes each its own ingredient, used as alternatives in the recipes, and each one has to be checked by you. {% endif %}
+      {% if tidy_plan %}Some ingredients are the same food written two ways, and some names carry words that only describe the food ("freshly cracked black pepper" is "black pepper"). Untick any change you do not want, or type another name. Click an ingredient's name to open it. Tidying keeps one of each, moves the recipes and stock over, and keeps every allergen and food group ticked on any of them.{% endif %}</p>
     <details>
       <summary>See what would change</summary>
       <ul class="tidy-list">
-        {% for members, target in tidy_plan %}<li>{% for m in members %}{{ m.name }}{{ " + " if not loop.last }}{% endfor %} &rarr; <strong>{{ target }}</strong></li>{% endfor %}
+        {% for ingredient, parts in split_plan %}<li>{{ ingredient.name }} &rarr; <strong>{{ parts|join(" and ") }}</strong> (alternatives)</li>{% endfor %}
+        {% for members, target in tidy_plan %}{% set key = members[0].id %}<li class="tidy-item"><input type="checkbox" name="apply" value="{{ key }}" checked aria-label="Apply this change"> <span class="tidy-names">{% for m in members %}<a href="/ingredients/{{ m.id }}">{{ m.name }}</a>{{ " + " if not loop.last }}{% endfor %} &rarr;</span> <input class="tidy-name" name="target_{{ key }}" value="{{ target }}" maxlength="60" aria-label="New name" autocomplete="off"><span class="tidy-actions"><button class="boxbtn quiet" type="button" data-tidy-reset title="Back to the suggested name">Reset</button><button class="boxbtn quiet" type="button" data-tidy-cancel title="Leave this change out">Cancel</button><button class="boxbtn" type="submit" name="only" value="{{ key }}" title="Make just this change now">Save</button></span></li>{% endfor %}
       </ul>
     </details>
-    <button type="submit">Tidy the names</button>
+    <button type="submit">Tidy the ticked names</button>
   </form>
+  <script>
+    // Beside each proposed change: Reset puts its suggested name back and ticks it, Cancel leaves
+    // it out (unticks it), and Save makes just that change.
+    (function () {
+      const mark = (row) => row.classList.toggle("skipped", !row.querySelector("[name=apply]").checked);
+      document.querySelectorAll(".tidy-item").forEach((row) => {
+        row.querySelector("[name=apply]").addEventListener("change", () => mark(row));
+      });
+      document.addEventListener("click", (event) => {
+        const reset = event.target.closest("[data-tidy-reset]");
+        const cancel = event.target.closest("[data-tidy-cancel]");
+        const row = (reset || cancel) && (reset || cancel).closest(".tidy-item");
+        if (!row) return;
+        const box = row.querySelector("[name=apply]");
+        const name = row.querySelector(".tidy-name");
+        if (reset) {
+          name.value = name.defaultValue;
+          box.checked = true;
+        } else {
+          box.checked = false;
+        }
+        mark(row);
+      });
+    })();
+  </script>
   {% endif %}
 
   <section class="results" aria-label="Ingredients">
@@ -76,7 +104,9 @@
         }
       });
       dialog.addEventListener("click", (event) => {
-        if (event.target === dialog || event.target.closest("[data-close-dialog]")) dialog.close();
+        const close = event.target.closest("[data-close-dialog]");
+        if (close) event.preventDefault();  // Cancel is a link, for use without scripting
+        if (event.target === dialog || close) dialog.close();
       });
     })();
   </script>

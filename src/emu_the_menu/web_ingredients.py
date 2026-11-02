@@ -16,7 +16,7 @@ from emu_the_menu.ingredients import kcal_basis, parse_kcal, suggest_tags
 from emu_the_menu.openfoodfacts import Fetch, LookupUnavailableError, find_product, http_fetch
 from emu_the_menu.repository import Ingredient, StockRepository
 from emu_the_menu.templating import TEMPLATES
-from emu_the_menu.units import BaseUnit
+from emu_the_menu.units import BaseUnit, IncompatibleUnitError
 
 
 def create_router(db_path: str | Path, fetch_product: Fetch = http_fetch) -> APIRouter:
@@ -48,7 +48,12 @@ def create_router(db_path: str | Path, fetch_product: Fetch = http_fetch) -> API
                 allergens = [a.value for a in suggestion.allergens]
                 suggested = True
         kcal = "" if ingredient.kcal is None else f"{ingredient.kcal:g}"
-        return {"kcal": kcal, "food_groups": groups, "allergens": allergens}, suggested
+        return {
+            "name": ingredient.name,
+            "kcal": kcal,
+            "food_groups": groups,
+            "allergens": allergens,
+        }, suggested
 
     def context(ingredient: Ingredient, form: dict, suggested: bool, error: str | None = None):
         return {
@@ -83,13 +88,36 @@ def create_router(db_path: str | Path, fetch_product: Fetch = http_fetch) -> API
                 "summary": summary,
                 "show": show,
                 "tidy_plan": repo.tidy_plan(),
+                "split_plan": repo.split_plan(),
             },
         )
 
     @router.post("/ingredients/tidy")
-    def tidy(repo: StockRepository = Depends(get_repo)):
-        """Merge ingredients that are one food written two ways and give each a plain name."""
-        repo.tidy()
+    async def tidy(request: Request):
+        """Merge ingredients that are one food written two ways and give each a plain name.
+
+        With `selected` only the changes ticked in `apply` are made, each under the name typed for
+        it in `target_<key>`. Without it every proposed change is made. A change that cannot be
+        made is skipped and the others still happen.
+        """
+        form = await request.form()
+        # Opened here, not injected: a connection must stay in the thread that made it.
+        with StockRepository(db_path) as repo:
+            if not form.get("selected"):
+                repo.tidy()
+            else:
+                # The Save beside one change (`only`) applies just that change.
+                only = str(form.get("only", "")).strip()
+                chosen = {only} if only else {str(v) for v in form.getlist("apply")}
+                for members, target in repo.tidy_plan():
+                    key = str(members[0].id)
+                    if key not in chosen:
+                        continue
+                    typed = str(form.get(f"target_{key}", "")).strip() or target
+                    try:
+                        repo.tidy_group([m.id for m in members], typed)
+                    except (ValueError, IncompatibleUnitError):
+                        continue
         return RedirectResponse("/ingredients", status_code=303)
 
     @router.get("/ingredients/{ingredient_id}/panel", response_class=HTMLResponse)
@@ -148,21 +176,32 @@ def create_router(db_path: str | Path, fetch_product: Fetch = http_fetch) -> API
     def save(
         request: Request,
         ingredient_id: int,
+        name: str = Form(""),
         kcal: str = Form(""),
         food_groups: list[str] = Form([]),
         allergens: list[str] = Form([]),
         repo: StockRepository = Depends(get_repo),
     ):
         ingredient = find(repo, ingredient_id)
-        form = {"kcal": kcal, "food_groups": food_groups, "allergens": allergens}
+        form = {
+            "name": name or ingredient.name,
+            "kcal": kcal,
+            "food_groups": food_groups,
+            "allergens": allergens,
+        }
         try:
+            renaming = bool(name.strip()) and " ".join(name.split()).lower() != ingredient.name
+            if renaming:
+                repo.check_rename(ingredient_id, name)  # before anything is saved
             repo.set_ingredient_details(
                 ingredient_id,
                 parse_kcal(kcal, ingredient.base_unit),
                 parse_food_groups(food_groups),
                 parse_allergens(allergens),
             )
-        except ValueError as exc:
+            if renaming:
+                repo.rename_ingredient(ingredient_id, name)
+        except (ValueError, IncompatibleUnitError) as exc:
             return TEMPLATES.TemplateResponse(
                 request,
                 "ingredient.html",

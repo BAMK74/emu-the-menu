@@ -169,9 +169,10 @@ def _score(
     eaters: int,
 ) -> float:
     recipe, facts = candidate.recipe, candidate.facts
-    ids = [line.ingredient.id for line in recipe.lines]
-    in_stock = sum(_in_stock(stock, i, day) for i in ids) / len(ids)
-    expiring = sum(_expiring(stock, i, day) for i in ids) / len(ids)
+    # A group of alternatives is one need, met if any of them is in Stock.
+    slots = recipe.slots
+    in_stock = sum(any(_in_stock(stock, i.id, day) for i in slot) for slot in slots) / len(slots)
+    expiring = sum(any(_expiring(stock, i.id, day) for i in slot) for slot in slots) / len(slots)
     kcal = facts.calories_per_serving
     if kcal and targets:
         # 1 when a serving is exactly an Eater's share of the day, falling to 0 at half or double.
@@ -213,9 +214,7 @@ def plan(
     weather = weather or {}
     candidates = []
     for recipe in recipes:
-        facts = analyse(
-            [(line.ingredient, line.quantity) for line in recipe.lines], recipe.servings
-        )
+        facts = analyse(recipe.for_analysis, recipe.servings)
         verdicts = [assess(recipe, facts, eater) for eater in eaters]
         candidates.append(
             _Candidate(
@@ -261,10 +260,12 @@ def _fill(day, slot, slots, candidates, eaters, stock, served, missing, weather,
         return Meal(day, slot, None, reason=reason), {}
     affordable = []
     for c in cooled:
+        # A group of alternatives needs nothing if any of them is in Stock, and otherwise one
+        # purchase, of the first.
         needed = {
-            line.ingredient.id: line.ingredient
-            for line in c.recipe.lines
-            if not _in_stock(stock, line.ingredient.id, day)
+            slot[0].id: slot[0]
+            for slot in c.recipe.slots
+            if not any(_in_stock(stock, i.id, day) for i in slot)
         }
         if len(missing.keys() | needed.keys()) <= settings.shopping_allowance:
             affordable.append((c, needed))

@@ -13,7 +13,7 @@ from dataclasses import dataclass
 
 from emu_the_menu.allergens import Allergen
 from emu_the_menu.food_groups import FoodGroup
-from emu_the_menu.names import stem
+from emu_the_menu.names import split_alternatives, stem
 from emu_the_menu.units import BaseUnit
 
 _MAX_KCAL = {BaseUnit.GRAM: 950, BaseUnit.MILLILITRE: 950, BaseUnit.COUNT: 3000}
@@ -240,12 +240,23 @@ class Judgement:
     reason: str = ""  # why it needs a look
 
 
+def lists_alternatives(name: str) -> bool:
+    """True if the name offers a choice ("water or vegetable broth"): more than one food."""
+    return len(split_alternatives(name)) > 1
+
+
 def judge(name: str) -> Judgement:
     """Sort an Ingredient name into plain-looking or needing a look, with the reason.
 
     Plain means every word is a basic plant food or a word that only describes it. It is never
     plain when the name hints at a food group or allergen. A guess from the name, not a check.
     """
+    if lists_alternatives(name):
+        return Judgement(
+            NEEDS_LOOK,
+            "it lists alternatives, which are more than one ingredient: tick everything"
+            " that any of them contains",
+        )
     raw = re.findall(r"[a-z]+", re.sub(r"\([^)]*\)", " ", _ascii(name)))
     words = [stem(w) for w in raw]
     hint = suggest_tags(name)

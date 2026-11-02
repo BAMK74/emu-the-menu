@@ -198,8 +198,8 @@ def test_export_lists_recipes_with_their_lines(repo):
     assert exported["weather"] == "cold"
     assert exported["tags"] == ["quick"]
     assert exported["lines"] == [
-        {"ingredient": "rice", "quantity": 200, "unit": "g"},
-        {"ingredient": "tomatoes", "quantity": 4, "unit": "count"},
+        {"ingredient": "rice", "quantity": 200, "unit": "g", "alternative_group": None},
+        {"ingredient": "tomatoes", "quantity": 4, "unit": "count", "alternative_group": None},
     ]
 
 

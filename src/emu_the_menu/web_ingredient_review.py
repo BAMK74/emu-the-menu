@@ -24,7 +24,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from emu_the_menu.allergens import Allergen, parse_allergens
 from emu_the_menu.food_groups import FoodGroup, parse_food_groups
-from emu_the_menu.ingredients import PLAIN, judge, parse_kcal, suggest_tags
+from emu_the_menu.ingredients import PLAIN, judge, lists_alternatives, parse_kcal, suggest_tags
 from emu_the_menu.recipe_repository import RecipeRepository
 from emu_the_menu.repository import Ingredient, StockRepository
 from emu_the_menu.templating import TEMPLATES
@@ -85,7 +85,9 @@ def create_router(db_path: str | Path) -> APIRouter:
             if judge(ingredient.name).kind == PLAIN:
                 continue
             hint = suggest_tags(ingredient.name)
-            if hint.food_groups or hint.allergens:
+            # A name that lists alternatives is several ingredients, so it is never confirmed
+            # as part of a group.
+            if (hint.food_groups or hint.allergens) and not lists_alternatives(ingredient.name):
                 key = (
                     tuple(g.value for g in hint.food_groups),
                     tuple(a.value for a in hint.allergens),

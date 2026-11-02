@@ -432,3 +432,36 @@ def test_a_filter_with_no_matches_says_so(client, db_path):
     save(client, ingredient(db_path, "rice").id, "360")
     page = text_of(client.get("/ingredients?show=no-calories").text)
     assert "Nothing to show" in page
+
+
+# --- Reset, Cancel and Save beside the text boxes ------------------------------------------------
+
+
+def edit_row(html):
+    return html.split('class="edit-row"')[1].split('<fieldset class="allergens">')[0]
+
+
+@pytest.mark.parametrize("path_of", ["/ingredients/{id}/panel", "/ingredients/{id}"])
+def test_reset_cancel_and_save_sit_beside_the_text_boxes(client, db_path, path_of):
+    stock(client, "rice")
+    html = client.get(path_of.format(id=ingredient(db_path, "rice").id)).text
+    row = edit_row(html)
+    assert 'name="name"' in row and 'name="kcal"' in row
+    actions = row.split('class="edit-actions"')[1]
+    reset, cancel, save = (
+        actions.index(m) for m in ('type="reset"', "data-close-dialog", 'type="submit"')
+    )
+    assert reset < cancel < save
+    assert ">Reset<" in actions and ">Cancel<" in actions and ">Save<" in actions
+
+
+def test_there_is_only_one_save_button(client, db_path):
+    stock(client, "rice")
+    html = client.get(f"/ingredients/{ingredient(db_path, 'rice').id}/panel").text
+    assert html.count('type="submit"') == 1
+
+
+def test_cancel_goes_back_to_the_list_without_scripting(client, db_path):
+    stock(client, "rice")
+    html = client.get(f"/ingredients/{ingredient(db_path, 'rice').id}").text
+    assert re.search(r'<a [^>]*href="/ingredients"[^>]*data-close-dialog[^>]*>Cancel</a>', html)

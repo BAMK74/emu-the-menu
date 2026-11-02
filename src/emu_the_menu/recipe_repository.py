@@ -6,7 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urlsplit
 
-from emu_the_menu.names import canonical_name
+from emu_the_menu.names import canonical_name, split_alternatives
 from emu_the_menu.recipes import (
     MealType,
     Weather,
@@ -43,6 +43,7 @@ CREATE TABLE IF NOT EXISTS recipe_lines (
     ingredient_id INTEGER NOT NULL REFERENCES ingredients(id),
     quantity      REAL NOT NULL CHECK (quantity > 0),
     position      INTEGER NOT NULL,
+    alt_group     INTEGER,
     PRIMARY KEY (recipe_id, ingredient_id)
 );
 """
@@ -56,6 +57,8 @@ class RecipeNotFoundError(LookupError):
 class RecipeLine:
     ingredient: Ingredient
     quantity: float  # in the Ingredient's base unit
+    # Lines of one Recipe with the same number are alternatives: any one of them may be used.
+    alt_group: int | None = None
 
 
 @dataclass(frozen=True)
@@ -68,6 +71,26 @@ class Recipe:
     tags: tuple[str, ...]
     lines: tuple[RecipeLine, ...]
     source_url: str | None = None  # the web page it was imported from or copied from
+
+    @property
+    def for_analysis(self) -> list[tuple[Ingredient, float, int | None]]:
+        """The lines as `recipes.analyse` wants them, with their groups of alternatives."""
+        return [(line.ingredient, line.quantity, line.alt_group) for line in self.lines]
+
+    @property
+    def slots(self) -> list[list[Ingredient]]:
+        """What the Recipe needs, one entry per line, a group of alternatives being one entry."""
+        found: list[list[Ingredient]] = []
+        placed: dict[int, list[Ingredient]] = {}
+        for line in self.lines:
+            if line.alt_group is None:
+                found.append([line.ingredient])
+            elif line.alt_group in placed:
+                placed[line.alt_group].append(line.ingredient)
+            else:
+                placed[line.alt_group] = [line.ingredient]
+                found.append(placed[line.alt_group])
+        return found
 
     @property
     def source_host(self) -> str | None:
@@ -90,6 +113,7 @@ def clean_source(url: str | None) -> str | None:
 
 
 LineInput = tuple[str, float, str]  # ingredient name, quantity, unit as typed
+_Entry = tuple[str, BaseUnit, float, int | None]  # name, base unit, amount, group
 
 
 class RecipeRepository:
@@ -103,6 +127,10 @@ class RecipeRepository:
         if "source_url" not in columns:
             with self._db:
                 self._db.execute("ALTER TABLE recipes ADD COLUMN source_url TEXT")
+        line_columns = {row[1] for row in self._db.execute("PRAGMA table_info(recipe_lines)")}
+        if "alt_group" not in line_columns:
+            with self._db:
+                self._db.execute("ALTER TABLE recipe_lines ADD COLUMN alt_group INTEGER")
 
     def __enter__(self) -> "RecipeRepository":
         return self
@@ -157,7 +185,7 @@ class RecipeRepository:
         servings = parse_servings(str(servings))
         meals = parse_meal_types(m.value for m in meal_types)
         tags = parse_tags(",".join(tags))
-        amounts = _merged(self._canonical_lines(lines))
+        amounts = _merged(self._entries(lines))
         source = clean_source(source_url)
         try:
             with self._db:
@@ -185,11 +213,18 @@ class RecipeRepository:
                     "INSERT INTO recipe_tags (recipe_id, tag, position) VALUES (?, ?, ?)",
                     [(recipe_id, tag, n) for n, tag in enumerate(tags)],
                 )
-                for position, (ingredient, (base, amount)) in enumerate(amounts.items()):
+                for position, (ingredient, (base, amount, group)) in enumerate(amounts.items()):
                     self._db.execute(
-                        "INSERT INTO recipe_lines (recipe_id, ingredient_id, quantity, position)"
-                        " VALUES (?, ?, ?, ?)",
-                        (recipe_id, self._ingredient_id(ingredient, base), amount, position),
+                        "INSERT INTO recipe_lines"
+                        " (recipe_id, ingredient_id, quantity, position, alt_group)"
+                        " VALUES (?, ?, ?, ?, ?)",
+                        (
+                            recipe_id,
+                            self._ingredient_id(ingredient, base),
+                            amount,
+                            position,
+                            group,
+                        ),
                     )
         except sqlite3.IntegrityError as exc:
             if "recipes.name" in str(exc):
@@ -197,20 +232,30 @@ class RecipeRepository:
             raise
         return recipe_id
 
-    def _canonical_lines(self, lines: Sequence[LineInput]) -> list[LineInput]:
-        """The lines with each Ingredient named as one already stored, where it is the same food.
+    def _entries(self, lines: Sequence[LineInput]) -> list[_Entry]:
+        """The lines as one entry per Ingredient, each alternative being an Ingredient of its own.
 
-        "extra-virgin olive oil" becomes "extra virgin olive oil" and "sea salt" becomes "salt" if
-        those exist in the same kind of unit, so one food is never stored twice.
+        "water or vegetable broth" is two Ingredients that share a group. Each is named as one
+        already stored where it is the same food ("extra-virgin olive oil" becomes "olive oil"),
+        so one food is never stored twice. Raises ValueError for a blank name or a quantity of 0
+        or less.
         """
         kinds = dict(self._db.execute("SELECT name, base_unit FROM ingredients"))
-        canonical: list[LineInput] = []
-        for name, quantity, unit in lines:
-            family = base_unit_for(unit).value
-            chosen = canonical_name(name, kinds, family)
-            kinds.setdefault(chosen, family)
-            canonical.append((chosen, quantity, unit))
-        return canonical
+        entries: list[_Entry] = []
+        for number, (ingredient, quantity, unit) in enumerate(lines):
+            base, amount = base_unit_for(unit), to_base(quantity, unit)
+            name = " ".join(ingredient.split())
+            if not name:
+                raise ValueError("Every ingredient line needs an ingredient")
+            if not quantity > 0:
+                raise ValueError(f"The quantity of {name.lower()} must be more than 0")
+            alternatives = split_alternatives(name)
+            group = number if len(alternatives) > 1 else None
+            for alternative in alternatives:
+                chosen = canonical_name(alternative, kinds, base.value)
+                kinds.setdefault(chosen, base.value)
+                entries.append((chosen.lower(), base, amount, group))
+        return entries
 
     def _ingredient_id(self, name: str, base: BaseUnit) -> int:
         """The id of an Ingredient, creating it (unreviewed) if it is new.
@@ -241,9 +286,10 @@ class RecipeRepository:
             self._db.execute("SELECT recipe_id, tag FROM recipe_tags ORDER BY position")
         )
         lines = _grouped(
-            (rid, RecipeLine(ingredients[iid], quantity))
-            for rid, iid, quantity in self._db.execute(
-                "SELECT recipe_id, ingredient_id, quantity FROM recipe_lines ORDER BY position"
+            (rid, RecipeLine(ingredients[iid], quantity, group))
+            for rid, iid, quantity, group in self._db.execute(
+                "SELECT recipe_id, ingredient_id, quantity, alt_group FROM recipe_lines"
+                " ORDER BY position"
             )
         )
         return [
@@ -276,6 +322,7 @@ class RecipeRepository:
                         "ingredient": line.ingredient.name,
                         "quantity": line.quantity,
                         "unit": line.ingredient.base_unit.value,
+                        "alternative_group": line.alt_group,
                     }
                     for line in r.lines
                 ],
@@ -291,24 +338,33 @@ def _grouped(pairs) -> dict[int, list]:
     return found
 
 
-def _merged(lines: Sequence[LineInput]) -> dict[str, tuple[BaseUnit, float]]:
-    """Ingredient lines in the units they will be stored in, the same Ingredient added together.
+def _merged(entries: Sequence[_Entry]) -> dict[str, tuple[BaseUnit, float, int | None]]:
+    """Ingredient entries in the units they will be stored in, the same Ingredient added together.
 
-    Raises ValueError for a blank name, a quantity of 0 or less, or no lines at all.
+    Alternatives that end up as one Ingredient are kept once. An Ingredient that is both an
+    alternative and a line of its own is a line of its own. Groups that are left with a single
+    Ingredient are no longer alternatives, and the rest are numbered from 1.
+    Raises ValueError for no entries at all.
     """
-    merged: dict[str, tuple[BaseUnit, float]] = {}
-    for ingredient, quantity, unit in lines:
-        name = " ".join(ingredient.split()).lower()
-        if not name:
-            raise ValueError("Every ingredient line needs an ingredient")
-        if not quantity > 0:
-            raise ValueError(f"The quantity of {name} must be more than 0")
-        base, amount = base_unit_for(unit), to_base(quantity, unit)
+    merged: dict[str, tuple[BaseUnit, float, int | None]] = {}
+    for name, base, amount, group in entries:
         if name in merged:
-            if merged[name][0] is not base:
+            old_base, old_amount, old_group = merged[name]
+            if old_base is not base:
                 raise IncompatibleUnitError(f"{name} is listed in two kinds of unit")
-            amount += merged[name][1]
-        merged[name] = (base, amount)
+            if group is not None and group == old_group:
+                continue  # the same alternative named twice
+            merged[name] = (base, old_amount + amount, None)
+        else:
+            merged[name] = (base, amount, group)
     if not merged:
         raise ValueError("Add at least one ingredient")
-    return merged
+    members: dict[int, int] = {}
+    for _, _, group in merged.values():
+        if group is not None:
+            members[group] = members.get(group, 0) + 1
+    numbers = {g: n for n, g in enumerate((g for g in members if members[g] > 1), start=1)}
+    return {
+        name: (base, amount, numbers.get(group) if group is not None else None)
+        for name, (base, amount, group) in merged.items()
+    }

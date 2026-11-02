@@ -139,8 +139,7 @@ def create_router(db_path: str | Path, today=date.today) -> APIRouter:
         def view(meal):
             unchecked = ()
             if meal.recipe:
-                lines = [(line.ingredient, line.quantity) for line in meal.recipe.lines]
-                unchecked = analyse(lines, meal.recipe.servings).unchecked
+                unchecked = analyse(meal.recipe.for_analysis, meal.recipe.servings).unchecked
             return meal, unchecked
 
         by_day = [

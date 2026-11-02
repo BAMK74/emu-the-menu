@@ -352,7 +352,7 @@ def test_the_ingredients_page_offers_to_tidy_twins_and_names_them(client, db_pat
     make_twins(db_path)
     text = text_of(client.get("/ingredients").text)
     assert "olive oil" in text and "extra-virgin olive oil" in text
-    assert "Tidy the names" in text
+    assert "Tidy the ticked names" in text
     assert 'action="/ingredients/tidy"' in client.get("/ingredients").text
 
 

@@ -108,20 +108,36 @@ class RecipeFacts:
         return not self.unchecked
 
 
-def analyse(lines: Sequence[tuple[Ingredient, float]], servings: int) -> RecipeFacts:
-    """Add up Ingredient lines, each with its quantity in the Ingredient's base unit."""
-    calories = [calories_in(quantity, i.base_unit, i.kcal) for i, quantity in lines]
-    complete = all(c is not None for c in calories)
-    total = sum(calories) if complete else None  # type: ignore[arg-type]
-    groups = {g for i, _ in lines for g in i.food_groups}
-    allergens = {a for i, _ in lines for a in i.allergens}
-    unchecked = tuple(i.name for i, _ in lines if not i.reviewed)
+def analyse(
+    lines: Sequence[tuple[Ingredient, float] | tuple[Ingredient, float, int | None]],
+    servings: int,
+) -> RecipeFacts:
+    """Add up Ingredient lines, each with its quantity in the Ingredient's base unit.
+
+    A line may carry a third item, the number of a group of alternatives ("water or vegetable
+    broth"). Any one of a group may be used, so the allergens, food groups and unreviewed
+    Ingredients of all of them count, but only one of them is counted in the calories: the highest.
+    """
+    rows = [(row[0], row[1], row[2] if len(row) > 2 else None) for row in lines]
+    calories = [calories_in(quantity, i.base_unit, i.kcal) for i, quantity, _ in rows]
+    # What each group of alternatives or single line adds: None if any part has no calories.
+    parts: dict[object, list[float | None]] = {}
+    for n, ((_, _, group), kcal) in enumerate(zip(rows, calories, strict=True)):
+        parts.setdefault(("group", group) if group is not None else ("line", n), []).append(kcal)
+    counted = [
+        None if any(k is None for k in kcals) else max(kcals)  # type: ignore[type-var]
+        for kcals in parts.values()
+    ]
+    total = None if any(c is None for c in counted) else sum(counted)  # type: ignore[arg-type]
+    groups = {g for i, _, _ in rows for g in i.food_groups}
+    allergens = {a for i, _, _ in rows for a in i.allergens}
+    unchecked = tuple(dict.fromkeys(i.name for i, _, _ in rows if not i.reviewed))
     diets = () if unchecked else tuple(d for d in _BADGE_DIETS if not groups & d.excluded_groups)
     return RecipeFacts(
         total_calories=total,
         calories_per_serving=None if total is None else total / servings,
         without_calories=tuple(
-            i.name for (i, _), c in zip(lines, calories, strict=True) if c is None
+            dict.fromkeys(i.name for (i, _, _), c in zip(rows, calories, strict=True) if c is None)
         ),
         food_groups=tuple(g for g in FoodGroup if g in groups),
         allergens=tuple(a for a in Allergen if a in allergens),

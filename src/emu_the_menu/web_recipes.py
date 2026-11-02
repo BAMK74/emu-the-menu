@@ -81,7 +81,7 @@ def create_router(
             return [i.name for i in stock.ingredients()]
 
     def facts(recipe: Recipe):
-        return analyse([(line.ingredient, line.quantity) for line in recipe.lines], recipe.servings)
+        return analyse(recipe.for_analysis, recipe.servings)
 
     def blank_form() -> dict:
         return {
@@ -96,11 +96,17 @@ def create_router(
 
     def form_of(recipe: Recipe) -> dict:
         lines = []
+        shown: dict[int, dict] = {}  # alternatives are shown as one row: "water or vegetable broth"
         for line in recipe.lines:
+            if line.alt_group in shown:
+                row = shown[line.alt_group]
+                row["ingredient"] += f" or {line.ingredient.name}"
+                continue
             quantity, unit = display_quantity(line.quantity, line.ingredient.base_unit)
-            lines.append(
-                {"ingredient": line.ingredient.name, "quantity": f"{quantity:g}", "unit": unit}
-            )
+            row = {"ingredient": line.ingredient.name, "quantity": f"{quantity:g}", "unit": unit}
+            lines.append(row)
+            if line.alt_group is not None:
+                shown[line.alt_group] = row
         return {
             "name": recipe.name,
             "servings": str(recipe.servings),

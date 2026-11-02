@@ -14,7 +14,7 @@ from emu_the_menu.allergens import Allergen, parse_allergens
 from emu_the_menu.countries import COUNTRIES
 from emu_the_menu.food_groups import FoodGroup, parse_food_groups
 from emu_the_menu.ingredients import check_kcal, kcal_basis
-from emu_the_menu.names import canonical_name, clean_name, name_key
+from emu_the_menu.names import canonical_name, clean_name, name_key, split_alternatives
 from emu_the_menu.openfoodfacts import ProductInfo
 from emu_the_menu.shelf_life import ShelfLife, ShelfLifeUnit
 from emu_the_menu.stock import Location, StockItem, add_stock, reduce_stock, sort_by_expiry
@@ -105,12 +105,18 @@ class Ingredient:
     reviewed: bool = False
 
 
+MAX_INGREDIENT_NAME = 60
+_UNIT_SUFFIX = {"g": " (by weight)", "ml": " (by volume)", "count": " (counted)"}
+
+
 class StockRepository:
-    def __init__(self, path: str | Path):
+    def __init__(self, path: str | Path, auto_split: bool = True):
         self._db = sqlite3.connect(path)
         self._db.execute("PRAGMA foreign_keys = ON")
         self._db.executescript(_SCHEMA)
         self._upgrade()
+        if auto_split:
+            self._split_stored_alternatives()
 
     def _upgrade(self) -> None:
         """Add columns that databases created by older versions lack."""
@@ -150,6 +156,11 @@ class StockRepository:
         `shelf_life` if given, each replacing any earlier one. Nothing is remembered
         if the add fails.
         """
+        if len(split_alternatives(ingredient)) > 1:
+            raise ValueError(
+                f"{ingredient.strip()} is more than one ingredient. Add each to stock on its"
+                " own: a choice between ingredients belongs in a recipe."
+            )
         ingredient = self._canonical(ingredient, unit)
         self._apply(
             lambda items: add_stock(items, ingredient, quantity, unit, location, expires_on)
@@ -264,24 +275,30 @@ class StockRepository:
         if keep.base_unit is not drop.base_unit:
             raise IncompatibleUnitError(f"{keep.name} and {drop.name} use different units")
         with self._db:
-            has_recipes = self._db.execute(
-                "SELECT 1 FROM sqlite_master WHERE name = 'recipe_lines'"
-            ).fetchone()
-            if has_recipes:
+            if self._recipe_lines_exist():
                 lines = self._db.execute(
                     "SELECT recipe_id, quantity FROM recipe_lines WHERE ingredient_id = ?",
                     (drop_id,),
                 ).fetchall()
                 for recipe_id, quantity in lines:
                     both = self._db.execute(
-                        "SELECT 1 FROM recipe_lines WHERE recipe_id = ? AND ingredient_id = ?",
+                        "SELECT alt_group FROM recipe_lines"
+                        " WHERE recipe_id = ? AND ingredient_id = ?",
                         (recipe_id, keep_id),
                     ).fetchone()
                     if both:
-                        self._db.execute(
-                            "UPDATE recipe_lines SET quantity = quantity + ?"
+                        (dropped_group,) = self._db.execute(
+                            "SELECT alt_group FROM recipe_lines"
                             " WHERE recipe_id = ? AND ingredient_id = ?",
-                            (quantity, recipe_id, keep_id),
+                            (recipe_id, drop_id),
+                        ).fetchone()
+                        if both[0] is not None and both[0] == dropped_group:
+                            quantity = 0  # two alternatives that are now one: counted once
+                        self._db.execute(
+                            "UPDATE recipe_lines SET quantity = quantity + ?,"
+                            " alt_group = CASE WHEN alt_group IS ? THEN alt_group ELSE NULL END"
+                            " WHERE recipe_id = ? AND ingredient_id = ?",
+                            (quantity, dropped_group, recipe_id, keep_id),
                         )
                         self._db.execute(
                             "DELETE FROM recipe_lines WHERE recipe_id = ? AND ingredient_id = ?",
@@ -319,6 +336,206 @@ class StockRepository:
             )
             self._db.execute("DELETE FROM ingredients WHERE id = ?", (drop_id,))
 
+    def _split_stored_alternatives(self) -> None:
+        """Split Ingredients stored under a name that offers a choice, as older versions saved
+        them. A choice belongs to a Recipe line only: Ingredients are always single foods."""
+        offers = self._db.execute(
+            "SELECT 1 FROM ingredients WHERE name LIKE '% or %' OR name LIKE '%and/or%' LIMIT 1"
+        ).fetchone()
+        for _ in range(3):
+            if not offers or not self.split_ingredients():
+                break
+
+    def split_plan(self) -> list[tuple[Ingredient, list[str]]]:
+        """Ingredients whose name offers a choice ("water or vegetable broth") and that Recipes
+        use, each with the separate ingredients it would become."""
+        used = self._ingredient_ids_in_recipes()
+        kinds = dict(self._db.execute("SELECT name, base_unit FROM ingredients"))
+        plan = []
+        for ingredient in self.ingredients():
+            if ingredient.id not in used or len(split_alternatives(ingredient.name)) < 2:
+                continue
+            names = self._part_names(ingredient, kinds)
+            if len(names) >= 2:
+                plan.append((ingredient, names))
+        return plan
+
+    def _recipe_lines_exist(self) -> bool:
+        """Whether Recipes have been used here, bringing an older table up to date if so."""
+        has_recipes = self._db.execute(
+            "SELECT 1 FROM sqlite_master WHERE name = 'recipe_lines'"
+        ).fetchone()
+        if has_recipes:
+            columns = {row[1] for row in self._db.execute("PRAGMA table_info(recipe_lines)")}
+            if "alt_group" not in columns:
+                with self._db:
+                    self._db.execute("ALTER TABLE recipe_lines ADD COLUMN alt_group INTEGER")
+        return bool(has_recipes)
+
+    def _ingredient_ids_in_recipes(self) -> set[int]:
+        if not self._recipe_lines_exist():
+            return set()
+        return {
+            row[0] for row in self._db.execute("SELECT DISTINCT ingredient_id FROM recipe_lines")
+        }
+
+    def _part_names(self, ingredient: Ingredient, kinds: dict[str, str]) -> list[str]:
+        """The names the alternatives of an Ingredient would be stored under."""
+        others = {n: k for n, k in kinds.items() if n.lower() != ingredient.name.lower()}
+        family = ingredient.base_unit.value
+        names: list[str] = []
+        for part in split_alternatives(ingredient.name):
+            chosen = canonical_name(part, others, family).lower()
+            if others.get(chosen, family) != family:
+                # The name is taken by an Ingredient in another kind of unit, and a quantity in this
+                # kind cannot be converted without a density, so this one is kept apart.
+                chosen += _UNIT_SUFFIX[family]
+            others.setdefault(chosen, family)
+            if chosen not in names:
+                names.append(chosen)
+        return names
+
+    def split_ingredients(self) -> int:
+        """Replace each Ingredient that offers a choice by the separate Ingredients it names.
+
+        Every Recipe line that used it becomes one line per alternative, all with the same
+        quantity and marked as alternatives of one another. The new Ingredients are unreviewed
+        unless they already existed and a person reviewed them: what was ticked on the combined
+        name is not copied, because it described something that is not one food. Returns how many
+        Ingredients were split.
+        """
+        done = 0
+        for ingredient, _ in self.split_plan():
+            # Named afresh: an earlier split in this pass may have made Ingredients this one meets.
+            names = self._part_names(
+                ingredient, dict(self._db.execute("SELECT name, base_unit FROM ingredients"))
+            )
+            if len(names) < 2:
+                continue
+            family = ingredient.base_unit.value
+            taken = {
+                name.lower(): kind
+                for name, kind in self._db.execute("SELECT name, base_unit FROM ingredients")
+            }
+            if any(taken.get(n, family) != family for n in names):
+                continue  # a name is used by an Ingredient in another kind of unit: leave it
+            with self._db:
+                ids = []
+                for name in names:
+                    row = self._db.execute(
+                        "SELECT id FROM ingredients WHERE name = ?", (name,)
+                    ).fetchone()
+                    ids.append(
+                        row[0]
+                        if row
+                        else self._db.execute(
+                            "INSERT INTO ingredients (name, base_unit) VALUES (?, ?)",
+                            (name, family),
+                        ).lastrowid
+                    )
+                lines = self._db.execute(
+                    "SELECT recipe_id, quantity, position FROM recipe_lines"
+                    " WHERE ingredient_id = ?",
+                    (ingredient.id,),
+                ).fetchall()
+                for recipe_id, quantity, position in lines:
+                    self._db.execute(
+                        "DELETE FROM recipe_lines WHERE recipe_id = ? AND ingredient_id = ?",
+                        (recipe_id, ingredient.id),
+                    )
+                    present = {
+                        r[0]
+                        for r in self._db.execute(
+                            "SELECT ingredient_id FROM recipe_lines WHERE recipe_id = ?",
+                            (recipe_id,),
+                        )
+                    }
+                    new = [i for i in ids if i not in present]
+                    group = None
+                    if len(new) > 1:
+                        (top,) = self._db.execute(
+                            "SELECT COALESCE(MAX(alt_group), 0) FROM recipe_lines"
+                            " WHERE recipe_id = ?",
+                            (recipe_id,),
+                        ).fetchone()
+                        group = top + 1
+                    for part_id in new:
+                        self._db.execute(
+                            "INSERT INTO recipe_lines"
+                            " (recipe_id, ingredient_id, quantity, position, alt_group)"
+                            " VALUES (?, ?, ?, ?, ?)",
+                            (recipe_id, part_id, quantity, position, group),
+                        )
+                held = self._db.execute(
+                    "SELECT 1 FROM stock_items WHERE ingredient_id = ?", (ingredient.id,)
+                ).fetchone()
+                if not held:
+                    self._db.execute("DELETE FROM ingredients WHERE id = ?", (ingredient.id,))
+            done += 1
+        return done
+
+    def check_rename(self, ingredient_id: int, new_name: str) -> tuple[str, int | None]:
+        """Check that an Ingredient may be given this name, without changing anything.
+
+        Returns the name as it would be stored and the id of another Ingredient that already has
+        it, if there is one. Raises ValueError for a blank or very long name or one that offers a
+        choice, and IncompatibleUnitError if that other Ingredient is stored in a different kind
+        of unit, since the two cannot be merged without a density.
+        """
+        ingredient = self.get_ingredient(ingredient_id)
+        if ingredient is None:
+            raise IngredientNotFoundError(ingredient_id)
+        name = " ".join(new_name.split()).lower()
+        if not name:
+            raise ValueError("Enter a name for the ingredient")
+        if len(name) > MAX_INGREDIENT_NAME:
+            raise ValueError(f"An ingredient name can be at most {MAX_INGREDIENT_NAME} characters")
+        if len(split_alternatives(name)) > 1:
+            raise ValueError(
+                f"{name} offers a choice, which is more than one ingredient. Name one food: a"
+                " choice between ingredients belongs in a recipe."
+            )
+        other = self._db.execute(
+            "SELECT id, base_unit FROM ingredients WHERE name = ? AND id != ?",
+            (name, ingredient_id),
+        ).fetchone()
+        if other is None:
+            return name, None
+        if BaseUnit(other[1]) is not ingredient.base_unit:
+            raise IncompatibleUnitError(
+                f"{name} is already an ingredient stored in a different kind of unit"
+            )
+        return name, other[0]
+
+    def rename_ingredient(self, ingredient_id: int, new_name: str) -> int:
+        """Give an Ingredient a new name and return its id.
+
+        If another Ingredient in the same kind of unit already has the name, the two are merged
+        into that one (see `merge_ingredients`) and its id is returned.
+        """
+        name, other = self.check_rename(ingredient_id, new_name)
+        if other is not None:
+            self.merge_ingredients(other, ingredient_id)
+            return other
+        with self._db:
+            self._db.execute("UPDATE ingredients SET name = ? WHERE id = ?", (name, ingredient_id))
+        return ingredient_id
+
+    def tidy_group(self, member_ids: list[int], target: str) -> None:
+        """Merge Ingredients that are one food into the oldest of them and name it `target`.
+
+        Everything is checked first, so nothing changes if the name cannot be used.
+        """
+        keep = min(member_ids)
+        name, other = self.check_rename(keep, target)
+        if other is not None and other not in member_ids:
+            keep = other  # the name belongs to an Ingredient outside the group: merge into it
+        for member in member_ids:
+            if member != keep:
+                self.merge_ingredients(keep, member)
+        if keep == min(member_ids):
+            self.rename_ingredient(keep, name)
+
     def tidy_plan(self) -> list[tuple[list[Ingredient], str]]:
         """What tidying would do: groups of Ingredients that are one food, each with the plain
         name it would end up under.
@@ -347,11 +564,23 @@ class StockRepository:
         return plan
 
     def tidy(self) -> int:
+        """Split, merge and rename Ingredients until nothing is left to do (at most three passes,
+        since splitting makes new names that may need tidying too). Returns how many changes."""
+        total = 0
+        for _ in range(3):
+            changed = self._tidy_once()
+            total += changed
+            if not changed:
+                break
+        return total
+
+    def _tidy_once(self) -> int:
         """Merge Ingredients that are one food and give each its plain name.
 
         Returns how many groups were changed. Allergens and food groups ticked on any of the
         merged Ingredients are kept (see `merge_ingredients`).
         """
+        split = self.split_ingredients()
         plan = self.tidy_plan()
         for members, target in plan:
             keep = next((m for m in members if m.name == target), min(members, key=lambda i: i.id))
@@ -363,7 +592,7 @@ class StockRepository:
                     self._db.execute(
                         "UPDATE ingredients SET name = ? WHERE id = ?", (target, keep.id)
                     )
-        return len(plan)
+        return split + len(plan)
 
     def delete(self, item_id: int) -> None:
         with self._db:

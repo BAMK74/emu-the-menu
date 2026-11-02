@@ -120,3 +120,39 @@ def canonical_name(
         if name_key(existing) == key and (family is None or kind is None or kind == family):
             return existing
     return clean_name(name)
+
+
+# Words that tell one kind of a food from another, such as a colour or a type of oil. In "brown or
+# green lentils" they are the two kinds, and the food is shared.
+_KINDS = frozenset(
+    """
+    red green yellow orange brown white black purple light dark large small medium fresh dried
+    frozen sweet salted unsalted cherry grape roma plum sunflower vegetable canola rapeseed olive
+    sesame coconut peanut almond hazelnut cashew walnut pecan whole skim semi granulated caster
+    """.split()
+)
+
+
+def split_alternatives(name: str) -> list[str]:
+    """The ingredients a name offers a choice of: "water or vegetable broth" is two.
+
+    Where each side is a whole ingredient they are kept as written. Where the sides are only two
+    kinds of one food, the shared ending is added to both: "brown or green lentils" is "brown
+    lentils" and "green lentils". A name with nothing to choose between is returned as it is.
+    """
+    text = name.strip()
+    parts = [p.strip() for p in re.split(r"\s+(?:and/or|or)\s+", text, flags=re.IGNORECASE)]
+    if len(parts) < 2 or not all(parts):
+        return [text]
+    tail = parts[-1].split()
+    shared = tail[1:] if len(tail) >= 2 and tail[0].lower() in _KINDS else []
+    result = []
+    for part in parts[:-1]:
+        words = part.split()
+        # "all-natural salted peanut or almond butter": the last word is the kind, the rest of
+        # the left side describes it.
+        if shared and words and words[-1].lower() in _KINDS:
+            part = " ".join([part, *shared])
+        result.append(part)
+    result.append(parts[-1])
+    return list(dict.fromkeys(result))

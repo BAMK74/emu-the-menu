@@ -48,6 +48,10 @@ _Avoid_: Product, item, food
 A named dish made from quantities of Ingredients, with tags such as warm, cold or festive.
 _Avoid_: Dish, meal idea
 
+**Alternatives**:
+Ingredients on one Recipe line of which any one may be used, such as water or vegetable broth. A Recipe takes the allergens of all of them.
+_Avoid_: Substitutes, options
+
 **Stock Item**:
 A quantity of one Ingredient held in a Location, with an optional expiry date.
 _Avoid_: Inventory entry, pantry item

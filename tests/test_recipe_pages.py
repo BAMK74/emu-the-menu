@@ -291,7 +291,9 @@ def test_recipes_appear_in_the_json_export(client):
     create(client, tags="quick")
     exported = client.get("/export.json").json()["recipes"]
     assert exported[0]["name"] == "Tomato rice"
-    assert exported[0]["lines"][0] == {"ingredient": "rice", "quantity": 200, "unit": "g"}
+    assert exported[0]["lines"][0] == {
+        "ingredient": "rice", "quantity": 200, "unit": "g", "alternative_group": None,
+    }  # fmt: skip
 
 
 def test_new_ingredients_from_a_recipe_appear_on_the_ingredients_page_as_unchecked(client):

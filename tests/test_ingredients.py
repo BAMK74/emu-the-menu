@@ -170,7 +170,7 @@ def test_suggestions_come_in_the_standard_order():
         "garlic", "onion", "red onion", "carrots", "cherry tomatoes", "diced tomatoes",
         "fresh basil leaves", "chopped fresh cilantro", "lemon juice", "olive oil",
         "extra virgin olive oil", "water", "ice water", "white sugar", "brown sugar",
-        "red bell pepper", "baby spinach", "frozen peas", "chickpeas", "brown or green lentils",
+        "red bell pepper", "baby spinach", "frozen peas", "chickpeas", "brown lentils",
         "black beans", "cucumber", "sweet potatoes", "dried oregano", "ground cumin", "kale",
     ],
 )  # fmt: skip
@@ -237,10 +237,10 @@ def test_a_bare_oil_could_be_anything_so_it_needs_a_look():
         "long grain rice", "jasmine rice", "steamed jasmine rice", "uncooked quinoa",
         "strawberries", "raspberries", "dates", "limes", "eating apple", "banana slices",
         "cannellini beans", "kidney beans", "jalapeño", "green chiles", "fresno chiles",
-        "iceberg lettuce", "bean sprouts", "choy sum", "bok choys", "collard greens or kale",
+        "iceberg lettuce", "bean sprouts", "choy sum", "bok choys", "collard greens",
         "maris piper potatoes", "lemon wedges", "pumpkin seeds", "roasted sunflower seeds",
         "chia seeds", "flaxseed meal", "pitted kalamata olives", "bundle rainbow chard",
-        "or 2 med. yellow heirloom tomatoes", "cooked jasmine rice", "green beans or haricot verts",
+        "or 2 med. yellow heirloom tomatoes", "cooked jasmine rice", "green beans", "haricot verts",
     ],
 )  # fmt: skip
 def test_more_plain_foods_look_plain(name):
@@ -302,7 +302,7 @@ def test_accents_do_not_break_the_words():
         "chickpeas (counted)", "onion (by weight)", "tomatoes (counted)", "cucumber (by volume)",
         "bunch lacinato kale", "flat-leaf parsley", "thai basil leaves", "black beluga lentils",
         "frozen corn kernels", "reserved corn kernels", "corn on the cob", "caraway seeds",
-        "smoked paprika", "birds eye or thai chilli", "herbs", "fruit", "caster sugar",
+        "smoked paprika", "birds eye chilli", "herbs", "fruit", "caster sugar",
         "baking soda", "baking soda / bi-carb",
     ],
 )  # fmt: skip
