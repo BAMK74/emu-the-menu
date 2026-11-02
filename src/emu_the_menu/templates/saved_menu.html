@@ -1,0 +1,15 @@
+{% extends "base.html" %}
+{% block title %}Emu the Menu - {{ saved.name }}{% endblock %}
+{% block heading %}{{ saved.name }}{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+  <div class="warning-note" role="note">
+    <p><strong>Suggestions, not advice.</strong> Emu the Menu cannot check what a product really contains, so always read the label of everything you cook with. A recipe marked "Not checked" has an ingredient nobody has reviewed. Portions are a rough guide from calorie goals, not medical or dietary advice. <a href="/disclaimer">Read the disclaimer</a>.</p>
+  </div>
+  <p class="hint">{{ label(saved.start) }}, {{ saved.days }} day{{ "" if saved.days == 1 else "s" }}.
+    <a href="/menus">All saved menus</a></p>
+  {% include "_menu_days.html" %}
+  <form method="post" action="/menus/{{ saved.id }}/delete" data-confirm="Delete this saved menu?">
+    <button class="quiet" type="submit">Delete this menu</button>
+  </form>
+{% endblock %}

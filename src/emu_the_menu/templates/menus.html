@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+{% block title %}Emu the Menu - Saved menus{% endblock %}
+{% block heading %}Saved menus{% endblock %}
+{% block content %}
+  <p><a class="button quiet" href="/menu">Plan a new menu</a></p>
+  {% if menus %}
+  <section class="results" aria-label="Saved menus">
+    {% for m in menus %}
+    <article class="card">
+      <h3><a href="/menus/{{ m.id }}">{{ m.name }}</a></h3>
+      <p class="hint">{{ label(m.start) }}, {{ m.days }} day{{ "" if m.days == 1 else "s" }}, {{ m.meals|length }} meal{{ "" if m.meals|length == 1 else "s" }}</p>
+    </article>
+    {% endfor %}
+  </section>
+  {% else %}
+  <p class="empty">No saved menus yet. Plan one on the <a href="/menu">Menu</a> page and press "Save this menu".</p>
+  {% endif %}
+{% endblock %}

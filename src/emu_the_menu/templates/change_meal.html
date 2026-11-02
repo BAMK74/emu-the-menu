@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Emu the Menu - Change a meal{% endblock %}
+{% block heading %}Change a meal{% endblock %}
+{% block content %}
+  <div class="warning-note" role="note">
+    <p><strong>Suggestions, not advice.</strong> Every recipe below passed the allergy and diet checks for the people at this meal, but Emu the Menu cannot check what a product really contains, so always read the label. <a href="/disclaimer">Read the disclaimer</a>.</p>
+  </div>
+  <p>{{ label(meal.day) }}, {{ meal.slot.label|lower }}, in <a href="/menus/{{ saved.id }}">{{ saved.name }}</a>.
+    For {% for d in diners %}{{ d.name }}{{ ", " if not loop.last }}{% endfor %}.</p>
+  {% if error %}<p class="error" role="alert">error: {{ error }}</p>{% endif %}
+  {% if options %}
+  <form method="post" action="/menus/{{ saved.id }}/meals/{{ meal.id }}">
+    <section class="results" aria-label="Recipes for this meal">
+      {% for recipe, facts, portions in options %}
+      <article class="card">
+        <label><input type="radio" name="recipe" value="{{ recipe.id }}"{{ " checked" if recipe.id == meal.recipe_id }} required>
+          <strong>{{ recipe.name }}</strong>{% if recipe.id == meal.recipe_id %} (current){% endif %}</label>
+        <p class="hint">{% if facts.calories_per_serving is not none %}{{ "%d"|format(facts.calories_per_serving|round) }} kcal a serving{% else %}calories unknown{% endif %}.
+          {% for p in portions %}{{ p.eater.name }} {{ "%g"|format(p.servings) }}{{ ", " if not loop.last }}{% endfor %} serving{{ "" if portions|length == 1 and portions[0].servings == 1 else "s" }}.
+          {% if facts.unchecked %}Not checked: {{ facts.unchecked|join(", ") }}.{% endif %}</p>
+      </article>
+      {% endfor %}
+    </section>
+    <div class="buttons">
+      <button type="submit">Use this recipe</button>
+      <a class="button quiet" href="/menus/{{ saved.id }}">Cancel</a>
+    </div>
+  </form>
+  {% else %}
+  <p class="empty">No recipe is tagged for {{ meal.slot.label|lower }} and suits everyone at this meal. <a href="/menus/{{ saved.id }}">Back to the menu</a></p>
+  {% endif %}
+{% endblock %}

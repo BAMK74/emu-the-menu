@@ -445,3 +445,42 @@ def test_all_six_slots_share_out_exactly_the_whole_day():
     )
     total = sum(m.portions[0].kcal for m in menu.meals)
     assert total == pytest.approx(2000, rel=0.02)
+
+
+# --- choosing a recipe for one meal -----------------------------------------------------------
+
+
+def test_portions_for_one_meal_follow_the_eaters_share_of_the_day():
+    from emu_the_menu.planner import portions_for
+
+    [portion] = portions_for(
+        recipe("rich", [ing("rich", kcal=500)]), [eater(goal=2000)], Slot.DINNER, [Slot.DINNER]
+    )
+    assert portion.servings == 4 and portion.kcal == 2000
+
+
+def test_portions_for_a_slot_use_only_its_share_of_the_chosen_slots():
+    from emu_the_menu.planner import portions_for
+
+    both = [Slot.LUNCH, Slot.DINNER]
+    [portion] = portions_for(
+        recipe("rich", [ing("rich", kcal=500)], meals=(L,)), [eater(goal=2000)], Slot.LUNCH, both
+    )
+    assert portion.kcal == pytest.approx(2000 * 0.30 / 0.65, abs=250)
+
+
+def test_choices_for_a_meal_are_the_tagged_recipes_that_suit_everyone():
+    from emu_the_menu.planner import choices_for
+
+    plain = recipe("plain", [ing("plain")])
+    nutty = recipe("nutty", [ing("nuts", allergens=(Allergen.PEANUTS,))])
+    lunch_only = recipe("lunch only", [ing("soup")], meals=(L,))
+    allergic = eater("Alex", allergens=(Allergen.PEANUTS,))
+    assert choices_for([plain, nutty, lunch_only], [allergic], Slot.DINNER) == [plain]
+
+
+def test_choices_are_listed_by_name():
+    from emu_the_menu.planner import choices_for
+
+    b, a = recipe("b", [ing("x")]), recipe("a", [ing("y")])
+    assert [r.name for r in choices_for([b, a], [eater()], Slot.DINNER)] == ["a", "b"]

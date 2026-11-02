@@ -1,19 +1,22 @@
 """The Menu page: plan a few days of Meals for the people ticked, from the Recipes and the Stock.
 
 The plan is made fresh from the address, so the same settings and seed always give the same page.
-Nothing is saved yet: reshuffling just changes the seed.
+Nothing is saved until "Save this menu", which makes the same plan again from the same settings
+and keeps it (see `web_saved_menus`). Reshuffling just changes the seed.
 """
 
+from dataclasses import dataclass
 from datetime import date
 from itertools import groupby
 from pathlib import Path
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Query, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, RedirectResponse
 
-from emu_the_menu.eaters import EaterRepository
-from emu_the_menu.planner import PlanSettings, Slot, plan
+from emu_the_menu.eaters import Eater, EaterRepository
+from emu_the_menu.menu_repository import MenuRepository
+from emu_the_menu.planner import Menu, PlanSettings, Slot, plan
 from emu_the_menu.recipe_repository import RecipeRepository
 from emu_the_menu.recipes import analyse
 from emu_the_menu.repository import StockRepository
@@ -41,20 +44,106 @@ def day_label(day: date) -> str:
     return f"{day.strftime('%a')} {day.day} {day.strftime('%b')}"
 
 
+def stock_map(stock: StockRepository) -> dict[int, date | None]:
+    """Ingredient id to when what is held runs out: None if any of it never expires."""
+    ids = {i.name: i.id for i in stock.ingredients()}
+    held: dict[int, list[date | None]] = {}
+    for item in stock.list_items():
+        if item.quantity > 0 and item.ingredient in ids:
+            held.setdefault(ids[item.ingredient], []).append(item.expires_on)
+    return {
+        ingredient_id: None if None in dates else max(dates)  # type: ignore[type-var]
+        for ingredient_id, dates in held.items()
+    }
+
+
+def days_of(meals):
+    """Meals grouped by day for the template, each with its unchecked Ingredients."""
+
+    def view(meal):
+        unchecked = ()
+        if meal.recipe:
+            unchecked = analyse(meal.recipe.for_analysis, meal.recipe.servings).unchecked
+        return meal, unchecked
+
+    return [(day, [view(m) for m in group]) for day, group in groupby(meals, key=lambda m: m.day)]
+
+
+@dataclass(frozen=True)
+class PlanRequest:
+    """The settings of a plan, checked."""
+
+    start: date
+    days: int
+    slots: list[Slot]
+    people: list[Eater]
+    allowance: int
+    cooldown: int
+    seed: int
+
+    def run(self, db_path: str | Path) -> Menu:
+        with (
+            RecipeRepository(db_path) as recipes,
+            StockRepository(db_path) as stock,
+            MenuRepository(db_path) as menus,
+        ):
+            return plan(
+                self.start,
+                self.days,
+                self.slots,
+                recipes.recipes(),
+                self.people,
+                stock_map(stock),
+                seed=self.seed,
+                settings=PlanSettings(self.allowance, self.cooldown),
+                last_served=menus.last_served(),
+            )
+
+    def query(self, seed: int) -> list[tuple[str, object]]:
+        return [
+            ("go", "1"),
+            ("start", self.start.isoformat()),
+            ("days", self.days),
+            *[("meal_types", m.value) for m in self.slots],
+            *[("eater", p.id) for p in self.people],
+            ("allowance", self.allowance),
+            ("cooldown", self.cooldown),
+            ("seed", seed),
+        ]
+
+
+def parse_plan(
+    everyone: list[Eater],
+    start: str,
+    days: str,
+    meal_types: list[str],
+    eater: list[int],
+    allowance: str,
+    cooldown: str,
+    seed: str,
+) -> PlanRequest:
+    """Check the settings of a plan. Raises ValueError with a message to show."""
+    try:
+        first = date.fromisoformat(start)
+    except ValueError:
+        raise ValueError("Enter a valid start date") from None
+    length = _whole(days, 1, MAX_DAYS, f"Choose between 1 and {MAX_DAYS} days")
+    shop = _whole(
+        allowance, 0, MAX_ALLOWANCE, f"The shopping allowance must be 0 to {MAX_ALLOWANCE}"
+    )
+    cool = _whole(cooldown, 0, MAX_COOLDOWN, f"The cooldown must be 0 to {MAX_COOLDOWN} days")
+    number = _whole(seed, 0, 10**9, "The seed must be a number")
+    if not meal_types or not set(meal_types) <= {s.value for s in Slot}:
+        raise ValueError("Choose meal types from the list, at least one")
+    people = [e for e in everyone if e.id in eater]
+    if not people:
+        raise ValueError("Choose who is eating")
+    slots = [s for s in Slot if s.value in meal_types]
+    return PlanRequest(first, length, slots, people, shop, cool, number)
+
+
 def create_router(db_path: str | Path, today=date.today) -> APIRouter:
     router = APIRouter()
-
-    def stock_map(stock: StockRepository) -> dict[int, date | None]:
-        """Ingredient id to when what is held runs out: None if any of it never expires."""
-        ids = {i.name: i.id for i in stock.ingredients()}
-        held: dict[int, list[date | None]] = {}
-        for item in stock.list_items():
-            if item.quantity > 0 and item.ingredient in ids:
-                held.setdefault(ids[item.ingredient], []).append(item.expires_on)
-        return {
-            ingredient_id: None if None in dates else max(dates)  # type: ignore[type-var]
-            for ingredient_id, dates in held.items()
-        }
 
     @router.get("/menu", response_class=HTMLResponse)
     def menu(
@@ -92,6 +181,7 @@ def create_router(db_path: str | Path, today=date.today) -> APIRouter:
             "error": None,
             "reshuffle": None,
             "label": day_label,
+            "save_fields": None,
         }
 
         def answer(error: str | None = None, status: int = 200, **extra):
@@ -102,62 +192,49 @@ def create_router(db_path: str | Path, today=date.today) -> APIRouter:
         if not everyone:
             return answer()
         try:
-            first = date.fromisoformat(form["start"])
-        except ValueError:
-            return answer("Enter a valid start date", 400)
-        try:
-            length = _whole(days, 1, MAX_DAYS, f"Choose between 1 and {MAX_DAYS} days")
-            shop = _whole(
-                allowance, 0, MAX_ALLOWANCE, f"The shopping allowance must be 0 to {MAX_ALLOWANCE}"
+            settings = parse_plan(
+                everyone,
+                form["start"],
+                days,
+                chosen_meals,
+                chosen_eaters,
+                allowance,
+                cooldown,
+                seed,
             )
-            cool = _whole(
-                cooldown, 0, MAX_COOLDOWN, f"The cooldown must be 0 to {MAX_COOLDOWN} days"
-            )
-            number = _whole(seed, 0, 10**9, "The seed must be a number")
         except ValueError as exc:
             return answer(str(exc), 400)
-        valid_meals = {s.value for s in Slot}
-        if not chosen_meals or not set(chosen_meals) <= valid_meals:
-            return answer("Choose meal types from the list, at least one", 400)
-        people = [e for e in everyone if e.id in chosen_eaters]
-        if not people:
-            return answer("Choose who is eating", 400)
-
-        meal_types_chosen = [s for s in Slot if s.value in chosen_meals]
-        with RecipeRepository(db_path) as recipes, StockRepository(db_path) as stock:
-            result = plan(
-                first,
-                length,
-                meal_types_chosen,
-                recipes.recipes(),
-                people,
-                stock_map(stock),
-                seed=number,
-                settings=PlanSettings(shop, cool),
-            )
-
-        def view(meal):
-            unchecked = ()
-            if meal.recipe:
-                unchecked = analyse(meal.recipe.for_analysis, meal.recipe.servings).unchecked
-            return meal, unchecked
-
-        by_day = [
-            (day, [view(m) for m in meals])
-            for day, meals in groupby(result.meals, key=lambda m: m.day)
-        ]
-        reshuffle = "/menu?" + urlencode(
-            [
-                ("go", "1"),
-                ("start", form["start"]),
-                ("days", length),
-                *[("meal_types", m.value) for m in meal_types_chosen],
-                *[("eater", p.id) for p in people],
-                ("allowance", shop),
-                ("cooldown", cool),
-                ("seed", number + 1),
-            ]
+        result = settings.run(db_path)
+        return answer(
+            days_shown=days_of(result.meals),
+            shopping=result.shopping,
+            reshuffle="/menu?" + urlencode(settings.query(settings.seed + 1)),
+            save_fields=settings.query(settings.seed),
         )
-        return answer(days_shown=by_day, shopping=result.shopping, reshuffle=reshuffle)
+
+    @router.post("/menu/save")
+    async def save(request: Request):
+        """Plan again from the same settings and keep the result as a saved Menu."""
+        form = await request.form()
+        # Opened here, not injected: a connection must stay in the thread that made it.
+        with EaterRepository(db_path) as eater_repo:
+            everyone = eater_repo.list()
+        try:
+            settings = parse_plan(
+                everyone,
+                str(form.get("start", "")),
+                str(form.get("days", "")),
+                [str(v) for v in form.getlist("meal_types")],
+                [int(v) for v in form.getlist("eater") if str(v).isdigit()],
+                str(form.get("allowance", _DEFAULTS.shopping_allowance)),
+                str(form.get("cooldown", _DEFAULTS.cooldown_days)),
+                str(form.get("seed", "0")),
+            )
+        except ValueError as exc:
+            return HTMLResponse(f"error: {exc}", status_code=400)
+        result = settings.run(db_path)
+        with MenuRepository(db_path) as menus:
+            menu_id = menus.save(str(form.get("name", "")), settings.start, settings.days, result)
+        return RedirectResponse(f"/menus/{menu_id}", status_code=303)
 
     return router

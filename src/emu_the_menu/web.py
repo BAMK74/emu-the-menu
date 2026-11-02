@@ -33,6 +33,7 @@ from emu_the_menu.web_ingredient_review import create_router as create_review_ro
 from emu_the_menu.web_ingredients import create_router as create_ingredients_router
 from emu_the_menu.web_menu import create_router as create_menu_router
 from emu_the_menu.web_recipes import create_router as create_recipes_router
+from emu_the_menu.web_saved_menus import create_router as create_saved_menus_router
 
 # Pages the Settings overlay may send you back to after saving.
 _RETURN_PAGES = ("/", "/eaters")
@@ -88,6 +89,7 @@ def create_app(
     app.include_router(create_ingredients_router(path, fetch_product))
     app.include_router(create_recipes_router(path, fetch_recipe_page))
     app.include_router(create_menu_router(path, today))
+    app.include_router(create_saved_menus_router(path, today))
     app.include_router(create_disclaimer_router(path, today))
     app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 

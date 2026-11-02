@@ -376,7 +376,7 @@
       <span>Emu the Menu</span>
     </a>
     <nav aria-label="Main">
-      {% block nav %}<a href="/"{% if request.url.path == "/" %} aria-current="page"{% endif %}>Stock</a><a href="/menu"{% if request.url.path == "/menu" %} aria-current="page"{% endif %}>Menu</a><a href="/recipes"{% if request.url.path.startswith("/recipes") %} aria-current="page"{% endif %}>Recipes</a><a href="/ingredients"{% if request.url.path.startswith("/ingredients") %} aria-current="page"{% endif %}>Ingredients</a><a href="/eaters"{% if request.url.path == "/eaters" %} aria-current="page"{% endif %}>Eaters</a><a id="settings-link" href="/settings"{% if request.url.path == "/settings" %} aria-current="page"{% endif %}>Settings</a>{% endblock %}
+      {% block nav %}<a href="/"{% if request.url.path == "/" %} aria-current="page"{% endif %}>Stock</a><a href="/menu"{% if request.url.path == "/menu" or request.url.path.startswith("/menus") %} aria-current="page"{% endif %}>Menu</a><a href="/recipes"{% if request.url.path.startswith("/recipes") %} aria-current="page"{% endif %}>Recipes</a><a href="/ingredients"{% if request.url.path.startswith("/ingredients") %} aria-current="page"{% endif %}>Ingredients</a><a href="/eaters"{% if request.url.path == "/eaters" %} aria-current="page"{% endif %}>Eaters</a><a id="settings-link" href="/settings"{% if request.url.path == "/settings" %} aria-current="page"{% endif %}>Settings</a>{% endblock %}
     </nav>
   </div>
 </header>

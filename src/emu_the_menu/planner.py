@@ -96,6 +96,8 @@ class Meal:
     recipe: Recipe | None
     portions: tuple[Portion, ...] = ()
     reason: str = ""  # why there is no Recipe, when there is none
+    id: int | None = None  # the saved Meal this is, once the Menu is saved
+    cooked_on: date | None = None
 
     @property
     def meal_type(self) -> MealType:
@@ -240,6 +242,46 @@ def plan(
                 served[meal.recipe.id] = day
                 missing.update(newly_missing)
     return Menu(tuple(meals), tuple(sorted(missing.values(), key=lambda i: i.name)))
+
+
+def portions_for(
+    recipe: Recipe, eaters: Sequence[Eater], slot: Slot, slots: Collection[Slot]
+) -> tuple[Portion, ...]:
+    """What each Eater gets of `recipe` in `slot`, when the day is shared between `slots`."""
+    kcal = analyse(recipe.for_analysis, recipe.servings).calories_per_serving
+    return _portions(eaters, _targets(eaters, slot, slots), kcal)
+
+
+def choices_for(recipes: Sequence[Recipe], eaters: Sequence[Eater], slot: Slot) -> list[Recipe]:
+    """The Recipes that may be put in a Meal: tagged for the slot and suiting every Eater.
+
+    These are the hard rules that depend only on the Meal. Cooldown and the Shopping Allowance
+    are left to the person choosing.
+    """
+    found = []
+    for recipe in recipes:
+        if slot.meal_type not in recipe.meal_types:
+            continue
+        facts = analyse(recipe.for_analysis, recipe.servings)
+        if all(assess(recipe, facts, eater).ok for eater in eaters):
+            found.append(recipe)
+    return sorted(found, key=lambda r: r.name.lower())
+
+
+def shopping_for(meals: Sequence[Meal], stock: Mapping[int, date | None]) -> list[Ingredient]:
+    """The Ingredients the Meals' Recipes need that Stock lacks on the day, by name.
+
+    A group of alternatives needs nothing if any of them is in Stock, and otherwise one purchase,
+    of the first.
+    """
+    missing: dict[int, Ingredient] = {}
+    for meal in meals:
+        if meal.recipe is None:
+            continue
+        for slot in meal.recipe.slots:
+            if not any(_in_stock(stock, i.id, meal.day) for i in slot):
+                missing[slot[0].id] = slot[0]
+    return sorted(missing.values(), key=lambda i: i.name)
 
 
 def _fill(day, slot, slots, candidates, eaters, stock, served, missing, weather, settings, rng):
