@@ -5,6 +5,7 @@ A saved Menu holds only which Recipe is in each Meal and each person's servings.
 Stock as they are now.
 """
 
+import random
 from datetime import date
 from pathlib import Path
 
@@ -14,7 +15,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from emu_the_menu.cooking import Pantry, shopping_amounts, uses_for
 from emu_the_menu.eaters import EaterRepository
 from emu_the_menu.menu_repository import MenuNotFoundError, MenuRepository, SavedMenu
-from emu_the_menu.planner import Meal, Portion, choices_for, portions_for
+from emu_the_menu.planner import Meal, Portion, choices_for, plan, portions_for
 from emu_the_menu.recipe_repository import RecipeRepository
 from emu_the_menu.recipes import analyse
 from emu_the_menu.repository import StockRepository
@@ -84,8 +85,13 @@ def create_router(db_path: str | Path, today=date.today) -> APIRouter:
             raise HTTPException(404, "No such meal")
         return saved, meal
 
-    def eaters_of(meal, people):
-        return [people[p.eater_id] for p in meal.portions if p.eater_id in people]
+    def table_of(saved, meal, people):
+        """Who a Meal is for. Older Menus kept nobody for an empty Meal, so the people of the
+        Menu's other Meals stand in; with nobody known, nothing may be chosen for it."""
+        ids = [p.eater_id for p in meal.portions] or sorted(
+            {p.eater_id for m in saved.meals for p in m.portions}
+        )
+        return [people[i] for i in ids if i in people]
 
     @router.get("/menus/{menu_id}/meals/{meal_id}", response_class=HTMLResponse)
     def change_page(request: Request, menu_id: int, meal_id: int, error: str = ""):
@@ -97,10 +103,10 @@ def create_router(db_path: str | Path, today=date.today) -> APIRouter:
         with EaterRepository(db_path) as eaters, RecipeRepository(db_path) as recipes:
             people = {e.id: e for e in eaters.list()}
             everything = recipes.recipes()
-        diners = eaters_of(meal, people)
+        diners = table_of(saved, meal, people)
         slots = sorted({m.slot for m in saved.meals if m.day == meal.day})
         options = []
-        for recipe in choices_for(everything, diners, meal.slot):
+        for recipe in choices_for(everything, diners, meal.slot) if diners else []:
             facts = analyse(recipe.for_analysis, recipe.servings)
             options.append((recipe, facts, portions_for(recipe, diners, meal.slot, slots)))
         return TEMPLATES.TemplateResponse(
@@ -127,10 +133,14 @@ def create_router(db_path: str | Path, today=date.today) -> APIRouter:
             with EaterRepository(db_path) as eaters, RecipeRepository(db_path) as recipes:
                 people = {e.id: e for e in eaters.list()}
                 everything = recipes.recipes()
-            diners = eaters_of(meal, people)
+            diners = table_of(saved, meal, people)
             # The same rules as the list, checked again: a posted id is not trusted.
             chosen = next(
-                (r for r in choices_for(everything, diners, meal.slot) if str(r.id) == wanted),
+                (
+                    r
+                    for r in (choices_for(everything, diners, meal.slot) if diners else [])
+                    if str(r.id) == wanted
+                ),
                 None,
             )
             if chosen is None:
@@ -149,6 +159,50 @@ def create_router(db_path: str | Path, today=date.today) -> APIRouter:
                 )
             except ValueError as exc:
                 return _change(request, menu_id, meal_id, str(exc), 400)
+        return RedirectResponse(f"/menus/{menu_id}", status_code=303)
+
+    @router.post("/menus/{menu_id}/meals/{meal_id}/reshuffle")
+    def reshuffle(request: Request, menu_id: int, meal_id: int):
+        """Pick another recipe for one meal, by the planner's own rules and scoring.
+
+        The planner is run for that day alone with the current recipe left out, so the result
+        suits everyone at the table, respects the Cooldown (from cooked meals) and prefers what
+        is in Stock. A new seed each time means pressing it again gives another.
+        """
+        with MenuRepository(db_path) as repo:
+            saved, meal = find_meal(repo, menu_id, meal_id)
+            if meal.cooked_on is not None:
+                raise HTTPException(400, "A cooked meal cannot be changed")
+            with EaterRepository(db_path) as eaters, RecipeRepository(db_path) as recipes:
+                people = {e.id: e for e in eaters.list()}
+                everything = recipes.recipes()
+            diners = table_of(saved, meal, people)
+            others = [r for r in everything if r.id != meal.recipe_id]
+            day_slots = sorted({m.slot for m in saved.meals if m.day == meal.day})
+            picked = None
+            if diners:
+                with StockRepository(db_path) as stock:
+                    held = stock_lots(stock)
+                result = plan(
+                    meal.day,
+                    1,
+                    day_slots,
+                    others,
+                    diners,
+                    held,
+                    seed=random.SystemRandom().randrange(10**9),
+                    last_served=repo.last_served(),
+                )
+                picked = next((m for m in result.meals if m.slot is meal.slot), None)
+            if picked is None or picked.recipe is None:
+                why = picked.reason if picked else "Nobody is recorded as eating this meal"
+                return _change(request, menu_id, meal_id, f"No other recipe fits: {why}", 400)
+            repo.set_meal(
+                menu_id,
+                meal_id,
+                picked.recipe.id,
+                [(p.eater.id, p.servings) for p in picked.portions],
+            )
         return RedirectResponse(f"/menus/{menu_id}", status_code=303)
 
     def cook(menu_id: int, meal_id: int, day: date | None):

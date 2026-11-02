@@ -273,3 +273,9 @@ def test_what_was_taken_belongs_to_a_meal_of_that_menu(repo, soup, sam):
     _, other_meal = saved_meal(repo, soup, sam)
     with pytest.raises(MenuNotFoundError):
         repo.taken(menu_id, other_meal)
+
+
+def test_a_gap_keeps_the_people_at_its_table_with_no_servings(repo, sam):
+    empty = Meal(START, Slot.LUNCH, None, reason="none")
+    saved = repo.get(repo.save("Gap", START, 1, Menu((empty,), ()), table=[sam]))
+    assert [(p.eater_id, p.servings) for p in saved.meals[0].portions] == [(sam.id, 0.0)]

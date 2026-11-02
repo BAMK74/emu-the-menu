@@ -244,7 +244,9 @@ def create_router(db_path: str | Path, today=date.today) -> APIRouter:
             return HTMLResponse(f"error: {exc}", status_code=400)
         result = settings.run(db_path)
         with MenuRepository(db_path) as menus:
-            menu_id = menus.save(str(form.get("name", "")), settings.start, settings.days, result)
+            menu_id = menus.save(
+                str(form.get("name", "")), settings.start, settings.days, result, settings.people
+            )
         return RedirectResponse(f"/menus/{menu_id}", status_code=303)
 
     return router

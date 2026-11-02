@@ -469,3 +469,103 @@ def test_the_menu_page_accepts_plenty_of_stock_under_a_zero_allowance(client, db
     stock_carrots(db_path, 100_000)
     query = QUERY.format(eater=kitchen) + "&allowance=0"
     assert "Carrot soup" in text_of(client.get("/menu?" + query).text)
+
+
+# --- reshuffling one meal ---------------------------------------------------------------------
+
+
+def test_each_uncooked_meal_offers_to_pick_another_recipe(client, db_path, kitchen):
+    location = save(client, kitchen).headers["location"]
+    menu_id, meal = first_meal(db_path, location)
+    html = client.get(location).text
+    assert f'action="/menus/{menu_id}/meals/{meal.id}/reshuffle"' in html
+    assert "Pick another" in html
+    post_to(client, menu_id, meal.id, "cooked")
+    assert f"/menus/{menu_id}/meals/{meal.id}/reshuffle" not in client.get(location).text
+
+
+def test_reshuffling_swaps_in_a_different_suitable_recipe(client, db_path, kitchen):
+    location = save(client, kitchen).headers["location"]
+    pea = add_dinner(db_path, "Pea soup", "peas")
+    menu_id, meal = first_meal(db_path, location)
+    response = post_to(client, menu_id, meal.id, "reshuffle")
+    assert response.status_code == 303 and response.headers["location"] == location
+    with MenuRepository(db_path) as menus:
+        changed = menus.get(menu_id).meals[0]
+    assert changed.recipe_id == pea
+    assert changed.portions and changed.portions[0].servings > 0
+
+
+def test_reshuffling_never_picks_a_recipe_that_does_not_suit(client, db_path, kitchen):
+    from emu_the_menu.allergens import Allergen
+
+    location = save(client, kitchen).headers["location"]
+    add_dinner(db_path, "Peanut stew", "peanuts", allergens=(Allergen.PEANUTS,))
+    with EaterRepository(db_path) as eaters:
+        sam = eaters.list()[0]
+        eaters.update(sam.id, sam.name, sam.category, allergens=(Allergen.PEANUTS,))
+    menu_id, meal = first_meal(db_path, location)
+    response = post_to(client, menu_id, meal.id, "reshuffle")
+    assert response.status_code == 400
+    assert "No other recipe" in text_of(response.text)
+    with MenuRepository(db_path) as menus:
+        assert menus.get(menu_id).meals[0].recipe_id == meal.recipe_id
+
+
+def test_reshuffling_with_no_other_recipe_says_so_and_changes_nothing(client, db_path, kitchen):
+    location = save(client, kitchen).headers["location"]
+    menu_id, meal = first_meal(db_path, location)
+    response = post_to(client, menu_id, meal.id, "reshuffle")
+    assert response.status_code == 400 and "No other recipe" in text_of(response.text)
+    with MenuRepository(db_path) as menus:
+        assert menus.get(menu_id).meals[0].recipe_id == meal.recipe_id
+
+
+def test_reshuffling_fills_a_gap_in_the_menu(client, db_path, kitchen):
+    location = save(client, kitchen).headers["location"]
+    add_dinner(db_path, "Pea soup", "peas")
+    menu_id, _ = first_meal(db_path, location)
+    with MenuRepository(db_path) as menus:
+        gap = menus.get(menu_id).meals[1]
+    assert gap.recipe_id is None
+    response = post_to(client, menu_id, gap.id, "reshuffle")
+    assert response.status_code == 303
+    with MenuRepository(db_path) as menus:
+        assert menus.get(menu_id).meals[1].recipe_id is not None
+
+
+def test_a_cooked_meal_cannot_be_reshuffled(client, db_path, kitchen):
+    location = save(client, kitchen).headers["location"]
+    add_dinner(db_path, "Pea soup", "peas")
+    menu_id, meal = first_meal(db_path, location)
+    post_to(client, menu_id, meal.id, "cooked")
+    assert post_to(client, menu_id, meal.id, "reshuffle").status_code == 400
+    with MenuRepository(db_path) as menus:
+        assert menus.get(menu_id).meals[0].recipe_id == meal.recipe_id
+
+
+def test_reshuffling_unknown_meals_is_a_404(client, db_path, kitchen):
+    location = save(client, kitchen).headers["location"]
+    menu_id, _ = first_meal(db_path, location)
+    assert post_to(client, menu_id, 9999, "reshuffle").status_code == 404
+    assert post_to(client, 99, 1, "reshuffle").status_code == 404
+
+
+def test_a_gap_meal_still_knows_who_is_at_the_table(client, db_path, kitchen):
+    from emu_the_menu.allergens import Allergen
+
+    with EaterRepository(db_path) as eaters:
+        sam = eaters.list()[0]
+        eaters.update(sam.id, sam.name, sam.category, allergens=(Allergen.PEANUTS,))
+    location = save(client, kitchen).headers["location"]
+    add_dinner(db_path, "Peanut stew", "peanuts", allergens=(Allergen.PEANUTS,))
+    menu_id, _ = first_meal(db_path, location)
+    with MenuRepository(db_path) as menus:
+        gap = menus.get(menu_id).meals[1]
+    assert gap.recipe_id is None
+    page = client.get(f"/menus/{menu_id}/meals/{gap.id}")
+    assert page.status_code == 200
+    text = text_of(page.text)
+    assert "Carrot soup" in text and "Peanut stew" not in text
+    forced = client.post(f"/menus/{menu_id}/meals/{gap.id}", data={"recipe": "2"})
+    assert forced.status_code == 400

@@ -11,7 +11,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from emu_the_menu.eaters import EaterRepository
+from emu_the_menu.eaters import Eater, EaterRepository
 from emu_the_menu.planner import Menu, Slot
 from emu_the_menu.recipe_repository import RecipeRepository
 from emu_the_menu.stock import Location, TakenLot
@@ -107,8 +107,14 @@ class MenuRepository:
         self._recipes.close()
         self._eaters.close()
 
-    def save(self, name: str, start: date, days: int, menu: Menu) -> int:
-        """Keep a planned Menu and return its id."""
+    def save(
+        self, name: str, start: date, days: int, menu: Menu, table: Sequence[Eater] = ()
+    ) -> int:
+        """Keep a planned Menu and return its id.
+
+        `table` is who the Menu is for. A Meal with no Recipe keeps them with no servings, so it
+        is still known who a Recipe put there later has to suit.
+        """
         name = " ".join(name.split()) or f"Menu from {start.day} {start:%b %Y}"
         with self._db:
             menu_id = self._db.execute(
@@ -129,7 +135,8 @@ class MenuRepository:
                 ).lastrowid
                 self._db.executemany(
                     "INSERT INTO menu_portions (meal_id, eater_id, servings) VALUES (?, ?, ?)",
-                    [(meal_id, p.eater.id, p.servings) for p in meal.portions],
+                    [(meal_id, p.eater.id, p.servings) for p in meal.portions]
+                    or [(meal_id, e.id, 0.0) for e in table],
                 )
         assert menu_id is not None
         return menu_id
