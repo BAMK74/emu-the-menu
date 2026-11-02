@@ -1,0 +1,44 @@
+{% extends "base.html" %}
+{% block title %}Emu the Menu - Calories{% endblock %}
+{% block heading %}Calories{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% block content %}
+  {% if error %}<p class="error" role="alert">error: {{ error }}</p>{% endif %}
+  {% if done %}<p class="saved" role="status">Saved {{ done }} ingredient{{ "" if done == 1 else "s" }}.</p>{% endif %}
+  {% if recipe %}<p class="summary"><span class="chip chip-new">Recipe: {{ recipe.name }}</span><a class="chip" href="/ingredients/calories">Show every ingredient</a></p>{% endif %}
+
+  {% if not total %}
+  <p class="empty">Every ingredient has calories. <a href="/ingredients">Back to the ingredients</a>.</p>
+  {% else %}
+  <div class="warning-note" role="note">
+    <p><strong>Rough figures to start from.</strong> Calories are per 100 g, per 100 ml or per piece, as shown on each row. Figures marked "suggested" are typical values for the plain food, picked by Emu the Menu and not checked by a dietitian. Change any that do not match your product, using the label. A blank box saves nothing. Calories only feed portions and the calorie fit of a menu: they never mark an ingredient as reviewed for allergens. <a href="/disclaimer">Read the disclaimer</a>.</p>
+  </div>
+  <p class="summary"><span class="chip chip-soon">{{ total }} without calories</span><a class="chip" href="/ingredients">Back to the ingredients</a></p>
+
+  <form class="add calorie-bulk" method="post" action="/ingredients/calories">
+    <input type="hidden" name="recipe" value="{{ recipe.id if recipe else "" }}">
+    <input type="hidden" name="page" value="{{ page }}">
+    <ul class="calorie-list">
+      {% for row in rows %}
+      <li class="calorie-row">
+        <a href="/ingredients/{{ row.ingredient.id }}">{{ row.ingredient.name }}</a>
+        <span class="hint">used in {{ row.used }} recipe{{ "" if row.used == 1 else "s" }}</span>
+        <label>kcal {{ row.basis }}
+          <input name="kcal_{{ row.ingredient.id }}" value="{{ row.value }}" inputmode="decimal" autocomplete="off" size="6">
+        </label>
+        {% if row.suggested %}<span class="chip chip-new">suggested</span>{% endif %}
+      </li>
+      {% endfor %}
+    </ul>
+    <div class="buttons"><button type="submit">Save the calories</button></div>
+  </form>
+
+  {% if pages > 1 %}
+  <p class="summary">
+    {% if page > 1 %}<a class="chip" href="{{ page_link(page - 1) }}">Previous</a>{% endif %}
+    <span class="chip">Page {{ page }} of {{ pages }}</span>
+    {% if page < pages %}<a class="chip" href="{{ page_link(page + 1) }}">Next</a>{% endif %}
+  </p>
+  {% endif %}
+  {% endif %}
+{% endblock %}

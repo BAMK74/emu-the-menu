@@ -18,7 +18,7 @@
       <li>
         <div class="item-head">
           <a class="card-link" href="/recipes/{{ r.id }}"><strong>{{ r.name }}</strong></a>
-          {% if f.calories_per_serving is not none %}<span class="qty">{{ "%d"|format(f.calories_per_serving|round) }} kcal per serving</span>{% else %}<span class="qty none">Calories unknown</span>{% endif %}
+          {% if f.calories_per_serving is not none %}<span class="qty">{{ "%d"|format(f.calories_per_serving|round) }} kcal per serving</span>{% else %}<span class="qty none">Calories unknown</span> <a href="/ingredients/calories?recipe={{ r.id }}">add</a>{% endif %}
         </div>
         <div class="chips">
           <span class="chip">{{ r.servings }} serving{{ "" if r.servings == 1 else "s" }}</span>

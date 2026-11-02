@@ -25,7 +25,7 @@
   {% if facts %}
   <div class="recipe-facts">
     <p class="summary">
-      {% if facts.calories_per_serving is not none %}<span class="chip">{{ "%d"|format(facts.calories_per_serving|round) }} kcal per serving</span>{% else %}<span class="chip chip-soon">Calories unknown{% if facts.without_calories %}: {{ facts.without_calories|join(", ") }}{% endif %}</span>{% endif %}
+      {% if facts.calories_per_serving is not none %}<span class="chip">{{ "%d"|format(facts.calories_per_serving|round) }} kcal per serving</span>{% else %}<span class="chip chip-soon">Calories unknown{% if facts.without_calories %}: {{ facts.without_calories|join(", ") }}{% endif %}</span> <a href="/ingredients/calories?recipe={{ recipe.id }}">add the calories</a>{% endif %}
       {% if facts.is_checked %}
         {% for a in facts.allergens %}<span class="chip chip-allergen">{{ a.short_label }}</span>{% endfor %}
         {% if not facts.allergens %}<span class="chip chip-none">No allergens ticked</span>{% endif %}

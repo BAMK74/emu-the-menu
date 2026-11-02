@@ -704,6 +704,19 @@ class StockRepository:
     def get_ingredient(self, ingredient_id: int) -> Ingredient | None:
         return next((i for i in self.ingredients() if i.id == ingredient_id), None)
 
+    def set_calories(self, ingredient_id: int, kcal: float | None) -> None:
+        """Set only the calories of an Ingredient (blank clears them).
+
+        Unlike `set_ingredient_details` this does not touch the food groups or allergens and does
+        not mark the Ingredient as reviewed: calories say nothing about what is safe to eat.
+        """
+        ingredient = self.get_ingredient(ingredient_id)
+        if ingredient is None:
+            raise IngredientNotFoundError(ingredient_id)
+        kcal = check_kcal(kcal, ingredient.base_unit)
+        with self._db:
+            self._db.execute("UPDATE ingredients SET kcal = ? WHERE id = ?", (kcal, ingredient_id))
+
     def set_ingredient_details(
         self,
         ingredient_id: int,
