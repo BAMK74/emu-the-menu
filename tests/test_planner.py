@@ -484,3 +484,80 @@ def test_choices_are_listed_by_name():
 
     b, a = recipe("b", [ing("x")]), recipe("a", [ing("y")])
     assert [r.name for r in choices_for([b, a], [eater()], Slot.DINNER)] == ["a", "b"]
+
+
+# --- stock with amounts and dates -------------------------------------------------------------
+
+ROOTS = ing("roots", kcal=100)
+
+
+def stew(grams=500, **kwargs):
+    # servings=1 and 100 kcal per 100 g: a serving is `grams` g.
+    return recipe("stew", [ROOTS], grams=grams, **kwargs)
+
+
+def one_diner():
+    return [eater(goal=500)]  # a 500 g serving at 100 kcal / 100 g is exactly their day
+
+
+def test_stock_that_covers_the_amount_means_nothing_to_buy():
+    menu = make_plan([stew()], one_diner(), days=1, have={ROOTS.id: [(600, None)]})
+    assert menu.shopping == ()
+
+
+def test_stock_below_the_amount_needed_still_means_buying():
+    menu = make_plan([stew()], one_diner(), days=1, have={ROOTS.id: [(100, None)]})
+    assert [i.name for i in menu.shopping] == ["roots"]
+
+
+def test_what_one_meal_uses_is_not_there_for_the_next():
+    # 700 g held, a meal needs 500 g: the second dinner has to buy.
+    menu = make_plan(
+        [stew()],
+        one_diner(),
+        days=2,
+        have={ROOTS.id: [(700, None)]},
+        settings=PlanSettings(shopping_allowance=0, cooldown_days=0),
+    )
+    assert names(menu) == ["stew", None]
+    assert "Shopping Allowance" in menu.meals[1].reason
+
+
+def test_with_enough_for_both_meals_both_are_planned_inside_a_zero_allowance():
+    menu = make_plan(
+        [stew()],
+        one_diner(),
+        days=2,
+        have={ROOTS.id: [(1000, None)]},
+        settings=PlanSettings(shopping_allowance=0, cooldown_days=0),
+    )
+    assert names(menu) == ["stew", "stew"]
+
+
+def test_stock_that_has_expired_by_the_day_does_not_count():
+    menu = make_plan(
+        [stew()],
+        one_diner(),
+        days=1,
+        have={ROOTS.id: [(1000, TODAY - timedelta(days=1))]},
+        settings=PlanSettings(shopping_allowance=0, cooldown_days=0),
+    )
+    assert names(menu) == [None]
+
+
+def test_a_date_alone_still_means_there_is_always_enough_until_then():
+    menu = make_plan([stew()], one_diner(), days=3, have={ROOTS.id: TODAY + timedelta(days=9)})
+    assert menu.shopping == ()
+
+
+def test_a_recipe_that_uses_the_stock_before_it_expires_is_preferred():
+    soon = ing("soon-roots", kcal=100)
+    later = ing("later-roots", kcal=100)
+    a = recipe("uses soon", [soon], grams=500)
+    b = recipe("uses later", [later], grams=500)
+    have = {
+        soon.id: [(500, TODAY + timedelta(days=2))],
+        later.id: [(500, TODAY + timedelta(days=60))],
+    }
+    menu = make_plan([a, b], one_diner(), days=1, have=have)
+    assert names(menu) == ["uses soon"]

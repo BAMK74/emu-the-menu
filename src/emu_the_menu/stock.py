@@ -29,6 +29,17 @@ class StockItem:
     id: int | None = None  # set once the item is stored in the database
 
 
+@dataclass(frozen=True)
+class TakenLot:
+    """Some Stock that was used up, remembered so that it can be put back where it was."""
+
+    ingredient: str
+    quantity: float  # in `unit`, the Ingredient's base unit
+    unit: str
+    location: Location
+    expires_on: date | None
+
+
 def _name(ingredient: str) -> str:
     return ingredient.strip().lower()
 

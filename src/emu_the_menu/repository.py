@@ -17,7 +17,14 @@ from emu_the_menu.ingredients import check_kcal, kcal_basis
 from emu_the_menu.names import canonical_name, clean_name, name_key, split_alternatives
 from emu_the_menu.openfoodfacts import ProductInfo
 from emu_the_menu.shelf_life import ShelfLife, ShelfLifeUnit
-from emu_the_menu.stock import Location, StockItem, add_stock, reduce_stock, sort_by_expiry
+from emu_the_menu.stock import (
+    Location,
+    StockItem,
+    TakenLot,
+    add_stock,
+    reduce_stock,
+    sort_by_expiry,
+)
 from emu_the_menu.units import BaseUnit, IncompatibleUnitError, base_unit_for, to_base
 
 _SCHEMA = """
@@ -182,6 +189,59 @@ class StockRepository:
         """Deduct Stock, earliest expiry first. Changes nothing if there is not enough."""
         ingredient = self._canonical(ingredient, unit)
         self._apply(lambda items: reduce_stock(items, ingredient, quantity, unit))
+
+    def use_available(
+        self, ingredient: str, quantity: float, unit: str, on: date | None = None
+    ) -> float:
+        """Deduct as much as there is, up to `quantity`, and return how much was taken."""
+        return sum(lot.quantity for lot in self.take_available(ingredient, quantity, unit, on))
+
+    def take_available(
+        self, ingredient: str, quantity: float, unit: str, on: date | None = None
+    ) -> list[TakenLot]:
+        """Deduct as much as there is, up to `quantity`, and say which Stock it came from.
+
+        Unlike `use` this never fails for lack of Stock: cooking takes what is there. With `on`,
+        Stock that has expired by that day is left alone and does not count. The lots returned
+        are in the Ingredient's base unit and can be handed to `put_back`.
+        """
+        name = self._canonical(ingredient, unit)
+
+        def usable(item: StockItem) -> bool:
+            same = item.ingredient.strip().lower() == name
+            return same and (on is None or item.expires_on is None or item.expires_on >= on)
+
+        before = {i.id: i for i in self.list_items() if usable(i)}
+        taken = min(sum(i.quantity for i in before.values()), to_base(quantity, unit))
+        if taken <= 0:
+            return []
+        base = base_unit_for(unit).value
+
+        def rule(items: list[StockItem]) -> list[StockItem]:
+            fresh = [i for i in items if usable(i) or i.ingredient.strip().lower() != name]
+            spoiled = [i for i in items if i not in fresh]
+            return reduce_stock(fresh, name, taken, base) + spoiled
+
+        self._apply(rule)
+        after = {i.id: i for i in self.list_items()}
+        lots = []
+        for item_id, item in before.items():
+            used = item.quantity - (after[item_id].quantity if item_id in after else 0)
+            if used > 1e-9:
+                lots.append(TakenLot(name, used, base, item.location, item.expires_on))
+        return sorted(lots, key=lambda lot: (lot.expires_on is None, lot.expires_on or date.max))
+
+    def put_back(self, lot: TakenLot) -> None:
+        """Return a lot taken with `take_available` to the Stock it came from.
+
+        It merges into a matching item (same place and expiry) or makes a new one, and does not
+        change what adding remembers for the Ingredient.
+        """
+        self._apply(
+            lambda items: add_stock(
+                items, lot.ingredient, lot.quantity, lot.unit, lot.location, lot.expires_on
+            )
+        )
 
     def set_quantity(self, item_id: int, quantity: float, unit: str) -> None:
         amount = to_base(quantity, unit)

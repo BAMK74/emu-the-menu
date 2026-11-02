@@ -12,8 +12,11 @@ The Recipes left are ranked by a weighted score: calorie fit, using Stock that e
 Stock at all, weather, and a penalty for dislikes. The weights are settings. The best one wins, and
 ties are broken at random from a seed so that a Menu can be reshuffled and also repeated.
 
-Stock is only counted as present or not (and when it expires), not in amounts. That keeps the
-Shopping Allowance simple and is an approximation to improve later.
+Stock is counted in amounts with expiry dates (`cooking.Pantry`): an Ingredient is covered when
+what is held and has not expired by the day is at least what the Meal needs, and what a Meal
+uses is not there for the next. A stock entry that is only a date (or None) means an amount that
+is not tracked, always enough until then. Ingredients to buy are assumed to cover the rest of
+the Menu once bought, so each counts once against the Shopping Allowance.
 """
 
 import random
@@ -22,6 +25,7 @@ from dataclasses import dataclass
 from datetime import date, timedelta
 from enum import StrEnum
 
+from emu_the_menu.cooking import Held, Pantry, uses_for
 from emu_the_menu.eaters import Eater
 from emu_the_menu.recipe_repository import Recipe
 from emu_the_menu.recipes import MealType, RecipeFacts, Weather, analyse
@@ -98,6 +102,7 @@ class Meal:
     reason: str = ""  # why there is no Recipe, when there is none
     id: int | None = None  # the saved Meal this is, once the Menu is saved
     cooked_on: date | None = None
+    short: str = ""  # what Stock could not cover when it was cooked
 
     @property
     def meal_type(self) -> MealType:
@@ -128,18 +133,6 @@ class _Candidate:
     ok: bool  # suits every Eater at the table
 
 
-def _in_stock(stock: Mapping[int, date | None], ingredient_id: int, day: date) -> bool:
-    if ingredient_id not in stock:
-        return False
-    expires = stock[ingredient_id]
-    return expires is None or expires >= day
-
-
-def _expiring(stock: Mapping[int, date | None], ingredient_id: int, day: date) -> bool:
-    expires = stock.get(ingredient_id)
-    return expires is not None and day <= expires <= day + timedelta(days=EXPIRING_WITHIN_DAYS)
-
-
 def _targets(eaters: Sequence[Eater], slot: Slot, slots: Collection[Slot]):
     total = sum(SLOT_SHARES[s] for s in slots)
     share = SLOT_SHARES[slot] / total
@@ -161,10 +154,16 @@ def _portions(
     return tuple(portions)
 
 
+def _covered(pantry: Pantry, slot: Sequence[Ingredient], need: Mapping[int, float], day: date):
+    """Whether Stock holds enough of any one of a group of alternatives."""
+    return any(pantry.available(i.id, day) >= need[i.id] - 1e-9 for i in slot)
+
+
 def _score(
     candidate: _Candidate,
     day: date,
-    stock: Mapping[int, date | None],
+    pantry: Pantry,
+    need: Mapping[int, float],
     targets: Sequence[float],
     weather: Weather | None,
     weights: Weights,
@@ -173,8 +172,14 @@ def _score(
     recipe, facts = candidate.recipe, candidate.facts
     # A group of alternatives is one need, met if any of them is in Stock.
     slots = recipe.slots
-    in_stock = sum(any(_in_stock(stock, i.id, day) for i in slot) for slot in slots) / len(slots)
-    expiring = sum(any(_expiring(stock, i.id, day) for i in slot) for slot in slots) / len(slots)
+    in_stock = sum(_covered(pantry, slot, need, day) for slot in slots) / len(slots)
+    expiring = sum(
+        any(
+            pantry.expiring(i.id, day, EXPIRING_WITHIN_DAYS) and pantry.available(i.id, day) > 0
+            for i in slot
+        )
+        for slot in slots
+    ) / len(slots)
     kcal = facts.calories_per_serving
     if kcal and targets:
         # 1 when a serving is exactly an Eater's share of the day, falling to 0 at half or double.
@@ -199,7 +204,7 @@ def plan(
     slots: Sequence[Slot],
     recipes: Sequence[Recipe],
     eaters: Sequence[Eater],
-    stock: Mapping[int, date | None],
+    stock: Mapping[int, Held],
     seed: int = 0,
     settings: PlanSettings = DEFAULT_SETTINGS,
     last_served: Mapping[int, date] | None = None,
@@ -207,11 +212,13 @@ def plan(
 ) -> Menu:
     """A Menu of `days` days from `start`, one Meal per day for each of `slots`.
 
-    `stock` maps an Ingredient id to the earliest expiry of what is held (None for no expiry).
+    `stock` maps an Ingredient id to what is held: (quantity, expiry or None) lots, or just a
+    date or None for an amount that is not tracked (see `cooking.Pantry`).
     `last_served` maps a Recipe id to when it was last served, for the Cooldown. `weather` maps a
     day to the weather expected, where known.
     """
     rng = random.Random(seed)
+    pantry = Pantry(stock)
     served = dict(last_served or {})
     weather = weather or {}
     candidates = []
@@ -234,13 +241,14 @@ def plan(
         day = start + timedelta(days=offset)
         for slot in ordered_slots:
             meal, newly_missing = _fill(
-                day, slot, ordered_slots, candidates, eaters, stock, served, missing,
+                day, slot, ordered_slots, candidates, eaters, pantry, served, missing,
                 weather.get(day), settings, rng,
             )  # fmt: skip
             meals.append(meal)
             if meal.recipe is not None:
                 served[meal.recipe.id] = day
                 missing.update(newly_missing)
+                _use_up(pantry, meal)
     return Menu(tuple(meals), tuple(sorted(missing.values(), key=lambda i: i.name)))
 
 
@@ -268,23 +276,20 @@ def choices_for(recipes: Sequence[Recipe], eaters: Sequence[Eater], slot: Slot) 
     return sorted(found, key=lambda r: r.name.lower())
 
 
-def shopping_for(meals: Sequence[Meal], stock: Mapping[int, date | None]) -> list[Ingredient]:
-    """The Ingredients the Meals' Recipes need that Stock lacks on the day, by name.
-
-    A group of alternatives needs nothing if any of them is in Stock, and otherwise one purchase,
-    of the first.
-    """
-    missing: dict[int, Ingredient] = {}
-    for meal in meals:
-        if meal.recipe is None:
-            continue
-        for slot in meal.recipe.slots:
-            if not any(_in_stock(stock, i.id, meal.day) for i in slot):
-                missing[slot[0].id] = slot[0]
-    return sorted(missing.values(), key=lambda i: i.name)
+def _need(recipe: Recipe, scale: float) -> dict[int, float]:
+    """How much of each Ingredient the Recipe needs when cooked `scale` times over."""
+    return {line.ingredient.id: line.quantity * scale for line in recipe.lines}
 
 
-def _fill(day, slot, slots, candidates, eaters, stock, served, missing, weather, settings, rng):
+def _use_up(pantry: Pantry, meal: Meal) -> None:
+    """Take from the Pantry what the Meal uses, as far as it goes."""
+    assert meal.recipe is not None
+    held = {i.id: pantry.available(i.id, meal.day) for slot in meal.recipe.slots for i in slot}
+    for use in uses_for(meal.recipe, meal.scale, held):
+        pantry.take(use.ingredient.id, use.taken, meal.day)
+
+
+def _fill(day, slot, slots, candidates, eaters, pantry, served, missing, weather, settings, rng):
     meal_type = slot.meal_type
     tagged = [c for c in candidates if meal_type in c.recipe.meal_types]
     if not tagged:
@@ -300,27 +305,35 @@ def _fill(day, slot, slots, candidates, eaters, stock, served, missing, weather,
     if not cooled:
         reason = f"Cooldown: every suitable recipe was served within {settings.cooldown_days} days"
         return Meal(day, slot, None, reason=reason), {}
+    targets = _targets(eaters, slot, slots)
     affordable = []
     for c in cooled:
-        # A group of alternatives needs nothing if any of them is in Stock, and otherwise one
-        # purchase, of the first.
+        # What this Recipe needs, at the servings this table would eat. A group of alternatives
+        # needs nothing more if any one of them is covered, and otherwise one purchase, of the
+        # first.
+        servings = sum(p.servings for p in _portions(eaters, targets, c.facts.calories_per_serving))
+        need = _need(c.recipe, servings / c.recipe.servings)
         needed = {
-            slot[0].id: slot[0]
-            for slot in c.recipe.slots
-            if not any(_in_stock(stock, i.id, day) for i in slot)
+            group[0].id: group[0]
+            for group in c.recipe.slots
+            if not _covered(pantry, group, need, day)
         }
         if len(missing.keys() | needed.keys()) <= settings.shopping_allowance:
-            affordable.append((c, needed))
+            affordable.append((c, needed, need))
     if not affordable:
         reason = (
             f"Shopping Allowance: every remaining recipe needs more than "
             f"{settings.shopping_allowance} ingredients that are not in stock"
         )
         return Meal(day, slot, None, reason=reason), {}
-    targets = _targets(eaters, slot, slots)
     scored = [
-        (_score(c, day, stock, targets, weather, settings.weights, len(eaters)), rng.random(), c, n)
-        for c, n in affordable
+        (
+            _score(c, day, pantry, need, targets, weather, settings.weights, len(eaters)),
+            rng.random(),
+            c,
+            n,
+        )
+        for c, n, need in affordable
     ]
     _, _, best, needed = max(scored, key=lambda s: (s[0], s[1]))
     portions = _portions(eaters, targets, best.facts.calories_per_serving)

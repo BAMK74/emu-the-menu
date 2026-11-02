@@ -296,3 +296,176 @@ def test_saving_a_menu_also_respects_the_cooldown(client, db_path, kitchen):
     with MenuRepository(db_path) as menus:
         newest = menus.get(int(again.headers["location"].rsplit("/", 1)[1]))
     assert newest.meals[0].recipe_id is None
+
+
+# --- cooking uses up stock --------------------------------------------------------------------
+
+
+def stock_carrots(db_path, grams):
+    from emu_the_menu.stock import Location
+
+    with StockRepository(db_path) as stock:
+        stock.add("carrots", grams, "g", Location.PANTRY)
+
+
+def carrots_left(db_path):
+    with StockRepository(db_path) as stock:
+        return sum(i.quantity for i in stock.list_items() if i.ingredient == "carrots")
+
+
+def cooked_menu(client, db_path, kitchen):
+    location = save(client, kitchen).headers["location"]
+    menu_id, meal = first_meal(db_path, location)
+    need = 200 * sum(p.servings for p in meal.portions) / 2  # a 2-serving recipe of 200 g
+    return location, menu_id, meal, need
+
+
+def test_cooking_takes_the_scaled_amount_from_stock(client, db_path, kitchen):
+    location, menu_id, meal, need = cooked_menu(client, db_path, kitchen)
+    stock_carrots(db_path, need + 1000)
+    post_to(client, menu_id, meal.id, "cooked")
+    assert carrots_left(db_path) == pytest.approx(1000)
+    assert "short" not in text_of(client.get(location).text).lower().replace("shopping", "")
+
+
+def test_cooking_with_too_little_stock_uses_it_up_and_says_what_was_short(client, db_path, kitchen):
+    location, menu_id, meal, need = cooked_menu(client, db_path, kitchen)
+    stock_carrots(db_path, 1000)
+    response = post_to(client, menu_id, meal.id, "cooked")
+    assert response.status_code == 303
+    assert carrots_left(db_path) == 0
+    text = text_of(client.get(location).text)
+    assert "Cooked" in text and "Short in stock: carrots" in text
+
+
+def test_cooking_with_nothing_in_stock_still_works(client, db_path, kitchen):
+    location, menu_id, meal, _ = cooked_menu(client, db_path, kitchen)
+    post_to(client, menu_id, meal.id, "cooked")
+    assert "Short in stock: carrots" in text_of(client.get(location).text)
+    with MenuRepository(db_path) as menus:
+        assert menus.get(menu_id).meals[0].cooked_on == TODAY
+
+
+def test_pressing_cooked_twice_takes_stock_only_once(client, db_path, kitchen):
+    _, menu_id, meal, need = cooked_menu(client, db_path, kitchen)
+    stock_carrots(db_path, need * 3)
+    post_to(client, menu_id, meal.id, "cooked")
+    post_to(client, menu_id, meal.id, "cooked")
+    assert carrots_left(db_path) == pytest.approx(need * 2)
+
+
+def test_not_cooked_puts_the_stock_back_where_it_came_from(client, db_path, kitchen):
+    from datetime import timedelta
+
+    from emu_the_menu.stock import Location
+
+    location, menu_id, meal, need = cooked_menu(client, db_path, kitchen)
+    soon = TODAY + timedelta(days=3)
+    with StockRepository(db_path) as stock:
+        stock.add("carrots", need * 2, "g", Location.FRIDGE, soon)
+    post_to(client, menu_id, meal.id, "cooked")
+    assert carrots_left(db_path) == pytest.approx(need)
+    post_to(client, menu_id, meal.id, "not-cooked")
+    with StockRepository(db_path) as stock:
+        [item] = stock.list_items()
+    assert (item.quantity, item.location, item.expires_on) == (
+        pytest.approx(need * 2),
+        Location.FRIDGE,
+        soon,
+    )
+
+
+def test_not_cooked_twice_puts_back_only_once(client, db_path, kitchen):
+    _, menu_id, meal, need = cooked_menu(client, db_path, kitchen)
+    stock_carrots(db_path, need * 2)
+    post_to(client, menu_id, meal.id, "cooked")
+    post_to(client, menu_id, meal.id, "not-cooked")
+    post_to(client, menu_id, meal.id, "not-cooked")
+    assert carrots_left(db_path) == pytest.approx(need * 2)
+
+
+def test_not_cooked_puts_back_only_what_was_really_taken(client, db_path, kitchen):
+    _, menu_id, meal, need = cooked_menu(client, db_path, kitchen)
+    stock_carrots(db_path, 1000)  # less than the meal needs
+    post_to(client, menu_id, meal.id, "cooked")
+    assert carrots_left(db_path) == 0
+    post_to(client, menu_id, meal.id, "not-cooked")
+    assert carrots_left(db_path) == pytest.approx(1000)
+
+
+def test_cooking_again_after_not_cooked_takes_stock_again(client, db_path, kitchen):
+    _, menu_id, meal, need = cooked_menu(client, db_path, kitchen)
+    stock_carrots(db_path, need * 2)
+    post_to(client, menu_id, meal.id, "cooked")
+    post_to(client, menu_id, meal.id, "not-cooked")
+    post_to(client, menu_id, meal.id, "cooked")
+    assert carrots_left(db_path) == pytest.approx(need)
+
+
+def test_the_not_cooked_button_says_it_puts_the_stock_back(client, db_path, kitchen):
+    location, menu_id, meal, need = cooked_menu(client, db_path, kitchen)
+    post_to(client, menu_id, meal.id, "cooked")
+    html = client.get(location).text
+    assert "puts the ingredients back in Stock" in html
+    assert "does not put the ingredients back" not in html
+
+
+# --- the shopping list with amounts -----------------------------------------------------------
+
+
+def amount_text(grams):
+    from emu_the_menu.units import BaseUnit, display_quantity
+
+    amount, unit = display_quantity(grams, BaseUnit.GRAM)
+    return f"carrots {amount:g} {unit}"
+
+
+def test_the_saved_menu_shopping_list_has_amounts_less_what_is_held(client, db_path, kitchen):
+    location, menu_id, meal, need = cooked_menu(client, db_path, kitchen)
+    stock_carrots(db_path, 1000)
+    text = text_of(client.get(location).text)
+    assert amount_text(need - 1000) in text
+    assert "Amounts are not totalled yet" not in text
+
+
+def test_the_shopping_list_drops_a_meal_once_it_is_cooked(client, db_path, kitchen):
+    location, menu_id, meal, need = cooked_menu(client, db_path, kitchen)
+    assert amount_text(need) in text_of(client.get(location).text)
+    post_to(client, menu_id, meal.id, "cooked")
+    # the second day is a Cooldown gap, so nothing else is left to buy
+    text = text_of(client.get(location).text)
+    assert "carrots" not in text.split("Shopping list")[1] and "Nothing to buy" in text
+
+
+def test_the_menu_page_shopping_list_has_amounts_too(client, db_path, kitchen):
+    text = text_of(client.get("/menu?" + QUERY.format(eater=kitchen)).text)
+    assert "carrots" in text and "Amounts are not totalled yet" not in text
+    assert " kg" in text
+
+
+# --- amounts and expiry in the planning and cooking pages -------------------------------------
+
+
+def test_cooking_leaves_expired_stock_alone_and_counts_it_as_short(client, db_path, kitchen):
+    from datetime import timedelta
+
+    from emu_the_menu.stock import Location
+
+    location, menu_id, meal, need = cooked_menu(client, db_path, kitchen)
+    with StockRepository(db_path) as stock:
+        stock.add("carrots", need * 2, "g", Location.PANTRY, TODAY - timedelta(days=1))
+    post_to(client, menu_id, meal.id, "cooked")
+    assert carrots_left(db_path) == pytest.approx(need * 2)
+    assert "Short in stock: carrots" in text_of(client.get(location).text)
+
+
+def test_the_menu_page_does_not_count_a_little_stock_as_enough(client, db_path, kitchen):
+    stock_carrots(db_path, 100)
+    query = QUERY.format(eater=kitchen) + "&allowance=0"
+    assert "Shopping Allowance" in text_of(client.get("/menu?" + query).text)
+
+
+def test_the_menu_page_accepts_plenty_of_stock_under_a_zero_allowance(client, db_path, kitchen):
+    stock_carrots(db_path, 100_000)
+    query = QUERY.format(eater=kitchen) + "&allowance=0"
+    assert "Carrot soup" in text_of(client.get("/menu?" + query).text)

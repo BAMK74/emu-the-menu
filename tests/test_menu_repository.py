@@ -210,3 +210,66 @@ def test_last_served_is_the_latest_cooked_date_of_each_recipe(repo, soup, sam):
 def test_nothing_cooked_means_nothing_served(repo, soup, sam):
     saved_meal(repo, soup, sam)
     assert repo.last_served() == {}
+
+
+def test_a_note_about_what_was_short_is_kept_with_the_cooked_meal(repo, soup, sam):
+    menu_id, meal_id = saved_meal(repo, soup, sam)
+    repo.set_cooked(menu_id, meal_id, COOKED, short="carrots 100 g")
+    assert repo.get(menu_id).meals[0].short == "carrots 100 g"
+    repo.set_cooked(menu_id, meal_id, None)
+    assert repo.get(menu_id).meals[0].short == ""
+
+
+def test_an_older_database_gains_the_short_column(db_path):
+    import sqlite3
+
+    db = sqlite3.connect(db_path)
+    db.executescript(
+        "CREATE TABLE menus (id INTEGER PRIMARY KEY, name TEXT NOT NULL,"
+        " start_day TEXT NOT NULL, days INTEGER NOT NULL);"
+        "CREATE TABLE menu_meals (id INTEGER PRIMARY KEY, menu_id INTEGER NOT NULL,"
+        " day TEXT NOT NULL, slot TEXT NOT NULL, recipe_id INTEGER,"
+        " reason TEXT NOT NULL DEFAULT '', cooked_on TEXT);"
+    )
+    db.commit()
+    db.close()
+    with MenuRepository(db_path) as repo:
+        assert repo.menus() == []
+        columns = {r[1] for r in repo._db.execute("PRAGMA table_info(menu_meals)")}
+    assert "short" in columns
+
+
+def test_what_cooking_took_from_stock_is_kept_and_returned(repo, soup, sam):
+    from emu_the_menu.stock import Location, TakenLot
+
+    menu_id, meal_id = saved_meal(repo, soup, sam)
+    lots = [
+        TakenLot("carrots", 200, "g", Location.FRIDGE, date(2026, 11, 9)),
+        TakenLot("carrots", 50, "g", Location.PANTRY, None),
+    ]
+    repo.set_cooked(menu_id, meal_id, COOKED, took=lots)
+    assert repo.taken(menu_id, meal_id) == lots
+
+
+def test_marking_not_cooked_forgets_what_was_taken(repo, soup, sam):
+    from emu_the_menu.stock import Location, TakenLot
+
+    menu_id, meal_id = saved_meal(repo, soup, sam)
+    repo.set_cooked(
+        menu_id, meal_id, COOKED, took=[TakenLot("carrots", 5, "g", Location.PANTRY, None)]
+    )
+    repo.set_cooked(menu_id, meal_id, None)
+    assert repo.taken(menu_id, meal_id) == []
+
+
+def test_a_meal_cooked_without_a_record_has_nothing_to_give_back(repo, soup, sam):
+    menu_id, meal_id = saved_meal(repo, soup, sam)
+    repo.set_cooked(menu_id, meal_id, COOKED)
+    assert repo.taken(menu_id, meal_id) == []
+
+
+def test_what_was_taken_belongs_to_a_meal_of_that_menu(repo, soup, sam):
+    menu_id, _ = saved_meal(repo, soup, sam)
+    _, other_meal = saved_meal(repo, soup, sam)
+    with pytest.raises(MenuNotFoundError):
+        repo.taken(menu_id, other_meal)

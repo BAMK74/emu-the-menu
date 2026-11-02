@@ -13,7 +13,9 @@
         <p class="hint">Cook {{ "%g"|format(meal.total_servings) }} servings ({{ "%g"|format(meal.scale|round(2)) }}× the recipe).</p>
         {% if change_base %}
         {% if meal.cooked_on %}
-        <form class="cooked" method="post" action="{{ change_base }}/{{ meal.id }}/not-cooked"><span class="chip">Cooked {{ label(meal.cooked_on) }}</span> <button class="quiet" type="submit">Not cooked</button></form>
+        <form class="cooked" method="post" action="{{ change_base }}/{{ meal.id }}/not-cooked" data-confirm="Mark this meal as not cooked? This puts the ingredients back in Stock."><span class="chip">Cooked {{ label(meal.cooked_on) }}</span> <button class="quiet" type="submit">Not cooked</button></form>
+        {% if meal.short %}<p class="hint">Short in stock: {{ meal.short }}. Stock was used up as far as it went.</p>{% endif %}
+        <p class="hint">Cooking took its ingredients out of Stock. Marking it not cooked puts the ingredients back in Stock where they came from.</p>
         {% else %}
         <form class="cooked" method="post" action="{{ change_base }}/{{ meal.id }}/cooked"><button class="quiet" type="submit">Mark cooked</button></form>
         {% endif %}
@@ -31,8 +33,8 @@
   <section class="shopping" aria-label="Shopping list">
     <h2>Shopping list</h2>
     {% if shopping %}
-    <p>{% for i in shopping %}<span class="chip chip-none">{{ i.name }}</span> {% endfor %}</p>
-    <p class="hint">Ingredients the recipes above need that are not in stock. Amounts are not totalled yet. Always read the label.</p>
+    <p>{% for i in shopping %}<span class="chip chip-none">{{ i }}</span> {% endfor %}</p>
+    <p class="hint">What the meals still to cook need, less what is in stock (stock is shared out between the meals in order). Amounts are rough. Always read the label.</p>
     {% else %}
     <p class="hint">Nothing to buy: everything is in stock. Always read the label.</p>
     {% endif %}

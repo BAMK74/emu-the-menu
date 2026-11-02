@@ -14,6 +14,7 @@ from pathlib import Path
 from emu_the_menu.eaters import EaterRepository
 from emu_the_menu.planner import Menu, Slot
 from emu_the_menu.recipe_repository import RecipeRepository
+from emu_the_menu.stock import Location, TakenLot
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS menus (
@@ -29,7 +30,16 @@ CREATE TABLE IF NOT EXISTS menu_meals (
     slot       TEXT NOT NULL,
     recipe_id  INTEGER REFERENCES recipes(id) ON DELETE SET NULL,
     reason     TEXT NOT NULL DEFAULT '',
-    cooked_on  TEXT
+    cooked_on  TEXT,
+    short      TEXT NOT NULL DEFAULT ''
+);
+CREATE TABLE IF NOT EXISTS menu_meal_taken (
+    meal_id    INTEGER NOT NULL REFERENCES menu_meals(id) ON DELETE CASCADE,
+    ingredient TEXT NOT NULL,
+    quantity   REAL NOT NULL,
+    unit       TEXT NOT NULL,
+    location   TEXT NOT NULL,
+    expires_on TEXT
 );
 CREATE TABLE IF NOT EXISTS menu_portions (
     meal_id    INTEGER NOT NULL REFERENCES menu_meals(id) ON DELETE CASCADE,
@@ -61,6 +71,7 @@ class SavedMeal:
     reason: str
     portions: tuple[SavedPortion, ...]
     cooked_on: date | None
+    short: str = ""  # what Stock could not cover when it was cooked
 
 
 @dataclass(frozen=True)
@@ -80,6 +91,10 @@ class MenuRepository:
         self._db = sqlite3.connect(path)
         self._db.execute("PRAGMA foreign_keys = ON")
         self._db.executescript(_SCHEMA)
+        columns = {row[1] for row in self._db.execute("PRAGMA table_info(menu_meals)")}
+        if "short" not in columns:
+            with self._db:
+                self._db.execute("ALTER TABLE menu_meals ADD COLUMN short TEXT NOT NULL DEFAULT ''")
 
     def __enter__(self) -> "MenuRepository":
         return self
@@ -158,16 +173,65 @@ class MenuRepository:
                 [(meal_id, eater_id, servings) for eater_id, servings in portions],
             )
 
-    def set_cooked(self, menu_id: int, meal_id: int, day: date | None) -> None:
-        """Record that a Meal was cooked on `day`, or with None that it was not."""
+    def set_cooked(
+        self,
+        menu_id: int,
+        meal_id: int,
+        day: date | None,
+        short: str = "",
+        took: Sequence[TakenLot] = (),
+    ) -> None:
+        """Record that a Meal was cooked on `day`, or with None that it was not.
+
+        `short` says what Stock could not cover, to show beside the Meal, and `took` is the Stock
+        it used up, kept so that it can be put back (see `taken`). Marking a Meal not cooked
+        forgets both.
+        """
         with self._db:
             recipe_id, _ = self._row(menu_id, meal_id)
             if day is not None and recipe_id is None:
                 raise ValueError("A meal with no recipe cannot be cooked")
             self._db.execute(
-                "UPDATE menu_meals SET cooked_on = ? WHERE id = ?",
-                (day.isoformat() if day else None, meal_id),
+                "UPDATE menu_meals SET cooked_on = ?, short = ? WHERE id = ?",
+                (day.isoformat() if day else None, short if day else "", meal_id),
             )
+            self._db.execute("DELETE FROM menu_meal_taken WHERE meal_id = ?", (meal_id,))
+            if day is not None:
+                self._db.executemany(
+                    "INSERT INTO menu_meal_taken"
+                    " (meal_id, ingredient, quantity, unit, location, expires_on)"
+                    " VALUES (?, ?, ?, ?, ?, ?)",
+                    [
+                        (
+                            meal_id,
+                            lot.ingredient,
+                            lot.quantity,
+                            lot.unit,
+                            lot.location.value,
+                            lot.expires_on.isoformat() if lot.expires_on else None,
+                        )
+                        for lot in took
+                    ],
+                )
+
+    def taken(self, menu_id: int, meal_id: int) -> list[TakenLot]:
+        """The Stock a cooked Meal used up, in the order it was taken."""
+        self._row(menu_id, meal_id)
+        rows = self._db.execute(
+            "SELECT ingredient, quantity, unit, location, expires_on FROM menu_meal_taken"
+            " WHERE meal_id = ? ORDER BY rowid",
+            (meal_id,),
+        )
+        return [
+            TakenLot(
+                ingredient,
+                quantity,
+                unit,
+                Location(location),
+                date.fromisoformat(expires_on) if expires_on else None,
+            )
+            for ingredient, quantity, unit, location, expires_on in rows
+        ]
 
     def last_served(self) -> dict[int, date]:
         """When each Recipe was last cooked, from every saved Menu. This drives the Cooldown."""
@@ -195,7 +259,7 @@ class MenuRepository:
         meals = [
             self._meal(m)
             for m in self._db.execute(
-                "SELECT id, day, slot, recipe_id, reason, cooked_on FROM menu_meals"
+                "SELECT id, day, slot, recipe_id, reason, cooked_on, short FROM menu_meals"
                 " WHERE menu_id = ?",
                 (menu_id,),
             ).fetchall()
@@ -204,7 +268,7 @@ class MenuRepository:
         return SavedMenu(menu_id, name, date.fromisoformat(start), days, tuple(meals))
 
     def _meal(self, row) -> SavedMeal:
-        meal_id, day, slot, recipe_id, reason, cooked_on = row
+        meal_id, day, slot, recipe_id, reason, cooked_on, short = row
         portions = tuple(
             SavedPortion(eater_id, servings)
             for eater_id, servings in self._db.execute(
@@ -222,4 +286,5 @@ class MenuRepository:
             reason,
             portions,
             date.fromisoformat(cooked_on) if cooked_on else None,
+            short,
         )

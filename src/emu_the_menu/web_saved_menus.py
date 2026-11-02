@@ -11,14 +11,16 @@ from pathlib import Path
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from emu_the_menu.cooking import Pantry, shopping_amounts, uses_for
 from emu_the_menu.eaters import EaterRepository
 from emu_the_menu.menu_repository import MenuNotFoundError, MenuRepository, SavedMenu
-from emu_the_menu.planner import Meal, Portion, choices_for, portions_for, shopping_for
+from emu_the_menu.planner import Meal, Portion, choices_for, portions_for
 from emu_the_menu.recipe_repository import RecipeRepository
 from emu_the_menu.recipes import analyse
 from emu_the_menu.repository import StockRepository
 from emu_the_menu.templating import TEMPLATES
-from emu_the_menu.web_menu import day_label, days_of, stock_map
+from emu_the_menu.units import display_quantity
+from emu_the_menu.web_menu import day_label, days_of, shopping_text, stock_lots
 
 
 def live_meals(saved: SavedMenu, db_path: str | Path) -> tuple[list[Meal], list]:
@@ -27,7 +29,7 @@ def live_meals(saved: SavedMenu, db_path: str | Path) -> tuple[list[Meal], list]
         people = {e.id: e for e in eaters.list()}
         found = {r.id: recipes.get(r.id) for r in recipes.recipes()}
     with StockRepository(db_path) as stock:
-        held = stock_map(stock)
+        held = stock_lots(stock)
     meals = []
     for m in saved.meals:
         recipe = found.get(m.recipe_id) if m.recipe_id is not None else None
@@ -41,8 +43,8 @@ def live_meals(saved: SavedMenu, db_path: str | Path) -> tuple[list[Meal], list]
             for p in m.portions
             if p.eater_id in people
         )
-        meals.append(Meal(m.day, m.slot, recipe, portions, m.reason, m.id, m.cooked_on))
-    return meals, shopping_for(meals, held)
+        meals.append(Meal(m.day, m.slot, recipe, portions, m.reason, m.id, m.cooked_on, m.short))
+    return meals, shopping_text(shopping_amounts(meals, held))
 
 
 def create_router(db_path: str | Path, today=date.today) -> APIRouter:
@@ -161,12 +163,56 @@ def create_router(db_path: str | Path, today=date.today) -> APIRouter:
 
     @router.post("/menus/{menu_id}/meals/{meal_id}/cooked")
     def cooked(menu_id: int, meal_id: int):
-        """Record that the meal was cooked today. This is what starts the Cooldown."""
-        return cook(menu_id, meal_id, today())
+        """Record that the meal was cooked today and take what it used from Stock.
+
+        This is what starts the Cooldown. Stock is used as far as it goes and what it could not
+        cover is kept with the meal; cooking is never refused for lack of Stock.
+        """
+        with MenuRepository(db_path) as repo:
+            saved = repo.get(menu_id)
+            meal = next((m for m in saved.meals if m.id == meal_id), None) if saved else None
+            if meal is None:
+                raise HTTPException(404, "No such meal")
+            if meal.cooked_on is not None:
+                return RedirectResponse(f"/menus/{menu_id}", status_code=303)  # stock only once
+            if meal.recipe_id is None:
+                raise HTTPException(400, "A meal with no recipe cannot be cooked")
+            with RecipeRepository(db_path) as recipes:
+                recipe = recipes.get(meal.recipe_id)
+            scale = sum(p.servings for p in meal.portions) / recipe.servings
+            short = []
+            took = []
+            with StockRepository(db_path) as stock:
+                pantry = Pantry(stock_lots(stock))
+                today_ = today()
+                held = {i.id: pantry.available(i.id, today_) for g in recipe.slots for i in g}
+                for use in uses_for(recipe, scale, held):
+                    unit = use.ingredient.base_unit
+                    lots = stock.take_available(
+                        use.ingredient.name, use.needed, unit.value, on=today_
+                    )
+                    took.extend(lots)
+                    got = sum(lot.quantity for lot in lots)
+                    if use.needed - got > 1e-6:
+                        amount, label = display_quantity(use.needed - got, unit)
+                        short.append(f"{use.ingredient.name} {amount:g} {label}".strip())
+            repo.set_cooked(menu_id, meal_id, today_, "; ".join(short), took)
+        return RedirectResponse(f"/menus/{menu_id}", status_code=303)
 
     @router.post("/menus/{menu_id}/meals/{meal_id}/not-cooked")
     def not_cooked(menu_id: int, meal_id: int):
-        return cook(menu_id, meal_id, None)
+        """Undo cooking: the Stock the meal took goes back where it came from."""
+        try:
+            with MenuRepository(db_path) as repo:
+                lots = repo.taken(menu_id, meal_id)
+                if lots:
+                    with StockRepository(db_path) as stock:
+                        for lot in lots:
+                            stock.put_back(lot)
+                repo.set_cooked(menu_id, meal_id, None)
+        except MenuNotFoundError:
+            raise HTTPException(404, "No such meal") from None
+        return RedirectResponse(f"/menus/{menu_id}", status_code=303)
 
     @router.post("/menus/{menu_id}/delete")
     def delete(menu_id: int):

@@ -282,3 +282,89 @@ def test_export_data_of_an_empty_database(repo):
         [],
         {"country": None},
     )
+
+
+# --- using what there is ----------------------------------------------------------------------
+
+
+def test_use_available_takes_what_is_there_and_says_how_much(repo):
+    repo.add("Flour", 300, "g", Location.PANTRY, SOON)
+    assert repo.use_available("flour", 500, "g") == 300
+    assert repo.list_items() == []
+
+
+def test_use_available_takes_all_of_a_request_that_stock_covers(repo):
+    repo.add("Flour", 300, "g", Location.PANTRY, SOON)
+    repo.add("Flour", 300, "g", Location.PANTRY, LATER)
+    assert repo.use_available("flour", 400, "g") == 400
+    assert [(i.quantity, i.expires_on) for i in repo.list_items()] == [(200, LATER)]
+
+
+def test_use_available_of_something_not_in_stock_takes_nothing(repo):
+    assert repo.use_available("flour", 100, "g") == 0
+    assert repo.list_items() == []
+
+
+def test_use_available_still_refuses_a_unit_of_another_kind(repo):
+    repo.add("Flour", 300, "g", Location.PANTRY, SOON)
+    with pytest.raises(IncompatibleUnitError):
+        repo.use_available("flour", 100, "ml")
+
+
+def test_use_available_on_a_day_ignores_stock_that_has_expired_by_then(repo):
+    repo.add("Milk", 500, "ml", Location.FRIDGE, SOON)
+    repo.add("Milk", 500, "ml", Location.FRIDGE, LATER)
+    day = date(2026, 11, 1)  # after SOON, before LATER
+    assert repo.use_available("milk", 800, "ml", on=day) == 500
+    assert [(i.quantity, i.expires_on) for i in repo.list_items()] == [(500, SOON)]
+
+
+def test_use_available_on_a_day_keeps_stock_with_no_expiry_usable(repo):
+    repo.add("Rice", 500, "g", Location.PANTRY)
+    assert repo.use_available("rice", 200, "g", on=date(2030, 1, 1)) == 200
+
+
+# --- knowing what was taken, and putting it back ----------------------------------------------
+
+
+def test_take_available_reports_each_lot_it_took_from(repo):
+    from emu_the_menu.stock import TakenLot
+
+    repo.add("Milk", 300, "ml", Location.FRIDGE, SOON)
+    repo.add("Milk", 300, "ml", Location.FREEZER, LATER)
+    taken = repo.take_available("milk", 400, "ml")
+    assert taken == [
+        TakenLot("milk", 300, "ml", Location.FRIDGE, SOON),
+        TakenLot("milk", 100, "ml", Location.FREEZER, LATER),
+    ]
+
+
+def test_take_available_reports_nothing_when_nothing_was_there(repo):
+    assert repo.take_available("milk", 400, "ml") == []
+
+
+def test_put_back_restores_a_lot_where_it_came_from(repo):
+    from emu_the_menu.stock import TakenLot
+
+    repo.add("Milk", 300, "ml", Location.FRIDGE, SOON)
+    taken = repo.take_available("milk", 300, "ml")
+    assert repo.list_items() == []
+    repo.put_back(taken[0])
+    [item] = repo.list_items()
+    assert (item.ingredient, item.quantity, item.location, item.expires_on) == (
+        "milk",
+        300,
+        Location.FRIDGE,
+        SOON,
+    )
+    repo.put_back(TakenLot("milk", 50, "ml", Location.FRIDGE, SOON))
+    assert repo.list_items()[0].quantity == 350  # merged into the matching lot
+
+
+def test_put_back_does_not_change_what_adding_remembers(repo):
+    from emu_the_menu.stock import TakenLot
+
+    repo.add("Milk", 1, "l", Location.FRIDGE, SOON)
+    before = repo.ingredients()[0].last_entry
+    repo.put_back(TakenLot("milk", 100, "ml", Location.FRIDGE, SOON))
+    assert repo.ingredients()[0].last_entry == before

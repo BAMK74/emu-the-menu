@@ -14,6 +14,7 @@ from urllib.parse import urlencode
 from fastapi import APIRouter, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from emu_the_menu.cooking import shopping_amounts
 from emu_the_menu.eaters import Eater, EaterRepository
 from emu_the_menu.menu_repository import MenuRepository
 from emu_the_menu.planner import Menu, PlanSettings, Slot, plan
@@ -21,6 +22,7 @@ from emu_the_menu.recipe_repository import RecipeRepository
 from emu_the_menu.recipes import analyse
 from emu_the_menu.repository import StockRepository
 from emu_the_menu.templating import TEMPLATES
+from emu_the_menu.units import display_quantity
 
 DEFAULT_DAYS = 7
 MAX_DAYS = 28
@@ -44,17 +46,23 @@ def day_label(day: date) -> str:
     return f"{day.strftime('%a')} {day.day} {day.strftime('%b')}"
 
 
-def stock_map(stock: StockRepository) -> dict[int, date | None]:
-    """Ingredient id to when what is held runs out: None if any of it never expires."""
+def stock_lots(stock: StockRepository) -> dict[int, list[tuple[float, date | None]]]:
+    """Ingredient id to what is held: (quantity, expiry or None) for each stock item."""
     ids = {i.name: i.id for i in stock.ingredients()}
-    held: dict[int, list[date | None]] = {}
+    lots: dict[int, list[tuple[float, date | None]]] = {}
     for item in stock.list_items():
         if item.quantity > 0 and item.ingredient in ids:
-            held.setdefault(ids[item.ingredient], []).append(item.expires_on)
-    return {
-        ingredient_id: None if None in dates else max(dates)  # type: ignore[type-var]
-        for ingredient_id, dates in held.items()
-    }
+            lots.setdefault(ids[item.ingredient], []).append((item.quantity, item.expires_on))
+    return lots
+
+
+def shopping_text(pairs) -> list[str]:
+    """Shopping list entries such as "carrots 1.2 kg" from (Ingredient, base amount) pairs."""
+    found = []
+    for ingredient, amount in pairs:
+        quantity, unit = display_quantity(amount, ingredient.base_unit)
+        found.append(f"{ingredient.name} {quantity:g} {unit}".strip())
+    return found
 
 
 def days_of(meals):
@@ -93,7 +101,7 @@ class PlanRequest:
                 self.slots,
                 recipes.recipes(),
                 self.people,
-                stock_map(stock),
+                stock_lots(stock),
                 seed=self.seed,
                 settings=PlanSettings(self.allowance, self.cooldown),
                 last_served=menus.last_served(),
@@ -205,9 +213,11 @@ def create_router(db_path: str | Path, today=date.today) -> APIRouter:
         except ValueError as exc:
             return answer(str(exc), 400)
         result = settings.run(db_path)
+        with StockRepository(db_path) as stock:
+            held = stock_lots(stock)
         return answer(
             days_shown=days_of(result.meals),
-            shopping=result.shopping,
+            shopping=shopping_text(shopping_amounts(result.meals, held)),
             reshuffle="/menu?" + urlencode(settings.query(settings.seed + 1)),
             save_fields=settings.query(settings.seed),
         )
