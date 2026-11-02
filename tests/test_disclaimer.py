@@ -230,3 +230,59 @@ def test_the_eaters_warning_still_comes_before_the_empty_message(client):
     page = client.get("/eaters").text
     assert page.index('action="/eaters"') < page.index("Not medical advice")
     assert page.index("Not medical advice") < page.index("No one yet")
+
+
+# --- the disclaimer as a pop-up ----------------------------------------------------------------
+
+
+def test_the_popup_fragment_has_the_full_text_and_no_page_around_it(client):
+    page = client.get("/disclaimer/panel")
+    assert page.status_code == 200
+    assert "<html" not in page.text and "<header" not in page.text
+    assert "It is not a dietitian, a doctor or an allergy service" in page.text
+    assert "Always read the label" in page.text or "always read the label" in page.text.lower()
+
+
+def test_the_popup_offers_the_accept_form_that_stays_in_the_popup(client):
+    page = client.get("/disclaimer/panel").text
+    assert 'action="/disclaimer/accept"' in page
+    assert 'name="popup" value="1"' in page
+    assert "data-disclaimer-form" in page
+    assert "data-close-dialog" in page
+
+
+def test_accepting_in_the_popup_answers_with_the_panel_not_a_redirect(client):
+    response = client.post("/disclaimer/accept", data={"understood": "on", "popup": "1"})
+    assert response.status_code == 200
+    assert "You accepted version" in response.text
+    assert "<html" not in response.text
+    assert 'action="/disclaimer/accept"' not in response.text
+
+
+def test_accepting_in_the_popup_is_recorded(client):
+    client.post("/disclaimer/accept", data={"understood": "on", "popup": "1"})
+    assert 'class="disclaimer-banner"' not in client.get("/recipes").text
+
+
+def test_the_popup_asks_for_the_tick_and_says_so(client):
+    response = client.post("/disclaimer/accept", data={"popup": "1"})
+    assert response.status_code == 400
+    assert "Tick the box" in response.text
+    assert "<html" not in response.text
+    assert 'class="disclaimer-banner"' in client.get("/recipes").text
+
+
+def test_accepting_without_the_popup_still_redirects(client):
+    response = client.post("/disclaimer/accept", data={"understood": "on", "next": "/eaters"})
+    assert response.status_code == 303 and response.headers["location"] == "/eaters"
+
+
+def test_every_page_carries_the_dialog_the_links_open(client):
+    for path in ("/", "/recipes", "/menu", "/ingredients", "/eaters"):
+        assert 'id="disclaimer-dialog"' in client.get(path).text, path
+
+
+def test_the_disclaimer_page_itself_is_unchanged(client):
+    page = client.get("/disclaimer").text
+    assert "<h1>Disclaimer</h1>" in page
+    assert "It is not a dietitian, a doctor or an allergy service" in page

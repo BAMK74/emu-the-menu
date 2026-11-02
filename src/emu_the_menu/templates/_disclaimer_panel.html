@@ -1,0 +1,53 @@
+  {% if error %}<p class="error" role="alert">error: {{ error }}</p>{% endif %}
+
+  <article class="legal-text">
+    <p class="version">Version {{ version }}. Please read all of this. It explains what Emu the Menu can and cannot do.</p>
+
+    <h2>What Emu the Menu is</h2>
+    <p>Emu the Menu is a self-hosted household app. It helps you keep track of the food in your kitchen and suggests meal ideas from the information you give it. It is a cooking aid and nothing more.</p>
+
+    <h2>It is not a dietitian, a doctor or an allergy service</h2>
+    <p>Emu the Menu is an app. It is not a dietitian, nutritionist, doctor, pharmacist, nurse or allergy specialist, and it does not replace any of them. What it shows, including calorie goals, diets, menus, recipes, allergen tags and warnings, is not medical, dietary or nutritional advice, and using it creates no professional relationship.</p>
+    <p>Talk to a qualified professional before you change how you, or anyone you look after, eat. Do this especially with a medical condition (such as diabetes, coeliac disease, kidney disease or an eating disorder), pregnancy or breastfeeding, a food allergy, medicine that interacts with food, or when feeding babies, children, teenagers or older people.</p>
+
+    <h2>Allergies and intolerances: always read the label</h2>
+    <p>Emu the Menu cannot guarantee that any food, recipe or menu is free of an allergen. It only knows what people have typed in or looked up. That information can be missing, wrong or out of date. Allergen tags are set by people and are not checked by anyone. Emu the Menu cannot know about hidden ingredients, "may contain" warnings, cross-contamination, or a recipe that a manufacturer has changed.</p>
+    <p><strong>Always read the label of every product, every time you buy it and every time you cook with it, whatever Emu the Menu shows.</strong> If anyone has a serious allergy, follow the advice of their doctor, keep their prescribed emergency medicine to hand, and in an emergency call your local emergency number (112 in the European Union) at once. Never rely on Emu the Menu to keep someone safe.</p>
+
+    <h2>Calories, diets and nutrition</h2>
+    <p>Calorie goals start from rough default figures for each category and can be changed. They are not recommendations for any individual. Real needs depend on age, size, activity, health and more. Calorie amounts for ingredients and recipes are estimates, built from figures that you or others entered or that came from the database described below. They are rounded and often incomplete.</p>
+    <p>Diets such as pescatarian, vegetarian, vegan or low meat are preferences that Emu the Menu tries to respect. They are not a promise that every suggestion fits that diet, and they are not a diet plan.</p>
+
+    <h2>Food safety and expiry dates</h2>
+    <p>Expiry dates, shelf-life reminders and "use soon" hints are reminders based on what you enter. They are not a food safety check. Look at, smell and handle food sensibly, follow the storage and use-by instructions on the packaging and official food-safety guidance, and when in doubt, throw it out.</p>
+
+    <h2>Information from other sources</h2>
+    <p>Barcode lookups use Open Food Facts, a free database that anyone can edit. Its names, quantities and nutrition figures may be wrong, missing or out of date, and Emu the Menu does not check them. Check anything that matters against the package in your hand.</p>
+
+    <h2>You stay responsible</h2>
+    <p>You decide what to buy, cook and serve. Check every suggestion before you rely on it. If you manage a profile for a child or for another person, you are responsible for checking that what is served suits them.</p>
+
+    <h2>No warranty, limited liability</h2>
+    <p>Emu the Menu is provided as is, without any warranty of any kind. It may contain mistakes or stop working. To the fullest extent the law allows, its authors and contributors are not liable for any loss, injury, illness or damage that arises from using it or relying on it. Nothing here limits any right or liability that cannot be limited by law. The software licence in LICENSE.md also applies.</p>
+
+    <h2>Accepting this disclaimer</h2>
+    <p>By accepting, you confirm that you have read and understood this page, and that you will check allergens and food safety yourself. Emu the Menu keeps a note of the version you accepted and the date, and asks again if this text changes.</p>
+  </article>
+
+  {% if current %}
+    <p class="saved" role="status">You accepted version {{ acceptance[0] }} on {{ acceptance[1].isoformat() }}.</p>
+  {% else %}
+    {% if acceptance %}
+      <p class="notice" role="status">This disclaimer has changed since you last accepted it (version {{ acceptance[0] }}, on {{ acceptance[1].isoformat() }}). Please read it again.</p>
+    {% endif %}
+    <form class="add" method="post" action="/disclaimer/accept"{% if popup %} data-disclaimer-form{% endif %}>
+      {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+      {% if popup %}<input type="hidden" name="popup" value="1">{% endif %}
+      <label class="check">
+        <input type="checkbox" name="understood" value="on" required>
+        I have read and understood this disclaimer
+      </label>
+      <button type="submit">Accept</button>
+    </form>
+  {% endif %}
+  {% if popup %}<div class="buttons"><button class="quiet" type="button" data-close-dialog>Close</button></div>{% endif %}

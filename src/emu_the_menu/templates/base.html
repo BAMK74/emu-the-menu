@@ -204,6 +204,8 @@
       color: var(--text); border: 1px solid var(--line); border-radius: calc(var(--radius) + .2rem);
     }
     dialog::backdrop { background: rgba(0, 0, 0, .55); }
+    #disclaimer-dialog { width: min(44rem, calc(100vw - 2rem)); max-height: calc(100vh - 3rem); overflow-y: auto; }
+    #disclaimer-dialog .legal-text h2 { font-size: 1rem; }
     dialog h2 { font-size: 1.1rem; margin: 0 0 .8rem; }
     dialog form.add { border: 0; padding: 0; margin: 0; background: none; box-shadow: none; }
     .buttons { display: flex; gap: .6rem; }
@@ -399,6 +401,52 @@
     })();
   </script>
   {% endblock %}
+  <dialog id="disclaimer-dialog" aria-label="Disclaimer">
+    <h2>Disclaimer</h2>
+    <div id="disclaimer-panel"></div>
+  </dialog>
+  <script>
+    // "Read the disclaimer" opens the full text as a pop-up on the same page. Accepting stays in
+    // the pop-up and removes the reminder banner. Without scripting, or if the fetch fails, the
+    // link goes to the Disclaimer page.
+    (function () {
+      const dialog = document.getElementById("disclaimer-dialog");
+      const panel = document.getElementById("disclaimer-panel");
+      if (!dialog || typeof dialog.showModal !== "function") return;
+      document.addEventListener("click", async (event) => {
+        const link = event.target.closest('a[href^="/disclaimer"]');
+        if (!link || link.pathname !== "/disclaimer") return;
+        if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
+        event.preventDefault();
+        try {
+          const response = await fetch("/disclaimer/panel");
+          if (!response.ok) throw new Error("HTTP " + response.status);
+          panel.innerHTML = await response.text();
+          dialog.showModal();
+        } catch (error) {
+          window.location.href = link.href;
+        }
+      });
+      dialog.addEventListener("click", (event) => {
+        if (event.target === dialog || event.target.closest("[data-close-dialog]")) dialog.close();
+      });
+      dialog.addEventListener("submit", async (event) => {
+        const form = event.target.closest("form[data-disclaimer-form]");
+        if (!form) return;
+        event.preventDefault();
+        try {
+          const response = await fetch(form.action, {
+            method: "POST",
+            body: new URLSearchParams(new FormData(form)),
+          });
+          panel.innerHTML = await response.text();
+          if (response.ok) document.querySelectorAll(".disclaimer-banner").forEach((b) => b.remove());
+        } catch (error) {
+          form.submit();
+        }
+      });
+    })();
+  </script>
   {% block disclaimer_banner %}{% if not disclaimer_accepted %}
   <div class="disclaimer-banner" role="region" aria-label="Disclaimer">
     <p><strong>Before you rely on Emu the Menu:</strong> it is an app, not a dietitian or a doctor, and it cannot guarantee that a food is safe for an allergy. <a href="/disclaimer?next={{ request.url.path|urlencode }}">Read the disclaimer and accept it</a>.</p>

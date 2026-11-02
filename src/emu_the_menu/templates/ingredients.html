@@ -25,7 +25,7 @@
     <div class="results-head">
       <h2>All ingredients</h2>
       {% if summary.total %}<p class="summary"><a class="chip" href="/ingredients"{% if not show %} aria-current="true"{% endif %}>{{ summary.total }} ingredient{{ "" if summary.total == 1 else "s" }}</a>{% if summary.no_calories %}<a class="chip chip-soon" href="{{ '/ingredients' if show == 'no-calories' else '/ingredients?show=no-calories' }}"{% if show == "no-calories" %} aria-current="true"{% endif %}>{{ summary.no_calories }} without calories</a>{% endif %}{% if summary.unchecked %}<a class="chip chip-soon" href="{{ '/ingredients' if show == 'unchecked' else '/ingredients?show=unchecked' }}"{% if show == "unchecked" %} aria-current="true"{% endif %}>{{ summary.unchecked }} not checked yet</a>{% endif %}</p>
-      <em class="hint">Click an ingredient to edit it.</em>{% if summary.unchecked %} <a class="chip chip-new" href="/ingredients/review">Review them one by one</a>{% endif %}{% endif %}
+      <em class="hint">Click an ingredient to edit it.</em>{% if summary.unchecked %} <a class="chip chip-new" href="/ingredients/review">Review the unchecked ingredients</a>{% endif %}{% endif %}
     </div>
     {% if ingredients %}
     <ul>

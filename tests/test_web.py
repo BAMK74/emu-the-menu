@@ -290,7 +290,7 @@ def test_every_page_has_the_settings_overlay_and_link(client):
 
 
 def test_the_settings_page_itself_has_no_overlay(client):
-    assert "<dialog" not in client.get("/settings").text
+    assert "settings-dialog" not in client.get("/settings").text
 
 
 def test_the_settings_panel_is_a_fragment_holding_the_form(client):
