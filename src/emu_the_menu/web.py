@@ -26,6 +26,19 @@ from emu_the_menu.shelf_life import ShelfLife, ShelfLifeUnit
 from emu_the_menu.stock import Location
 from emu_the_menu.templating import TEMPLATES as _TEMPLATES
 from emu_the_menu.units import IncompatibleUnitError, display_quantity, known_units
+from emu_the_menu.weather import (
+    GetJson,
+    Limits,
+    PlaceNotFoundError,
+    WeatherUnavailableError,
+    find_place,
+    from_unit,
+    http_get_json,
+    parse_limits,
+    parse_unit,
+    to_unit,
+)
+from emu_the_menu.weather_store import WeatherRepository
 from emu_the_menu.web_disclaimer import create_router as create_disclaimer_router
 from emu_the_menu.web_eaters import create_router as create_eaters_router
 from emu_the_menu.web_eaters import export_eaters
@@ -80,6 +93,7 @@ def create_app(
     fetch_product: Fetch = http_fetch,
     backup_dir: str | Path | None = None,
     fetch_recipe_page: Callable[[str], str] = fetch_page,
+    get_json: GetJson = http_get_json,
 ) -> FastAPI:
     path = db_path or os.environ.get("EMU_DB", "emu.db")
     backup_dir = backup_dir or os.environ.get("EMU_BACKUP_DIR")
@@ -90,8 +104,8 @@ def create_app(
     app.include_router(create_calories_router(path))  # before /ingredients/{id}
     app.include_router(create_ingredients_router(path, fetch_product))
     app.include_router(create_recipes_router(path, fetch_recipe_page))
-    app.include_router(create_menu_router(path, today))
-    app.include_router(create_saved_menus_router(path, today))
+    app.include_router(create_menu_router(path, today, get_json))
+    app.include_router(create_saved_menus_router(path, today, get_json))
     app.include_router(create_disclaimer_router(path, today))
     app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
@@ -174,11 +188,49 @@ def create_app(
             "goals_open": goal_form is not None,
         }
 
+    def weather_context(typed: dict | None = None) -> dict:
+        with WeatherRepository(path) as weather:
+            place = weather.place()
+            limits = weather.limits()
+            stored_unit = weather.unit()
+        typed = typed or {}
+        unit = typed.get("unit", stored_unit)
+        other = "C" if unit == "F" else "F"
+
+        def shown(c: float) -> str:
+            return f"{round(to_unit(c, unit), 1):g}"
+
+        def other_unit(text: str) -> str:
+            try:
+                value = float(text.strip().replace(",", "."))
+                return f"{round(to_unit(from_unit(value, unit), other), 1):g}"
+            except ValueError:
+                return "?"
+
+        warm = typed.get("warm_from", shown(limits.warm_from))
+        cold = typed.get("cold_up_to", shown(limits.cold_up_to))
+        built_in = Limits()
+        return {
+            "place": place.label if place else "",
+            "unit": unit,
+            "other_unit": other,
+            "warm_from": warm,
+            "cold_up_to": cold,
+            "warm_other": other_unit(warm),
+            "cold_other": other_unit(cold),
+            "built_in_text": (
+                f"{built_in.warm_from:g} and {built_in.cold_up_to:g} °C"
+                f" ({round(to_unit(built_in.warm_from, 'F'), 1):g} and"
+                f" {round(to_unit(built_in.cold_up_to, 'F'), 1):g} °F)"
+            ),
+        }
+
     def settings_page(
         request: Request,
         repo: StockRepository,
         error: str | None = None,
         goal_form: dict | None = None,
+        weather_form: dict | None = None,
     ):
         return _TEMPLATES.TemplateResponse(
             request,
@@ -186,6 +238,7 @@ def create_app(
             {
                 "countries": COUNTRIES,
                 "country": repo.household_country(),
+                **weather_context(weather_form),
                 "saved": request.query_params.get("saved") == "1",
                 "error": error,
                 "backup": backup_status(),
@@ -203,6 +256,7 @@ def create_app(
             {
                 "countries": COUNTRIES,
                 "country": repo.household_country(),
+                **weather_context(),
                 "backup": backup_status(),
                 "next_url": next if next in _RETURN_PAGES else None,
                 **calorie_context(),
@@ -236,6 +290,28 @@ def create_app(
             f"{next}?saved=1" if next in _RETURN_PAGES else "/settings?saved=1", status_code=303
         )
 
+    def save_town(town: str, country: str | None) -> str | None:
+        """Find and keep the town (or clear it when blank). Returns a message on failure."""
+        town = " ".join(town.split())
+        with WeatherRepository(path) as weather:
+            current = weather.place()
+            if not town:
+                weather.set_place(None)
+                return None
+            if (
+                current
+                and town in (current.label, current.name)
+                and (not country or country == current.country_code)
+            ):
+                return None  # unchanged
+            try:
+                weather.set_place(find_place(town, country, get_json))
+            except PlaceNotFoundError as exc:
+                return str(exc)
+            except WeatherUnavailableError as exc:
+                return f"{exc}, so the town was not changed. Try again later."
+        return None
+
     @app.get("/settings", response_class=HTMLResponse)
     def settings(request: Request, repo: StockRepository = Depends(get_repo)):
         return settings_page(request, repo)
@@ -244,13 +320,29 @@ def create_app(
     def save_settings(
         request: Request,
         country: str = Form(""),
+        town: str = Form(""),
+        temperature_unit: str = Form(""),
+        warm_from: str = Form(""),
+        cold_up_to: str = Form(""),
         next: str = Form(""),
         repo: StockRepository = Depends(get_repo),
     ):
+        typed = {"warm_from": warm_from, "cold_up_to": cold_up_to}
         try:
+            with WeatherRepository(path) as weather:
+                # A form sent without the unit box leaves the unit as it is.
+                unit = parse_unit(temperature_unit) if temperature_unit else weather.unit()
+            typed["unit"] = unit
+            limits = parse_limits(warm_from, cold_up_to, unit)
             repo.set_household_country(country)
         except ValueError as exc:
-            return settings_page(request, repo, str(exc))
+            return settings_page(request, repo, str(exc), weather_form=typed)
+        error = save_town(town, repo.household_country())
+        if error:
+            return settings_page(request, repo, error, weather_form=typed)
+        with WeatherRepository(path) as weather:
+            weather.set_limits(limits)
+            weather.set_unit(unit)
         # Only known pages may be returned to, so this cannot redirect elsewhere.
         return RedirectResponse(
             f"{next}?saved=1" if next in _RETURN_PAGES else "/settings?saved=1",

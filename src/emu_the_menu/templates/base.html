@@ -190,6 +190,9 @@
     .menu-days { display: grid; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); gap: .8rem; margin-top: 1rem; }
     .day { background: var(--card); border: 1px solid var(--line); border-radius: var(--radius); padding: .8rem; }
     .day h3 { margin: 0 0 .5rem; font-size: 1rem; }
+    fieldset.limits { border: 1px solid var(--line, #ccc); border-radius: .5rem; margin: .75rem 0; padding: .5rem .75rem; }
+    fieldset.limits legend { font-size: .85rem; padding: 0 .3rem; }
+    .weather { font-size: .8rem; font-weight: 400; color: var(--muted); }
     .meal { padding: .5rem 0; border-top: 1px solid var(--line); }
     .meal:first-of-type { border-top: 0; }
     .meal p { margin: 0; }
@@ -485,6 +488,38 @@
   document.addEventListener("submit", (event) => {
     const form = event.target.closest("form[data-confirm]");
     if (form && !confirm(form.dataset.confirm)) event.preventDefault();
+  });
+  // Temperature limits in Settings: a box marked data-other-unit="id" shows its figure in the other
+  // unit inside #id as you type, and switching the unit converts the boxes.
+  const round1 = (x) => String(Math.round(x * 10) / 10);
+  const convert = (text, from) => {
+    const n = parseFloat(text.replace(",", "."));
+    if (!Number.isFinite(n)) return null;
+    return from === "C" ? n * 9 / 5 + 32 : (n - 32) * 5 / 9;
+  };
+  const showOther = (box, unit) => {
+    const out = document.getElementById(box.dataset.otherUnit);
+    const v = convert(box.value, unit);
+    if (out) out.textContent = v === null ? "?" : round1(v);
+  };
+  document.addEventListener("input", (event) => {
+    const box = event.target.closest("input[data-other-unit]");
+    const group = box && box.closest("[data-temp-unit]");
+    if (group) showOther(box, group.dataset.tempUnit);
+  });
+  document.addEventListener("change", (event) => {
+    const select = event.target.closest("select[data-temp-unit-select]");
+    const group = select && select.closest("[data-temp-unit]");
+    if (!group || select.value === group.dataset.tempUnit) return;
+    const from = group.dataset.tempUnit, to = select.value;
+    group.dataset.tempUnit = to;
+    group.querySelectorAll("input[data-other-unit]").forEach((box) => {
+      const v = convert(box.value, from);
+      if (v !== null) box.value = round1(v);
+      showOther(box, to);
+    });
+    group.querySelectorAll("[data-unit-name]").forEach((el) => { el.textContent = to; });
+    group.querySelectorAll("[data-other-unit-name]").forEach((el) => { el.textContent = from; });
   });
   // Ticking "No expiry" switches the date off and clears it.
   document.addEventListener("change", (event) => {

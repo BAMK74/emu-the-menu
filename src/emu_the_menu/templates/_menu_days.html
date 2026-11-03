@@ -1,7 +1,7 @@
   <section class="results menu-days" aria-label="Planned meals">
     {% for day, meals in days_shown %}
     <div class="day">
-      <h3>{{ label(day) }}</h3>
+      <h3>{{ label(day) }}{% if forecast and forecast.get(day) %}{% set w = forecast.get(day) %} <span class="weather" title="Forecast for {{ day.isoformat() }}">{{ degrees(w.high, temp_unit) }}° / {{ degrees(w.low, temp_unit) }}° {{ temp_unit }}{% if w.kind %} · {{ w.kind.value }}{% endif %}</span>{% endif %}</h3>
       {% for meal, unchecked in meals %}
       <div class="meal">
         <p class="meal-type">{{ meal.slot.label }}{% if change_base and not meal.cooked_on %} <a class="meal-change" href="{{ change_base }}/{{ meal.id }}">Change</a>{% endif %}</p>

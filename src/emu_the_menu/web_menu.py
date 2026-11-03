@@ -23,6 +23,8 @@ from emu_the_menu.recipes import analyse
 from emu_the_menu.reserve import free_stock
 from emu_the_menu.templating import TEMPLATES
 from emu_the_menu.units import display_quantity
+from emu_the_menu.weather import http_get_json
+from emu_the_menu.weather_store import kinds, weather_for
 
 DEFAULT_DAYS = 7
 MAX_DAYS = 28
@@ -79,7 +81,7 @@ class PlanRequest:
     cooldown: int
     seed: int
 
-    def run(self, db_path: str | Path, today: date) -> Menu:
+    def run(self, db_path: str | Path, today: date, forecast=None) -> Menu:
         """Plan, on the Stock that accepted Menus are not holding."""
         with RecipeRepository(db_path) as recipes, MenuRepository(db_path) as menus:
             return plan(
@@ -92,6 +94,7 @@ class PlanRequest:
                 seed=self.seed,
                 settings=PlanSettings(self.allowance, self.cooldown),
                 last_served=menus.last_served(),
+                weather=kinds(forecast or {}),
             )
 
     def query(self, seed: int) -> list[tuple[str, object]]:
@@ -137,7 +140,7 @@ def parse_plan(
     return PlanRequest(first, length, slots, people, shop, cool, number)
 
 
-def create_router(db_path: str | Path, today=date.today) -> APIRouter:
+def create_router(db_path: str | Path, today=date.today, get_json=http_get_json) -> APIRouter:
     router = APIRouter()
 
     @router.get("/menu", response_class=HTMLResponse)
@@ -176,6 +179,7 @@ def create_router(db_path: str | Path, today=date.today) -> APIRouter:
             "error": None,
             "reshuffle": None,
             "label": day_label,
+            "forecast": {},
             "save_fields": None,
         }
 
@@ -199,10 +203,12 @@ def create_router(db_path: str | Path, today=date.today) -> APIRouter:
             )
         except ValueError as exc:
             return answer(str(exc), 400)
-        result = settings.run(db_path, today())
+        forecast = weather_for(db_path, today(), get_json)
+        result = settings.run(db_path, today(), forecast)
         held = free_stock(db_path, today())
         return answer(
             days_shown=days_of(result.meals),
+            forecast=forecast,
             shopping=shopping_text(shopping_amounts(result.meals, held)),
             reshuffle="/menu?" + urlencode(settings.query(settings.seed + 1)),
             save_fields=settings.query(settings.seed),
@@ -228,7 +234,7 @@ def create_router(db_path: str | Path, today=date.today) -> APIRouter:
             )
         except ValueError as exc:
             return HTMLResponse(f"error: {exc}", status_code=400)
-        result = settings.run(db_path, today())
+        result = settings.run(db_path, today(), weather_for(db_path, today(), get_json))
         with MenuRepository(db_path) as menus:
             menu_id = menus.save(
                 str(form.get("name", "")), settings.start, settings.days, result, settings.people

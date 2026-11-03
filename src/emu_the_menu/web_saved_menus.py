@@ -22,6 +22,8 @@ from emu_the_menu.repository import StockRepository
 from emu_the_menu.reserve import free_stock, stock_lots
 from emu_the_menu.templating import TEMPLATES
 from emu_the_menu.units import display_quantity
+from emu_the_menu.weather import http_get_json
+from emu_the_menu.weather_store import kinds, weather_for
 from emu_the_menu.web_menu import day_label, days_of, shopping_text
 
 
@@ -52,7 +54,7 @@ def live_meals(saved: SavedMenu, db_path: str | Path, today: date) -> tuple[list
     return meals, shopping_text(shopping_amounts(meals, held))
 
 
-def create_router(db_path: str | Path, today=date.today) -> APIRouter:
+def create_router(db_path: str | Path, today=date.today, get_json=http_get_json) -> APIRouter:
     router = APIRouter()
 
     @router.get("/menus", response_class=HTMLResponse)
@@ -76,6 +78,7 @@ def create_router(db_path: str | Path, today=date.today) -> APIRouter:
             {
                 "saved": saved,
                 "days_shown": days_of(meals),
+                "forecast": weather_for(db_path, today(), get_json),
                 "shopping": shopping,
                 "change_base": f"/menus/{saved.id}/meals",
                 "label": day_label,
@@ -195,6 +198,7 @@ def create_router(db_path: str | Path, today=date.today) -> APIRouter:
                     held,
                     seed=random.SystemRandom().randrange(10**9),
                     last_served=repo.last_served(),
+                    weather=kinds(weather_for(db_path, today(), get_json)),
                 )
                 picked = next((m for m in result.meals if m.slot is meal.slot), None)
             if picked is None or picked.recipe is None:

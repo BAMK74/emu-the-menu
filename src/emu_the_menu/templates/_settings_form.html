@@ -6,7 +6,29 @@
       {% for code, name in countries.items() %}<option value="{{ code }}"{{ " selected" if code == country }}>{{ name }}</option>{% endfor %}
     </select>
   </label>
-  <p class="hint">Used to suggest local pack sizes and, later, weather and public holidays.</p>
+  <p class="hint">Used to suggest local pack sizes and, later, public holidays.</p>
+  <label>Town
+    <input name="town" type="text" maxlength="80" value="{{ place }}" autocomplete="off" placeholder="For the weather forecast">
+  </label>
+  <p class="hint">Menus favour warm or cold recipes on warm or cold days. Only the town name is sent, to Open-Meteo, to find its coordinates and forecast. Leave it blank to switch weather off.</p>
+  <fieldset class="limits" data-temp-unit="{{ unit }}">
+    <legend>Temperature and what counts as warm or cold</legend>
+    <label>Show temperatures in
+      <select name="temperature_unit" data-temp-unit-select>
+        <option value="C"{{ " selected" if unit == "C" }}>Celsius (°C)</option>
+        <option value="F"{{ " selected" if unit == "F" }}>Fahrenheit (°F)</option>
+      </select>
+    </label>
+    <p class="hint">A day is warm or cold by its highest temperature; in between, neither. Leave a box blank for the built-in figures ({{ built_in_text }}).</p>
+    <label>Warm from (°<span data-unit-name>{{ unit }}</span>)
+      <input name="warm_from" type="text" inputmode="decimal" maxlength="6" value="{{ warm_from }}" data-other-unit="f-warm">
+    </label>
+    <p class="hint">= <span id="f-warm">{{ warm_other }}</span> °<span data-other-unit-name>{{ other_unit }}</span></p>
+    <label>Cold up to (°<span data-unit-name>{{ unit }}</span>)
+      <input name="cold_up_to" type="text" inputmode="decimal" maxlength="6" value="{{ cold_up_to }}" data-other-unit="f-cold">
+    </label>
+    <p class="hint">= <span id="f-cold">{{ cold_other }}</span> °<span data-other-unit-name>{{ other_unit }}</span></p>
+  </fieldset>
   <div class="buttons">
     <button type="submit">Save</button>
     {% if next_url %}<button class="quiet" type="button" data-close-dialog>Cancel</button>{% endif %}
