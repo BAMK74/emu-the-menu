@@ -1,0 +1,8 @@
+{% if holds %}
+  <div class="warning-note holds" role="note">
+    <p><strong>Stock is being held.</strong> {{ "An accepted menu is" if holds|length == 1 else "Accepted menus are" }} holding stock, so {{ holds_for }} does not count on it. Un-accept a menu to let its stock go.</p>
+    <ul>
+      {% for menu, items in holds %}<li><a href="/menus/{{ menu.id }}">{{ menu.name }}</a> ({{ label(menu.start) }}, {{ menu.days }} day{{ "" if menu.days == 1 else "s" }}): {{ items|join(", ") }}</li>{% endfor %}
+    </ul>
+  </div>
+{% endif %}

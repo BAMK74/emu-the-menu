@@ -20,6 +20,12 @@
       <button type="submit">Accept this menu</button></p>
   </form>
   {% endif %}
+  {% if clashes %}
+  <div class="warning-note" role="note">
+    <p><strong>Overlapping menus.</strong> This menu covers days that {% for other in clashes %}<a href="/menus/{{ other.id }}">{{ other.name }}</a> ({{ label(other.start) }}, {{ other.days }} day{{ "" if other.days == 1 else "s" }}){{ ", " if not loop.last }}{% endfor %} {{ "also covers" if clashes|length == 1 else "also cover" }}. Both are accepted, so both plan meals for the same days and hold stock for them. Un-accept one if that is not what you want.</p>
+  </div>
+  {% endif %}
+  {% include "_holds.html" %}
   {% include "_menu_days.html" %}
   <form method="post" action="/menus/{{ saved.id }}/delete" data-confirm="Delete this saved menu?">
     <button class="quiet" type="submit">Delete this menu</button>

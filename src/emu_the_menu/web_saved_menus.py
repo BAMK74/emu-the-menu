@@ -20,12 +20,12 @@ from emu_the_menu.planner import Meal, Portion, choices_for, guests_for, plan, p
 from emu_the_menu.recipe_repository import RecipeRepository
 from emu_the_menu.recipes import analyse
 from emu_the_menu.repository import StockRepository
-from emu_the_menu.reserve import free_stock, stock_lots
+from emu_the_menu.reserve import free_stock, overlapping, stock_lots
 from emu_the_menu.templating import TEMPLATES
 from emu_the_menu.units import display_quantity
 from emu_the_menu.weather import http_get_json
 from emu_the_menu.weather_store import kinds, weather_for
-from emu_the_menu.web_menu import day_label, days_of, shopping_text
+from emu_the_menu.web_menu import day_label, days_of, held_text, shopping_text
 
 
 def live_meals(saved: SavedMenu, db_path: str | Path, today: date) -> tuple[list[Meal], list]:
@@ -67,17 +67,21 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
     def menus(request: Request):
         with MenuRepository(db_path) as repo:
             listed = repo.menus()
+            accepted = repo.accepted_menus()
+        clashes = {m.id: [o.name for o in overlapping(m, accepted, today())] for m in accepted}
         return TEMPLATES.TemplateResponse(
-            request, "menus.html", {"menus": listed, "label": day_label}
+            request, "menus.html", {"menus": listed, "label": day_label, "clashes": clashes}
         )
 
     @router.get("/menus/{menu_id}", response_class=HTMLResponse)
     def one(request: Request, menu_id: int):
         with MenuRepository(db_path) as repo:
             saved = repo.get(menu_id)
+            accepted = repo.accepted_menus()
         if saved is None:
             raise HTTPException(404, "No such menu")
         meals, shopping = live_meals(saved, db_path, today())
+        clashes = overlapping(saved, accepted, today()) if saved.accepted_on else []
         return TEMPLATES.TemplateResponse(
             request,
             "saved_menu.html",
@@ -87,6 +91,9 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
                 "forecast": weather_for(db_path, today(), get_json),
                 "occasions": occasions_for(db_path, saved.start, saved.days),
                 "shopping": shopping,
+                "clashes": clashes,
+                "holds": held_text(db_path, today(), saved.accepted_order),
+                "holds_for": "this menu",
                 "change_base": f"/menus/{saved.id}/meals",
                 "label": day_label,
             },

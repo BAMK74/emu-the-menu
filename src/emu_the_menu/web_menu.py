@@ -21,7 +21,7 @@ from emu_the_menu.occasion_repository import occasions_for
 from emu_the_menu.planner import Menu, PlanSettings, Slot, plan
 from emu_the_menu.recipe_repository import RecipeRepository
 from emu_the_menu.recipes import analyse
-from emu_the_menu.reserve import free_stock
+from emu_the_menu.reserve import free_stock, holdings
 from emu_the_menu.templating import TEMPLATES
 from emu_the_menu.units import display_quantity
 from emu_the_menu.weather import http_get_json
@@ -56,6 +56,11 @@ def shopping_text(pairs) -> list[str]:
         quantity, unit = display_quantity(amount, ingredient.base_unit)
         found.append(f"{ingredient.name} {quantity:g} {unit}".strip())
     return found
+
+
+def held_text(db_path: str | Path, today: date, before: int | None = None):
+    """What accepted Menus hold, as (menu, ["carrots 400 g", ...]) for the page to say so."""
+    return [(menu, shopping_text(items)) for menu, items in holdings(db_path, today, before)]
 
 
 def days_of(meals):
@@ -183,6 +188,8 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
             "label": day_label,
             "forecast": {},
             "occasions": {},
+            "holds": [],
+            "holds_for": "planning a new menu",
             "save_fields": None,
         }
 
@@ -214,6 +221,7 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
             days_shown=days_of(result.meals),
             forecast=forecast,
             occasions=occasions,
+            holds=held_text(db_path, today()),
             shopping=shopping_text(shopping_amounts(result.meals, held)),
             reshuffle="/menu?" + urlencode(settings.query(settings.seed + 1)),
             save_fields=settings.query(settings.seed),
