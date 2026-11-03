@@ -1,0 +1,80 @@
+{% extends "base.html" %}
+{% block title %}Emu the Menu - Occasions{% endblock %}
+{% block heading %}Occasions{% endblock %}
+{% block main_class %}wide{% endblock %}
+{% macro fields(o, id) %}
+    <label>Name
+      <input name="name" value="{{ o.name }}" maxlength="80" autocomplete="off" required>
+    </label>
+    <div class="pair">
+      <label>Date
+        <input name="day" type="date" value="{{ o.day }}" required>
+      </label>
+      <label>People at the table
+        <input name="headcount" type="number" min="1" max="{{ max_headcount }}" step="1" inputmode="numeric" value="{{ o.headcount }}" placeholder="Just us">
+      </label>
+    </div>
+    <div class="pair">
+      <label>Extra calories (%)
+        <input name="extra" type="number" min="0" max="{{ max_extra }}" step="1" inputmode="numeric" value="{{ o.extra }}" placeholder="0">
+      </label>
+      <label>Tags
+        <input name="tags" value="{{ o.tags }}" placeholder="festive, barbecue" autocomplete="off">
+      </label>
+    </div>
+{% endmacro %}
+{% block content %}
+  <div class="split">
+  <aside class="side">
+  {% if error %}<p class="error" role="alert">error: {{ error }}</p>{% endif %}
+  {% if notice %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
+
+  <form class="add" method="post" action="/occasions">
+    {{ fields(form, none) }}
+    <p class="hint">People at the table counts everyone, the household included. Leave it blank for just the household. Extra calories raises every eater's goal that day. Tags favour recipes that carry the same tag.</p>
+    <button type="submit">Add occasion</button>
+  </form>
+
+  <form class="add" method="post" action="/occasions/holidays">
+    <p><strong>Public holidays</strong></p>
+    {% if country %}
+    <p class="hint">Fetched from Nager.Date for {{ country }}. Only the country and the year are sent. Holidays that apply to the whole country are added; regional ones are skipped.</p>
+    <div class="buttons">
+      {% for y in years %}<button type="submit" name="year" value="{{ y }}" class="quiet">Import {{ y }}</button>{% endfor %}
+    </div>
+    {% else %}
+    <p class="hint">Set your country in Settings first.</p>
+    {% endif %}
+  </form>
+  </aside>
+
+  <section class="results" aria-label="Occasions">
+  {% if occasions %}
+  <ul>
+    {% for o in occasions %}
+    <li>
+      <div class="item-head">
+        <span><strong>{{ o.name }}</strong>{% if o.source.value == "holiday" %} <span class="tag">Holiday</span>{% endif %}</span>
+        <span class="qty">{{ label(o.day) }}</span>
+      </div>
+      <div class="meta">{% if o.headcount %}{{ o.headcount }} at the table{% else %}Just the household{% endif %}{% if o.extra_percent %} · +{{ o.extra_percent }}% calories{% endif %}</div>
+      {% if o.tags %}<div class="meta">Tags: {{ o.tags|join(", ") }}</div>{% endif %}
+      <details>
+        <summary>Edit</summary>
+        <form class="add edit" method="post" action="/occasions/{{ o.id }}">
+          {{ fields({"name": o.name, "day": o.day.isoformat(), "headcount": o.headcount or "", "extra": o.extra_percent or "", "tags": o.tags|join(", ")}, o.id) }}
+          <button type="submit">Save</button>
+        </form>
+        <form method="post" action="/occasions/{{ o.id }}/delete" data-confirm="Remove this occasion?">
+          <button class="quiet" type="submit">Remove</button>
+        </form>
+      </details>
+    </li>
+    {% endfor %}
+  </ul>
+  {% else %}
+  <p class="empty">No upcoming occasions. Add one, or import this year's public holidays.</p>
+  {% endif %}
+  </section>
+  </div>
+{% endblock %}

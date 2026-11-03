@@ -18,6 +18,9 @@ from emu_the_menu.eaters import (
     EaterRepository,
     parse_calorie_goal,
 )
+from emu_the_menu.holidays import GetJson as HolidayGet
+from emu_the_menu.holidays import http_get_json as http_get_holidays
+from emu_the_menu.occasion_repository import OccasionRepository
 from emu_the_menu.openfoodfacts import Fetch, LookupUnavailableError, find_product, http_fetch
 from emu_the_menu.page_fetch import fetch_page
 from emu_the_menu.recipe_repository import RecipeRepository
@@ -46,6 +49,7 @@ from emu_the_menu.web_ingredient_calories import create_router as create_calorie
 from emu_the_menu.web_ingredient_review import create_router as create_review_router
 from emu_the_menu.web_ingredients import create_router as create_ingredients_router
 from emu_the_menu.web_menu import create_router as create_menu_router
+from emu_the_menu.web_occasions import create_router as create_occasions_router
 from emu_the_menu.web_recipes import create_router as create_recipes_router
 from emu_the_menu.web_saved_menus import create_router as create_saved_menus_router
 
@@ -94,6 +98,7 @@ def create_app(
     backup_dir: str | Path | None = None,
     fetch_recipe_page: Callable[[str], str] = fetch_page,
     get_json: GetJson = http_get_json,
+    get_holidays: HolidayGet = http_get_holidays,
 ) -> FastAPI:
     path = db_path or os.environ.get("EMU_DB", "emu.db")
     backup_dir = backup_dir or os.environ.get("EMU_BACKUP_DIR")
@@ -104,6 +109,7 @@ def create_app(
     app.include_router(create_calories_router(path))  # before /ingredients/{id}
     app.include_router(create_ingredients_router(path, fetch_product))
     app.include_router(create_recipes_router(path, fetch_recipe_page))
+    app.include_router(create_occasions_router(path, today, get_holidays))
     app.include_router(create_menu_router(path, today, get_json))
     app.include_router(create_saved_menus_router(path, today, get_json))
     app.include_router(create_disclaimer_router(path, today))
@@ -375,6 +381,8 @@ def create_app(
             data["eaters"] = export_eaters(eaters.list())
         with RecipeRepository(path) as recipes:
             data["recipes"] = recipes.export_data()
+        with OccasionRepository(path) as occasions:
+            data["occasions"] = occasions.export_data()
         body = json.dumps(data, indent=2, ensure_ascii=False)
         return download(body, "application/json", f"emu-{today().isoformat()}.json")
 
