@@ -66,7 +66,7 @@ def free_stock(
                 recipe = found[meal.recipe_id]
                 if recipe is None:
                     continue
-                servings = sum(p.servings for p in meal.portions)
+                servings = sum(p.servings for p in meal.portions) + meal.guest_servings
                 held = {
                     i.id: pantry.available(i.id, meal.day) for slot in recipe.slots for i in slot
                 }

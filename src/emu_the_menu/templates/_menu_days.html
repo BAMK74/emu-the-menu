@@ -1,7 +1,7 @@
   <section class="results menu-days" aria-label="Planned meals">
     {% for day, meals in days_shown %}
     <div class="day">
-      <h3>{{ label(day) }}{% if forecast and forecast.get(day) %}{% set w = forecast.get(day) %} <span class="weather" title="Forecast for {{ day.isoformat() }}">{{ degrees(w.high, temp_unit) }}° / {{ degrees(w.low, temp_unit) }}° {{ temp_unit }}{% if w.kind %} · {{ w.kind.value }}{% endif %}</span>{% endif %}</h3>
+      <h3>{{ label(day) }}{% if forecast and forecast.get(day) %}{% set w = forecast.get(day) %} <span class="weather" title="Forecast for {{ day.isoformat() }}">{{ degrees(w.high, temp_unit) }}° / {{ degrees(w.low, temp_unit) }}° {{ temp_unit }}{% if w.kind %} · {{ w.kind.value }}{% endif %}</span>{% endif %}{% if occasions and occasions.get(day) %} <span class="chip occasion" title="Occasion">{{ occasions.get(day).name }}</span>{% endif %}</h3>
       {% for meal, unchecked in meals %}
       <div class="meal">
         <p class="meal-type">{{ meal.slot.label }}{% if change_base and not meal.cooked_on %} <a class="meal-change" href="{{ change_base }}/{{ meal.id }}">Change</a>{% endif %}</p>
@@ -11,6 +11,7 @@
         <div class="portions">
           {% for p in meal.portions %}<span class="portion"><strong>{{ p.eater.name }}</strong> {{ "%g"|format(p.servings) }} serving{{ "" if p.servings == 1 else "s" }} {% if p.kcal is not none %}{{ "%d"|format(p.kcal|round) }} kcal{% else %}calories unknown{% endif %}</span>{% endfor %}
         </div>
+        {% if meal.guests %}<p class="hint">Includes {{ meal.guests }} guest{{ "" if meal.guests == 1 else "s" }} ({{ "%g"|format(meal.guest_servings) }} serving{{ "" if meal.guest_servings == 1 else "s" }}). Guests' allergies and diets are not known: ask them before you cook.</p>{% endif %}
         <p class="hint">Cook {{ "%g"|format(meal.total_servings) }} servings ({{ "%g"|format(meal.scale|round(2)) }}× the recipe).</p>
         {% if change_base %}
         {% if meal.cooked_on %}

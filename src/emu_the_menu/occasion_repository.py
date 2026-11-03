@@ -172,3 +172,9 @@ class OccasionRepository:
             }
             for o in self.all()
         ]
+
+
+def occasions_for(path: str | Path, start: date, days: int) -> dict[date, Occasion]:
+    """The Occasion standing for each day of a plan that has any."""
+    with OccasionRepository(path) as repo:
+        return repo.for_days(start, days)

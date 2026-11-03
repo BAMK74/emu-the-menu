@@ -9,14 +9,19 @@ Every Meal is filled in the same way. First the hard rules throw Recipes out:
 4. it would take the Menu past its Shopping Allowance (too many Ingredients not in Stock).
 
 The Recipes left are ranked by a weighted score: calorie fit, using Stock that expires soon, using
-Stock at all, weather, and a penalty for dislikes. The weights are settings. The best one wins, and
-ties are broken at random from a seed so that a Menu can be reshuffled and also repeated.
+Stock at all, weather, an Occasion's tags, and a penalty for dislikes. The weights are settings.
+The best one wins, and ties are broken at random from a seed so that a Menu can be reshuffled and
+also repeated.
 
 Stock is counted in amounts with expiry dates (`cooking.Pantry`): an Ingredient is covered when
 what is held and has not expired by the day is at least what the Meal needs, and what a Meal
 uses is not there for the next. A stock entry that is only a date (or None) means an amount that
 is not tracked, always enough until then. Ingredients to buy are assumed to cover the rest of
 the Menu once bought, so each counts once against the Shopping Allowance.
+
+An Occasion on a day (`plan(occasions=...)`) changes that day's Meals three ways: its extra calories
+raise every Eater's goal, guests beyond the Household are cooked for as average adults
+(`GUEST_CALORIE_GOAL`), and Recipes carrying one of its tags score higher.
 """
 
 import random
@@ -27,6 +32,8 @@ from enum import StrEnum
 
 from emu_the_menu.cooking import Held, Pantry, uses_for
 from emu_the_menu.eaters import Eater
+from emu_the_menu.names import stem
+from emu_the_menu.occasions import Occasion
 from emu_the_menu.recipe_repository import Recipe
 from emu_the_menu.recipes import MealType, RecipeFacts, Weather, analyse
 from emu_the_menu.repository import Ingredient
@@ -64,6 +71,7 @@ SLOT_SHARES = {
     Slot.EVENING_SNACK: 0.08,
 }
 EXPIRING_WITHIN_DAYS = 7
+GUEST_CALORIE_GOAL = 2000  # a guest is cooked for as an average adult, before any extra calories
 SERVING_STEP = 0.25
 
 
@@ -73,6 +81,7 @@ class Weights:
     expiring: float = 2.0
     in_stock: float = 1.5
     weather: float = 1.0
+    occasion: float = 1.5  # a Recipe carrying one of the Occasion's tags
     soft: float = 1.5  # the penalty for dislikes and, on a low-meat diet, meat
 
 
@@ -100,6 +109,8 @@ class Meal:
     recipe: Recipe | None
     portions: tuple[Portion, ...] = ()
     reason: str = ""  # why there is no Recipe, when there is none
+    guests: int = 0  # people beyond the Eaters, from an Occasion
+    guest_servings: float = 0.0  # servings cooked for them, all together
     id: int | None = None  # the saved Meal this is, once the Menu is saved
     cooked_on: date | None = None
     short: str = ""  # what Stock could not cover when it was cooked
@@ -110,8 +121,8 @@ class Meal:
 
     @property
     def total_servings(self) -> float:
-        """How many servings to cook so that every Eater gets their portion."""
-        return sum(p.servings for p in self.portions)
+        """How many servings to cook so that every Eater and guest gets their portion."""
+        return sum(p.servings for p in self.portions) + self.guest_servings
 
     @property
     def scale(self) -> float:
@@ -133,10 +144,40 @@ class _Candidate:
     ok: bool  # suits every Eater at the table
 
 
-def _targets(eaters: Sequence[Eater], slot: Slot, slots: Collection[Slot]):
+def _tag_forms(tag: str) -> set[str]:
+    """A tag and its singular spellings, so "barbecues" matches "barbecue"."""
+    tag = tag.lower().strip()
+    return {tag, stem(tag), tag.removesuffix("s")}
+
+
+def _boost(occasion: Occasion | None) -> float:
+    """What an Occasion's extra calories multiply a day's calorie goals by."""
+    return 1 + occasion.extra_percent / 100 if occasion else 1.0
+
+
+def _targets(
+    eaters: Sequence[Eater],
+    slot: Slot,
+    slots: Collection[Slot],
+    occasion: Occasion | None = None,
+):
     total = sum(SLOT_SHARES[s] for s in slots)
-    share = SLOT_SHARES[slot] / total
+    share = SLOT_SHARES[slot] / total * _boost(occasion)
     return [eater.calorie_goal * share for eater in eaters]
+
+
+def _guest_servings(
+    guests: int, slot: Slot, slots: Collection[Slot], occasion: Occasion | None, kcal: float | None
+) -> float:
+    """Servings cooked for `guests` people, each an average adult, in quarters of a serving."""
+    if guests <= 0:
+        return 0.0
+    if not kcal:
+        return float(guests)
+    total = sum(SLOT_SHARES[s] for s in slots)
+    target = GUEST_CALORIE_GOAL * SLOT_SHARES[slot] / total * _boost(occasion)
+    each = max(SERVING_STEP, round(target / kcal / SERVING_STEP) * SERVING_STEP)
+    return each * guests
 
 
 def _portions(
@@ -168,6 +209,7 @@ def _score(
     weather: Weather | None,
     weights: Weights,
     eaters: int,
+    occasion: Occasion | None = None,
 ) -> float:
     recipe, facts = candidate.recipe, candidate.facts
     # A group of alternatives is one need, met if any of them is in Stock.
@@ -189,8 +231,13 @@ def _score(
     match = 0.0
     if weather is not None and recipe.weather is not Weather.ANY:
         match = 1.0 if recipe.weather is weather else -1.0
+    festive = 0.0
+    if occasion and occasion.tags:
+        wanted = {form for t in occasion.tags for form in _tag_forms(t)}
+        festive = 1.0 if any(_tag_forms(t) & wanted for t in recipe.tags) else 0.0
     return (
-        weights.calorie_fit * fit
+        weights.occasion * festive
+        + weights.calorie_fit * fit
         + weights.expiring * expiring
         + weights.in_stock * in_stock
         + weights.weather * match
@@ -209,18 +256,20 @@ def plan(
     settings: PlanSettings = DEFAULT_SETTINGS,
     last_served: Mapping[int, date] | None = None,
     weather: Mapping[date, Weather | None] | None = None,
+    occasions: Mapping[date, Occasion] | None = None,
 ) -> Menu:
     """A Menu of `days` days from `start`, one Meal per day for each of `slots`.
 
     `stock` maps an Ingredient id to what is held: (quantity, expiry or None) lots, or just a
     date or None for an amount that is not tracked (see `cooking.Pantry`).
     `last_served` maps a Recipe id to when it was last served, for the Cooldown. `weather` maps a
-    day to the weather expected, where known.
+    day to the weather expected, where known. `occasions` maps a day to the Occasion on it.
     """
     rng = random.Random(seed)
     pantry = Pantry(stock)
     served = dict(last_served or {})
     weather = weather or {}
+    occasions = occasions or {}
     candidates = []
     for recipe in recipes:
         facts = analyse(recipe.for_analysis, recipe.servings)
@@ -242,7 +291,7 @@ def plan(
         for slot in ordered_slots:
             meal, newly_missing = _fill(
                 day, slot, ordered_slots, candidates, eaters, pantry, served, missing,
-                weather.get(day), settings, rng,
+                weather.get(day), settings, rng, occasions.get(day),
             )  # fmt: skip
             meals.append(meal)
             if meal.recipe is not None:
@@ -253,11 +302,28 @@ def plan(
 
 
 def portions_for(
-    recipe: Recipe, eaters: Sequence[Eater], slot: Slot, slots: Collection[Slot]
+    recipe: Recipe,
+    eaters: Sequence[Eater],
+    slot: Slot,
+    slots: Collection[Slot],
+    occasion: Occasion | None = None,
 ) -> tuple[Portion, ...]:
     """What each Eater gets of `recipe` in `slot`, when the day is shared between `slots`."""
     kcal = analyse(recipe.for_analysis, recipe.servings).calories_per_serving
-    return _portions(eaters, _targets(eaters, slot, slots), kcal)
+    return _portions(eaters, _targets(eaters, slot, slots, occasion), kcal)
+
+
+def guests_for(
+    recipe: Recipe,
+    eaters: Sequence[Eater],
+    slot: Slot,
+    slots: Collection[Slot],
+    occasion: Occasion | None,
+) -> tuple[int, float]:
+    """How many guests an Occasion adds to a Meal, and the servings cooked for them together."""
+    guests = occasion.guests(len(eaters)) if occasion else 0
+    kcal = analyse(recipe.for_analysis, recipe.servings).calories_per_serving
+    return guests, _guest_servings(guests, slot, slots, occasion, kcal)
 
 
 def choices_for(recipes: Sequence[Recipe], eaters: Sequence[Eater], slot: Slot) -> list[Recipe]:
@@ -289,7 +355,10 @@ def _use_up(pantry: Pantry, meal: Meal) -> None:
         pantry.take(use.ingredient.id, use.taken, meal.day)
 
 
-def _fill(day, slot, slots, candidates, eaters, pantry, served, missing, weather, settings, rng):
+def _fill(
+    day, slot, slots, candidates, eaters, pantry, served, missing, weather, settings, rng,
+    occasion=None,
+):  # fmt: skip
     meal_type = slot.meal_type
     tagged = [c for c in candidates if meal_type in c.recipe.meal_types]
     if not tagged:
@@ -305,13 +374,16 @@ def _fill(day, slot, slots, candidates, eaters, pantry, served, missing, weather
     if not cooled:
         reason = f"Cooldown: every suitable recipe was served within {settings.cooldown_days} days"
         return Meal(day, slot, None, reason=reason), {}
-    targets = _targets(eaters, slot, slots)
+    targets = _targets(eaters, slot, slots, occasion)
+    guests = occasion.guests(len(eaters)) if occasion else 0
     affordable = []
     for c in cooled:
         # What this Recipe needs, at the servings this table would eat. A group of alternatives
         # needs nothing more if any one of them is covered, and otherwise one purchase, of the
         # first.
-        servings = sum(p.servings for p in _portions(eaters, targets, c.facts.calories_per_serving))
+        kcal = c.facts.calories_per_serving
+        servings = sum(p.servings for p in _portions(eaters, targets, kcal))
+        servings += _guest_servings(guests, slot, slots, occasion, kcal)
         need = _need(c.recipe, servings / c.recipe.servings)
         needed = {
             group[0].id: group[0]
@@ -328,7 +400,7 @@ def _fill(day, slot, slots, candidates, eaters, pantry, served, missing, weather
         return Meal(day, slot, None, reason=reason), {}
     scored = [
         (
-            _score(c, day, pantry, need, targets, weather, settings.weights, len(eaters)),
+            _score(c, day, pantry, need, targets, weather, settings.weights, len(eaters), occasion),
             rng.random(),
             c,
             n,
@@ -336,5 +408,7 @@ def _fill(day, slot, slots, candidates, eaters, pantry, served, missing, weather
         for c, n, need in affordable
     ]
     _, _, best, needed = max(scored, key=lambda s: (s[0], s[1]))
-    portions = _portions(eaters, targets, best.facts.calories_per_serving)
-    return Meal(day, slot, best.recipe, portions), needed
+    kcal = best.facts.calories_per_serving
+    portions = _portions(eaters, targets, kcal)
+    extra = _guest_servings(guests, slot, slots, occasion, kcal)
+    return Meal(day, slot, best.recipe, portions, guests=guests, guest_servings=extra), needed

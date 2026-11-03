@@ -15,7 +15,8 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from emu_the_menu.cooking import Pantry, shopping_amounts, uses_for
 from emu_the_menu.eaters import EaterRepository
 from emu_the_menu.menu_repository import MenuNotFoundError, MenuRepository, SavedMenu
-from emu_the_menu.planner import Meal, Portion, choices_for, plan, portions_for
+from emu_the_menu.occasion_repository import occasions_for
+from emu_the_menu.planner import Meal, Portion, choices_for, guests_for, plan, portions_for
 from emu_the_menu.recipe_repository import RecipeRepository
 from emu_the_menu.recipes import analyse
 from emu_the_menu.repository import StockRepository
@@ -50,7 +51,12 @@ def live_meals(saved: SavedMenu, db_path: str | Path, today: date) -> tuple[list
             for p in m.portions
             if p.eater_id in people
         )
-        meals.append(Meal(m.day, m.slot, recipe, portions, m.reason, m.id, m.cooked_on, m.short))
+        meals.append(
+            Meal(
+                m.day, m.slot, recipe, portions, m.reason, m.guests, m.guest_servings,
+                m.id, m.cooked_on, m.short,
+            )
+        )  # fmt: skip
     return meals, shopping_text(shopping_amounts(meals, held))
 
 
@@ -79,6 +85,7 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
                 "saved": saved,
                 "days_shown": days_of(meals),
                 "forecast": weather_for(db_path, today(), get_json),
+                "occasions": occasions_for(db_path, saved.start, saved.days),
                 "shopping": shopping,
                 "change_base": f"/menus/{saved.id}/meals",
                 "label": day_label,
@@ -112,10 +119,13 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
             everything = recipes.recipes()
         diners = table_of(saved, meal, people)
         slots = sorted({m.slot for m in saved.meals if m.day == meal.day})
+        occasion = occasions_for(db_path, meal.day, 1).get(meal.day)
         options = []
         for recipe in choices_for(everything, diners, meal.slot) if diners else []:
             facts = analyse(recipe.for_analysis, recipe.servings)
-            options.append((recipe, facts, portions_for(recipe, diners, meal.slot, slots)))
+            options.append(
+                (recipe, facts, portions_for(recipe, diners, meal.slot, slots, occasion))
+            )
         return TEMPLATES.TemplateResponse(
             request,
             "change_meal.html",
@@ -159,10 +169,17 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
                     400,
                 )
             slots = sorted({m.slot for m in saved.meals if m.day == meal.day})
-            portions = portions_for(chosen, diners, meal.slot, slots)
+            occasion = occasions_for(db_path, meal.day, 1).get(meal.day)
+            portions = portions_for(chosen, diners, meal.slot, slots, occasion)
+            guests, guest_servings = guests_for(chosen, diners, meal.slot, slots, occasion)
             try:
                 repo.set_meal(
-                    menu_id, meal_id, chosen.id, [(p.eater.id, p.servings) for p in portions]
+                    menu_id,
+                    meal_id,
+                    chosen.id,
+                    [(p.eater.id, p.servings) for p in portions],
+                    guests,
+                    guest_servings,
                 )
             except ValueError as exc:
                 return _change(request, menu_id, meal_id, str(exc), 400)
@@ -199,6 +216,7 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
                     seed=random.SystemRandom().randrange(10**9),
                     last_served=repo.last_served(),
                     weather=kinds(weather_for(db_path, today(), get_json)),
+                    occasions=occasions_for(db_path, meal.day, 1),
                 )
                 picked = next((m for m in result.meals if m.slot is meal.slot), None)
             if picked is None or picked.recipe is None:
@@ -209,6 +227,8 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
                 meal_id,
                 picked.recipe.id,
                 [(p.eater.id, p.servings) for p in picked.portions],
+                picked.guests,
+                picked.guest_servings,
             )
         return RedirectResponse(f"/menus/{menu_id}", status_code=303)
 
@@ -240,7 +260,7 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
                 raise HTTPException(400, "A meal with no recipe cannot be cooked")
             with RecipeRepository(db_path) as recipes:
                 recipe = recipes.get(meal.recipe_id)
-            scale = sum(p.servings for p in meal.portions) / recipe.servings
+            scale = (sum(p.servings for p in meal.portions) + meal.guest_servings) / recipe.servings
             short = []
             took = []
             with StockRepository(db_path) as stock:
