@@ -36,12 +36,46 @@ _DESCRIBING = frozenset(
     for w in """
     sea kosher fine finely flaky table coarse coarsely freshly fresh cracked chopped diced sliced
     minced grated shredded crushed roughly thinly lightly organic ripe raw large small medium
-    extra virgin
+    extra virgin peeled deseeded trimmed washed halved quartered cubed torn beaten melted softened
+    boneless skinless good quality
     """.split()
 )
 _SEASONING = frozenset({"salt", "pepper", "black"})
 # "Ground" only describes a spice. With these it means minced meat, which is not the same food.
 _MINCED = frozenset(stem(w) for w in "beef pork lamb turkey chicken veal meat sausage".split())
+
+
+# Words that say how much, never which food: "a drizzle of olive oil" is olive oil, "some olive
+# oil" and "a tomato" are olive oil and tomato, "a clove of garlic" is garlic. An amount word counts
+# before "of" (or after "a"), so a "pinch pot" keeps its name, and "little" is left in "little gem
+# lettuce".
+_AMOUNTS = """
+    drizzle pinch dash splash handful sprinkle glug knob sprig bunch dollop squeeze slug touch hint
+    smidgen drop shake twist bit sliver couple lots plenty dusting sprinkling scattering smattering
+    dab trickle lug smidge grind blob scoop spoonful slice clove stick head can tin jar bottle bag
+    pack packet box cup glass teaspoon tablespoon wedge piece cube loaf rasher fillet bulb stalk
+    block tub carton
+"""
+_AMOUNT = rf"(?:{'|'.join(_AMOUNTS.split())})(?:es|s)?\s+"
+# "zest of 1 lemon", "juice of half a lemon": the fruit is what is needed. A measured "1 tsp lemon
+# zest" is not here: it is its own ingredient, because a lemon is counted and zest is not.
+_PART = (
+    r"(?:(?:finely|freshly|coarsely|thinly)\s+)?(?:(?:grated|pared)\s+)?(?:zest|juice|rind|peel)"
+    r"(?:\s+(?:and|&)\s+(?:zest|juice|rind|peel))?\s+of\s+"
+    r"(?:(?:the|a|an|one|half|\d+(?:[./]\d+)?)\s+)*"
+)
+_QUANTITY_LEAD = re.compile(
+    r"^\s*(?:(?:a|an|some|any|the)\s+(?:(?:few|little(?!\s+gem)|good|generous|large|small|big"
+    r"|healthy|liberal|couple|bit)\s+(?:of\s+)?)*(?:" + _AMOUNT + r"(?:of\s+)?)?"
+    r"|" + _AMOUNT + r"of\s+)?(?:" + _PART + r")?",
+    re.IGNORECASE,
+)
+
+
+def strip_quantity(name: str) -> str:
+    """A name without the words that only say how much, or the name itself if nothing is left."""
+    stripped = _QUANTITY_LEAD.sub("", name, count=1)
+    return stripped if stripped.strip() else name
 
 
 def _core(words: list[str]) -> list[str]:
@@ -66,7 +100,7 @@ def name_key(name: str) -> str:
     so do salt, sea salt, sea-salt and "salt and pepper" (a seasoning pair counts as salt). It is
     not "red pepper" and "black pepper", or "olive oil" and "sesame oil".
     """
-    kept = _core([stem(w) for w in re.findall(r"[a-z0-9]+", name.lower())])
+    kept = _core([stem(w) for w in re.findall(r"[a-z0-9]+", strip_quantity(name).lower())])
     if "salt" in kept and set(kept) <= _SEASONING:
         return "salt"
     if kept == ["pepper"]:  # a bare "pepper" in a recipe means black pepper
@@ -86,6 +120,7 @@ def clean_name(name: str) -> str:
     key = name_key(name)
     if key in ("salt", "black pepper"):
         return key
+    name = strip_quantity(name)
     tokens: list[str] = []
     for token in name.lower().split():
         first = token.split("-")[0]

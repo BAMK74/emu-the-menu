@@ -13,7 +13,7 @@ from dataclasses import dataclass
 from html import unescape
 from html.parser import HTMLParser
 
-from emu_the_menu.names import name_key
+from emu_the_menu.names import name_key, strip_quantity
 from emu_the_menu.recipes import MAX_SERVINGS, MAX_TAG_LENGTH, MAX_TAGS
 
 
@@ -70,7 +70,13 @@ _units("head heads", "head")
 _CONTAINERS = frozenset("can cans tin tins jar jars pack packs packet packets bag bags".split())
 _CONTAINERS |= frozenset("bottle bottles package packages box boxes".split())
 # Amounts that cannot be turned into a number, so the line is left for a person.
-_VAGUE = frozenset("pinch pinches dash dashes handful handfuls splash sprig sprigs knob".split())
+_VAGUE = frozenset(
+    """
+    pinch pinches dash dashes handful handfuls splash splashes sprig sprigs knob knobs drizzle
+    drizzles glug glugs dollop dollops squeeze squeezes sprinkle sprinkles dusting dustings grind
+    grinds touch touches
+    """.split()
+)
 _SIZES = frozenset("small medium large big".split())
 # Words that describe the measure rather than the food: "2 heaped tablespoons yoghurt".
 _MODIFIERS = frozenset("heaped heaping scant level generous rounded packed lightly tightly".split())
@@ -127,8 +133,13 @@ def _drop_alternative_amount(text: str) -> str:
 def _clean_name(text: str) -> str:
     text = _drop_alternative_amount(_strip_brackets(text))
     text = re.split(r",| - | – |;| plus | \+ ", text)[0]
-    text = re.sub(r"\s+(to|for)\s+(taste|serve|serving|garnish|decorate)\b.*", "", text.lower())
-    words = text.split()
+    text = re.sub(
+        r"\s+(to|for)\s+(taste|serve|serving|garnish|decorate|frying|greasing|drizzling|brushing"
+        r"|dusting|dressing)\b.*",
+        "",
+        text.lower(),
+    )
+    words = strip_quantity(text).split()
     while words and words[0] in {"of", "a", "an", "each"}:
         words.pop(0)
     while words and (words[0] in _SIZES or words[0].startswith("medium-to")):
@@ -152,8 +163,7 @@ def parse_ingredient_line(text: str) -> IngredientLine:
     match = _START.match(text)
     if not match:
         # "a pinch of saffron", "salt to taste": no number, so nothing to measure.
-        words = text.split()
-        rest = " ".join(words[1:]) if words and words[0].lower() in {"a", "an"} else text
+        rest = strip_quantity(text)
         first = rest.split()[0].lower() if rest.split() else ""
         return IngredientLine(
             raw, _clean_name(rest[len(first) :] if first in _VAGUE else rest), None, None
