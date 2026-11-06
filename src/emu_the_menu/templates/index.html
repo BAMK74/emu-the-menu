@@ -86,7 +86,8 @@
   {% if items %}
   <ul>
     {% for item in items %}
-    <li>
+    <li class="with-ico">
+      {{ icon(food_icon(item.ingredient)) }}
       {% set shown_quantity, shown_unit = display_quantity(item.quantity, item.base_unit) %}
       {% set days = (item.expires_on - today).days if item.expires_on else none %}
       <div class="item-head">

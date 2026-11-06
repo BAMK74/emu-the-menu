@@ -1,0 +1,753 @@
+/* Design preview: five different designs, each in every season and two festive overlays.
+   <html> carries data-design, data-tone (light|dark), data-season and data-festive.
+   A season or festive overlay only supplies the accent and the pop colour. The design owns the
+   neutrals, shapes, type and layout. Safety colours (danger, warn, soon, ok) never change. */
+
+/* ---- Safety colours and shared drawing tones ---- */
+html[data-tone="light"] {
+  color-scheme: light;
+  --danger: #b3392c; --danger-bg: #fbeae8; --warn: #e0a526; --warn-bg: #fdf3da;
+  --ok: #2f7a4c; --ok-bg: #e3f2e8; --soon: #8a5a00; --soon-bg: #fdf0cf;
+}
+html[data-tone="dark"] {
+  color-scheme: dark;
+  --danger: #e5766a; --danger-bg: #3a2220; --warn: #e0a526; --warn-bg: #3a3118;
+  --ok: #7fc99a; --ok-bg: #1d3125; --soon: #f0c36a; --soon-bg: #3a3118;
+}
+html { --ico-1: var(--accent); --ico-2: var(--pop, #e0a526); --ico-3: var(--accent-soft); --ico-4: var(--card); }
+
+/* ---- Seasons: accent, text on accent, soft tint and a pop colour ---- */
+html[data-tone="light"][data-season="spring"] { --accent: #247a42; --accent-text: #fff; --accent-soft: #dff3e0; --pop: #f4a3bd; }
+html[data-tone="light"][data-season="summer"] { --accent: #b83f14; --accent-text: #fff; --accent-soft: #ffe6d4; --pop: #f7c33b; }
+html[data-tone="light"][data-season="autumn"] { --accent: #944d20; --accent-text: #fff; --accent-soft: #f1e0cc; --pop: #f0a24a; }
+html[data-tone="light"][data-season="winter"] { --accent: #245f8c; --accent-text: #fff; --accent-soft: #dce9f4; --pop: #a9d4f0; }
+html[data-tone="dark"][data-season="spring"] { --accent: #5fc27f; --accent-text: #0c140e; --accent-soft: #1d2f21; --pop: #f08fb0; }
+html[data-tone="dark"][data-season="summer"] { --accent: #ff8a5c; --accent-text: #1a0d06; --accent-soft: #3a2417; --pop: #f7c33b; }
+html[data-tone="dark"][data-season="autumn"] { --accent: #d9945a; --accent-text: #1c1009; --accent-soft: #382a1c; --pop: #f0a24a; }
+html[data-tone="dark"][data-season="winter"] { --accent: #6fb0e0; --accent-text: #08131c; --accent-soft: #1b2d3d; --pop: #a9d4f0; }
+/* Festive overlays come after the seasons, so they win. */
+html[data-tone="light"][data-festive="halloween"] { --accent: #6a3aa3; --accent-text: #fff; --accent-soft: #eadff6; --pop: #f59a3c; }
+html[data-tone="dark"][data-festive="halloween"] { --accent: #b58ae6; --accent-text: #150c24; --accent-soft: #2b2040; --pop: #f59a3c; }
+html[data-tone="light"][data-festive="christmas"] { --accent: #1a6140; --accent-text: #fff; --accent-soft: #dcefe3; --pop: #f0c85a; }
+html[data-tone="dark"][data-festive="christmas"] { --accent: #6fcf97; --accent-text: #08150d; --accent-soft: #1a3324; --pop: #f0c85a; }
+
+/* ---- Banner (every design shares the structure, each styles it) ---- */
+.hero {
+  position: relative; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 34rem); align-items: end; gap: .5rem;
+  padding: 1.2rem max(1rem, calc((100% - 72rem) / 2)) 0; min-height: 11rem; overflow: hidden;
+  background: var(--hero-bg, var(--accent-soft)); color: var(--hero-text, var(--text));
+}
+.hero-copy { align-self: center; padding-bottom: 1rem; position: relative; z-index: 1; }
+.hero-line { margin: 0 0 .3rem; font: var(--hero-font, 800 1.5rem/1.1 system-ui, sans-serif); }
+.hero-sub { margin: 0 0 .8rem; font-size: .95rem; max-width: 30rem; opacity: .92; }
+.hero-cta {
+  display: inline-block; padding: .6rem 1.1rem; border-radius: var(--radius); text-decoration: none; font-weight: 700;
+  background: var(--accent); color: var(--accent-text);
+}
+.hero-art { position: relative; width: 100%; aspect-ratio: 640 / 260; align-self: end; }
+.hero-art img {
+  position: absolute; aspect-ratio: 1; height: auto; object-fit: cover; border-radius: 50%; background: #ddd;
+  border: 5px solid #ffffff; box-shadow: 0 12px 26px rgba(0, 0, 0, .28); rotate: var(--r, 0deg); translate: 0 0;
+  will-change: transform, translate, rotate, opacity; backface-visibility: hidden; transform: translateZ(0);
+  animation-name: var(--an1, none), var(--an2, none), var(--an3, none);
+  animation-duration: var(--du1, 0s), var(--du2, 0s), 1s;
+  animation-delay: calc(var(--i, 0) * var(--st1, .1s)), calc(var(--dl2, 0s) + var(--i, 0) * var(--st2, .3s)), 0s;
+  animation-iteration-count: 1, var(--ic2, infinite), 1;
+  animation-direction: normal, alternate, normal;
+  animation-timing-function: var(--ea1, cubic-bezier(.16, 1, .3, 1)), ease-in-out, linear;
+  animation-fill-mode: both, backwards, both;
+  animation-timeline: auto, auto, var(--tl3, auto);
+  animation-range: normal, normal, 0 32rem;
+}
+@keyframes f-drop { 0% { transform: translateY(-46px) scale(.92); opacity: 0; } 100% { transform: translateZ(0); opacity: 1; } }
+@keyframes f-roll { 0% { transform: translateX(46px) scale(.94); opacity: 0; } 100% { transform: translateZ(0); opacity: 1; } }
+@keyframes f-bob { from { translate: 0 0; } to { translate: 0 -9px; } }
+@keyframes f-wrap { from { opacity: 0; translate: 0 36px; } to { opacity: 1; translate: 0 0; } }
+@keyframes f-sway { from { transform: rotate(-2.5deg); } to { transform: rotate(2.5deg); } }
+@keyframes f-par { from { translate: 0 0; } to { translate: 0 calc(var(--sp, 1) * 70px); } }
+.hero.compact { min-height: 0; padding-top: .5rem; grid-template-columns: minmax(0, 1fr) auto; align-items: center; }
+.hero.compact .hero-sub, .hero.compact .hero-cta { display: none; }
+.hero.compact .hero-copy { padding-bottom: .5rem; }
+.hero.compact .hero-line { font-size: 1.05rem; }
+.hero.compact .hero-art { width: 11rem; }
+@media (max-width: 639px) {
+  .hero { grid-template-columns: minmax(0, 1fr); padding-top: 1rem; min-height: 0; }
+  /* On a phone everything in the banner is centred */
+  .hero { text-align: center; justify-items: center; }
+  .hero-copy { display: grid; justify-items: center; }
+  .hero-sub { margin-inline: auto; }
+  .hero-art { max-width: 21rem; margin: .2rem auto 0; }
+  .hero.compact { grid-template-columns: minmax(0, 1fr); justify-items: center; padding-bottom: .6rem; }
+  .hero.compact .hero-art { width: 9rem; margin: 0 auto; }
+}
+@media (min-width: 640px) {
+  .hero { min-height: 15rem; padding-top: 1.8rem; }
+  .hero-line { font-size: 2.3rem; }
+  .hero.compact { min-height: 0; }
+  .hero.compact .hero-line { font-size: 1.3rem; }
+}
+
+/* Pictures beside things */
+.ico { width: 2.6rem; height: 2.6rem; flex: none; display: block; }
+li.with-ico { display: grid; grid-template-columns: 2.8rem minmax(0, 1fr); column-gap: .8rem; align-content: start; }
+li.with-ico > .ico { grid-column: 1; grid-row: 1 / span 8; margin-top: .1rem; }
+li.with-ico > *:not(.ico) { grid-column: 2; }
+.meal { display: grid; grid-template-columns: 2.4rem minmax(0, 1fr); column-gap: .7rem; align-content: start; }
+.meal > .ico { grid-column: 1; grid-row: 1 / span 10; width: 2.4rem; height: 2.4rem; margin-top: .1rem; }
+.meal > *:not(.ico) { grid-column: 2; }
+.empty::before {
+  content: ""; display: block; width: 4.5rem; height: 4.5rem; margin: 0 auto .8rem; background-color: var(--accent); opacity: .75;
+  -webkit-mask: url("/static/plate.svg") center / contain no-repeat; mask: url("/static/plate.svg") center / contain no-repeat;
+}
+header nav { flex-wrap: wrap; }
+html[data-embed] #dp-toggle, html[data-embed] #dp-panel { display: none; }
+
+/* =====================================================================================
+   1. TRATTORIA: a printed menu card. Cream paper, serif, double rules, centred.
+   ===================================================================================== */
+html[data-design="trattoria"] {
+  --bg: #f6eddb; --card: #fffaf0; --text: #2a2118; --muted: #65573f; --line: #cdb98f;
+  --radius: .2rem; --field: 2.4rem; --shadow: none;
+  --hero-bg: var(--accent-soft); --hero-text: #2a2118;
+  --hero-font: italic 400 1.7rem/1.15 "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  & body { font-family: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; font-size: 1.02rem; }
+  & header.topbar { background: var(--card); border-bottom: 4px double var(--line); box-shadow: none; }
+  & .topbar-inner { flex-direction: column; align-items: center; justify-content: center; gap: .3rem; padding: .9rem 1rem .5rem; }
+  & a.brand { font-size: 1.7rem; font-weight: 400; font-style: italic; letter-spacing: .01em; }
+  & .logo { width: 1.7rem; height: 1.7rem; }
+  & header nav { flex-wrap: wrap; justify-content: center; gap: 0 .2rem; }
+  & header nav a { border-radius: 0; text-transform: uppercase; letter-spacing: .14em; font-size: .72rem; padding: .35rem .7rem; border-bottom: 3px double transparent; }
+  & header nav a:hover { background: none; border-bottom-color: var(--line); }
+  & header nav a[aria-current="page"] { background: none; color: var(--accent); border-bottom-color: var(--accent); font-weight: 700; }
+  & .hero { border-bottom: 4px double var(--line); }
+  & .hero-cta { border-radius: 0; text-transform: uppercase; letter-spacing: .12em; font-size: .78rem; }
+  & h1 { text-align: center; font-weight: 400; font-style: italic; font-size: 2rem; letter-spacing: 0; margin: .8rem 0 1.4rem; }
+  & h1::after { content: ""; display: block; width: 5rem; height: 1px; background: var(--accent); margin: .6rem auto 0; box-shadow: 0 3px 0 var(--accent); }
+  & h2, & h3 { font-weight: 400; font-style: italic; }
+  & li, & .day, & form.add { border-radius: .2rem; border: 1px solid var(--line); box-shadow: inset 0 0 0 4px var(--card), inset 0 0 0 5px var(--line); background: var(--card); padding-block: .9rem; }
+  & li { padding-inline: 1.2rem; }
+  & li .item-head strong, & .day h3 { font-weight: 700; font-style: normal; }
+  & li:hover { border-color: var(--accent); }
+  & button, & a.button, & a.boxbtn { border-radius: .2rem; text-transform: uppercase; letter-spacing: .1em; font-size: .78rem; font-weight: 700; }
+  & button.quiet { font-weight: 400; }
+  & input:not([type=checkbox]), & select { border-radius: .2rem; background: var(--card); border-color: var(--line); }
+  & form.add label, & form.add legend { font-style: italic; text-transform: none; letter-spacing: 0; font-size: .85rem; font-weight: 400; }
+  & .chip, & .tag, & form.add .checks label { border-radius: .15rem; }
+  & .chip { background: transparent; border: 1px solid var(--line); color: var(--muted); }
+  & .chip-new, & .chip-ok, & .chip-soon, & .chip-expired, & .chip-allergen { border-color: currentColor; }
+  & footer.legal { text-align: center; border-top: 4px double var(--line); }
+}
+
+/* =====================================================================================
+   2. FARMERS MARKET: a hand-painted poster. Sunny, thick ink outlines, chunky and playful.
+   ===================================================================================== */
+html[data-design="market"] {
+  --bg: #fff3c9; --card: #ffffff; --text: #1b1b1b; --muted: #5a4f2e; --line: #1b1b1b;
+  --radius: 1rem; --field: 2.7rem; --shadow: 3px 3px 0 #1b1b1b;
+  --hero-bg: var(--pop); --hero-text: #1b1b1b;
+  --hero-font: 900 1.7rem/1.05 ui-rounded, "Nunito", "Segoe UI", system-ui, sans-serif;
+  & body { font-family: ui-rounded, "Nunito", "Segoe UI", system-ui, sans-serif; font-weight: 500; }
+  & header.topbar { background: var(--card); border-bottom: 3px solid #1b1b1b; box-shadow: none; }
+  & a.brand { font-weight: 900; font-size: 1.25rem; }
+  & .logo { color: var(--accent); }
+  & header nav a { color: #1b1b1b; font-weight: 700; border: 2px solid transparent; }
+  & header nav a:hover { background: var(--pop); border-color: #1b1b1b; }
+  & header nav a[aria-current="page"] { background: var(--pop); color: #1b1b1b; border-color: #1b1b1b; font-weight: 900; }
+  & .hero { border-bottom: 3px solid #1b1b1b; }
+  & .hero-cta { background: #1b1b1b; color: #fff; border-radius: 999px; padding: .7rem 1.3rem; box-shadow: 3px 3px 0 var(--accent); }
+  & h1 { font-weight: 900; font-size: 2rem; letter-spacing: -.02em; }
+  & h2, & h3 { font-weight: 900; }
+  & li, & .day, & form.add { border: 2px solid #1b1b1b; box-shadow: 3px 3px 0 #1b1b1b; background: var(--card); }
+  & li:hover, & .day:hover { transform: translate(-1px, -1px); box-shadow: 4px 4px 0 #1b1b1b; border-color: #1b1b1b; }
+  & li, & .day { transition: transform .12s ease-out, box-shadow .12s ease-out; }
+  & li .qty { color: #1b1b1b; background: var(--pop); border-radius: 999px; padding: .1rem .6rem; border: 2px solid #1b1b1b; font-weight: 800; }
+  & button { border: 2px solid #1b1b1b; border-radius: 999px; box-shadow: 0 3px 0 #1b1b1b; font-weight: 800; }
+  & button:active { transform: translateY(2px); box-shadow: 0 1px 0 #1b1b1b; }
+  & button.quiet { background: var(--card); color: #1b1b1b; }
+  & input:not([type=checkbox]), & select { border: 2px solid #1b1b1b; border-radius: .8rem; }
+  & .chip { border: 1.5px solid #1b1b1b; color: #1b1b1b; background: #fff; font-weight: 700; }
+  & .chip-new { background: var(--pop); }
+  & .chip-ok { background: var(--ok-bg); } & .chip-soon { background: var(--soon-bg); } & .chip-expired, & .chip-allergen { background: var(--danger-bg); color: var(--danger); border-color: var(--danger); }
+  & form.add label, & form.add legend { color: #1b1b1b; font-weight: 800; }
+  & form.add .checks label { border: 2px solid #1b1b1b; font-weight: 700; }
+  & form.add .checks label:has(input:checked) { background: var(--pop); }
+  & .warning-note, & .warning { border: 2px solid #1b1b1b; background: #fff; }
+  & .empty { border: 2px dashed #1b1b1b; background: #fff; }
+  & footer.legal { border-top: 3px solid #1b1b1b; color: #1b1b1b; }
+}
+
+/* =====================================================================================
+   3. MIDNIGHT KITCHEN: a candle-lit restaurant. Dark, one glowing accent, side rail on a computer, tab bar on a phone.
+   ===================================================================================== */
+html[data-design="midnight"] {
+  --bg: #0c1315; --card: #131d20; --text: #e9f1ef; --muted: #93a8a5; --line: #24363a;
+  --radius: .9rem; --field: 2.6rem; --shadow: 0 10px 30px rgba(0, 0, 0, .45);
+  --hero-bg: radial-gradient(70% 140% at 82% 55%, color-mix(in srgb, var(--accent) 30%, transparent), transparent 70%), #091012;
+  --hero-text: #f3f8f7;
+  --hero-font: 400 1.9rem/1.12 Georgia, "Times New Roman", serif;
+  & body { font-family: system-ui, sans-serif; padding-bottom: 4.6rem; }
+  & header.topbar { background: color-mix(in srgb, var(--card) 85%, black); border-bottom: 1px solid var(--line); box-shadow: none; }
+  & a.brand { font-family: Georgia, serif; font-weight: 400; letter-spacing: .06em; text-transform: uppercase; font-size: .95rem; }
+  & header nav { flex-wrap: nowrap; position: fixed; left: 0; right: 0; bottom: 0; z-index: 40; background: color-mix(in srgb, var(--card) 92%, black); border-top: 1px solid var(--line); overflow-x: auto; padding: .45rem .5rem; gap: .1rem; }
+  & header nav a { flex: none; border-radius: .6rem; font-size: .8rem; padding: .55rem .8rem; }
+  & header nav a[aria-current="page"] { background: transparent; color: var(--accent); box-shadow: inset 0 -2px 0 var(--accent); border-radius: 0; }
+  & .hero-cta { background: transparent; color: var(--accent); border: 1px solid var(--accent); border-radius: 999px; letter-spacing: .08em; text-transform: uppercase; font-size: .78rem; }
+  & h1 { font-family: Georgia, serif; font-weight: 400; font-size: 1.9rem; letter-spacing: .01em; }
+  & h2, & h3 { font-family: Georgia, serif; font-weight: 400; }
+  & li, & .day, & form.add { border: 1px solid var(--line); box-shadow: var(--shadow); background: linear-gradient(180deg, color-mix(in srgb, var(--card) 100%, white 3%), var(--card)); }
+  & li:hover { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 10px 30px rgba(0, 0, 0, .5); }
+  & li .qty { color: var(--accent); }
+  & form.add label, & form.add legend { letter-spacing: .12em; font-size: .68rem; }
+  & input:not([type=checkbox]), & select { background: #0c1315; border-color: var(--line); }
+  & button { border-radius: 999px; }
+  & button.quiet { color: var(--text); }
+  & .chip { background: transparent; border: 1px solid var(--line); color: var(--muted); }
+  & .chip-new { color: var(--accent); border-color: var(--accent); }
+  & .chip-ok { color: var(--ok); border-color: var(--ok); } & .chip-soon { color: var(--soon); border-color: var(--soon); } & .chip-expired, & .chip-allergen { color: var(--danger); border-color: var(--danger); background: transparent; }
+  & footer.legal { border-top-color: var(--line); }
+  & #dp-toggle { bottom: 5.4rem; }
+  & #dp-panel { bottom: 8.4rem; }
+}
+@media (min-width: 1000px) {
+  html[data-design="midnight"] body { padding-bottom: 0; padding-left: 14rem; }
+  html[data-design="midnight"] header.topbar { position: fixed; inset: 0 auto 0 0; width: 14rem; z-index: 40; border-bottom: 0; border-right: 1px solid var(--line); }
+  html[data-design="midnight"] .topbar-inner { flex-direction: column; align-items: flex-start; justify-content: flex-start; height: 100%; padding: 1.8rem 1.2rem; gap: 2rem; flex-wrap: nowrap; }
+  html[data-design="midnight"] header nav { position: static; flex-direction: column; flex-wrap: nowrap; width: 100%; background: none; border-top: 0; overflow: visible; padding: 0; gap: .2rem; }
+  html[data-design="midnight"] header nav a { font-size: .95rem; padding: .65rem .9rem; width: 100%; border-radius: .6rem; }
+  html[data-design="midnight"] header nav a[aria-current="page"] { background: color-mix(in srgb, var(--accent) 14%, transparent); box-shadow: none; border-radius: .6rem; }
+  html[data-design="midnight"] .hero { padding-inline: 2.5rem; }
+  html[data-design="midnight"] #dp-toggle { bottom: 1rem; }
+  html[data-design="midnight"] #dp-panel { bottom: 4.2rem; }
+}
+
+/* =====================================================================================
+   MODERN MAGAZINE, five versions. One shared base (an editorial spread: huge type, a full-colour banner,
+   rules instead of boxes), then a different mood and a different kind of movement for each.
+     A mag-curtain   white page, accent banner, words and produce arrive once, cards rise on scroll
+     C mag-parallax  newsprint page, produce drifts at different speeds as you scroll
+     D mag-kinetic   huge accent type, words slide up, produce glides in, buttons fill on hover
+   ===================================================================================== */
+html[data-design^="mag-"] {
+  --ink: #0b0b0b; --paper: #ffffff; --bg: var(--paper); --card: var(--paper); --text: var(--ink);
+  --muted: #555555; --line: #d6d6d6; --field-bg: #f4f4f4;
+  --radius: 0; --field: 2.7rem; --shadow: none;
+  --hero-bg: var(--accent); --hero-text: var(--accent-text); --cta-bg: var(--paper); --cta-text: var(--ink);
+  --hero-font: 900 2.3rem/.95 "Helvetica Neue", Helvetica, Arial, sans-serif;
+  & body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; background: var(--paper); color: var(--ink); }
+  & header.topbar { background: var(--paper); border-bottom: 4px solid var(--ink); box-shadow: none; }
+  & a.brand { text-transform: uppercase; letter-spacing: .12em; font-weight: 900; font-size: .9rem; color: var(--ink); }
+  & .logo { display: block; width: 2.1rem; height: 2.1rem; border-radius: 0; }
+  & header nav a {
+    border-radius: 0; text-transform: uppercase; letter-spacing: .1em; font-size: .72rem; font-weight: 700; color: var(--ink); padding: .5rem .5rem;
+    background: linear-gradient(var(--accent), var(--accent)) no-repeat 0 100% / 0 4px;
+  }
+  & header nav a:hover { background-size: 100% 4px; color: var(--ink); }
+  & header nav a[aria-current="page"] { background: linear-gradient(var(--accent), var(--accent)) no-repeat 0 100% / 100% 4px; color: var(--ink); }
+  & .hero { border-bottom: 4px solid var(--ink); }
+  & .hero-line { letter-spacing: -.04em; }
+  & .hero-sub { font-size: 1.05rem; }
+  & .hero-cta { background-color: var(--cta-bg); color: var(--cta-text); border-radius: 0; text-transform: uppercase; letter-spacing: .1em; font-size: .78rem; }
+  & h1 { position: relative; font-weight: 900; font-size: 2.8rem; letter-spacing: -.04em; line-height: .95; text-transform: uppercase; margin: 1.2rem 0 1.2rem; padding-bottom: .6rem; }
+  & h1::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--ink); transform-origin: 0 50%; }
+  & h2, & h3 { font-weight: 900; letter-spacing: -.02em; }
+  & li, & .day { background: transparent; border: 0; border-top: 3px solid var(--ink); border-radius: 0; box-shadow: none; padding: .8rem 0 1rem; }
+  & li:hover { border-top-color: var(--accent); }
+  & form.add { background: var(--card); border: 3px solid var(--ink); border-radius: 0; box-shadow: none; }
+  & li .qty { color: var(--ink); font-weight: 900; }
+  & button, & a.button, & a.boxbtn { border-radius: 0; background: var(--ink); color: var(--paper); text-transform: uppercase; letter-spacing: .1em; font-size: .78rem; font-weight: 800; }
+  & button:hover { background: var(--accent); color: var(--accent-text); filter: none; }
+  & button.quiet, & a.button { background: transparent; color: var(--ink); border: 2px solid var(--ink); }
+  & a.button { display: inline-flex; align-items: center; justify-content: center; min-height: var(--field); padding: 0 1.2rem; }
+  & button.quiet:hover, & a.button:hover { background: var(--ink); color: var(--paper); }
+  & button.danger { background: transparent; color: var(--danger); border: 2px solid var(--danger); }
+  & input:not([type=checkbox]), & select { border-radius: 0; border: 0; border-bottom: 3px solid var(--ink); background: var(--field-bg); color: var(--ink); }
+  & form.add label, & form.add legend { text-transform: uppercase; letter-spacing: .1em; color: var(--ink); font-size: .68rem; font-weight: 800; }
+  & .chip, & .tag, & form.add .checks label { border-radius: 0; text-transform: uppercase; letter-spacing: .06em; font-size: .66rem; background: transparent; border: 1px solid var(--ink); color: var(--ink); }
+  & .chip-ok { color: var(--ok); border-color: var(--ok); }
+  & .chip-soon { background: var(--soon-bg); border-color: var(--soon); color: var(--soon); }
+  & .chip-expired, & .chip-allergen { color: var(--danger); border-color: var(--danger); background: var(--danger-bg); }
+  & form.add .checks label:has(input:checked) { background: var(--ink); color: var(--paper); }
+  & .empty { border: 1px solid var(--ink); background: var(--paper); }
+  & footer.legal { border-top: 4px solid var(--ink); color: var(--ink); }
+  & .hero.compact { overflow: hidden; }
+}
+@media (min-width: 640px) {
+  html[data-design^="mag-"] .hero:not(.compact) { min-height: 18rem; }
+  html[data-design^="mag-"] .hero:not(.compact) .hero-line { font-size: clamp(3rem, 6vw, 5rem); }
+  html[data-design^="mag-"] .hero.compact .hero-line { font-size: 1.6rem; letter-spacing: -.03em; }
+  html[data-design^="mag-"] h1 { font-size: 4rem; }
+}
+
+/* ---- C: parallax, newsprint ---- */
+html[data-design="mag-parallax"] {
+  --paper: #f3ecdc; --card: #fbf6ea; --muted: #5a5448; --line: #d8cdb4; --field-bg: #ebe2cc;
+  --hero-bg: var(--accent-soft); --hero-text: var(--ink); --cta-bg: var(--ink); --cta-text: var(--paper);
+  & .hero:not(.compact) { overflow: visible; z-index: 2; margin-bottom: 2.5rem; }
+  & .hero:not(.compact) .hero-art { transform: translateY(2.5rem) scale(1.08); }
+  & .hero-sub { color: var(--ink); }
+}
+@media (min-width: 640px) { html[data-design="mag-parallax"] .hero:not(.compact) { min-height: 21rem; } }
+
+/* ---- D: kinetic type, huge accent headline on white ---- */
+html[data-design="mag-kinetic"] {
+  --hero-bg: var(--paper); --hero-text: var(--accent); --cta-bg: var(--ink); --cta-text: var(--paper);
+  & .hero-sub { color: var(--ink); font-weight: 600; }
+  & .hero-line .w { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: .12em; margin-right: .22em; }
+  & .hero-line .w > span { display: inline-block; }
+  & .hero-cta { background-image: linear-gradient(var(--accent), var(--accent)); background-repeat: no-repeat; background-size: 0% 100%; transition: background-size .4s cubic-bezier(.16, 1, .3, 1), color .4s; }
+  & .hero-cta:hover { background-size: 100% 100%; color: var(--accent-text); }
+}
+@media (min-width: 640px) {
+  html[data-design="mag-kinetic"] .hero:not(.compact) .hero-line { font-size: clamp(3.4rem, 8.5vw, 7rem); line-height: .86; }
+}
+
+/* =====================================================================================
+   MOVEMENT. Only when the person has not asked for reduced motion and the preview's Motion is on.
+   Everything is transform or opacity, so it stays smooth on the Pi's browser and costs no scripting.
+   ===================================================================================== */
+@keyframes mag-clip { from { clip-path: inset(0 0 100% 0); transform: translateY(.35em); opacity: 0; } to { clip-path: inset(-.3em); transform: none; opacity: 1; } }
+@keyframes mag-fade { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes mag-draw { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes mag-rise { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
+@keyframes mag-word { from { transform: translateY(108%); } to { transform: none; } }
+@keyframes mag-copy-drift { to { translate: 0 3.2rem; } }
+
+@media (prefers-reduced-motion: no-preference) {
+  html[data-design^="mag-"]:not([data-motion="off"]) {
+    & h1::after { animation: mag-draw .9s cubic-bezier(.16, 1, .3, 1) .15s both; }
+    & .hero-sub { animation: mag-fade .7s ease-out .3s both; }
+    & .hero-cta { animation: mag-fade .7s ease-out .5s both; }
+    & .hero-line { animation: mag-fade .8s cubic-bezier(.16, 1, .3, 1) both; }
+  }
+  /* A: produce drops in once, the headline is revealed line by line, cards rise as they scroll into view */
+  html[data-design="mag-curtain"]:not([data-motion="off"]) {
+    & .hero-line { animation: mag-clip 1s cubic-bezier(.16, 1, .3, 1) both; }
+    & .hero-art { --an1: f-drop; --du1: 1.5s; --st1: .07s; --an2: f-bob; --du2: 4.6s; --st2: .45s; --dl2: 1.7s; }
+  }
+  /* C: produce sways, and everything drifts at its own pace as the page scrolls */
+  html[data-design="mag-parallax"]:not([data-motion="off"]) {
+    & .hero-art { --an2: f-sway; --du2: 6s; --st2: .5s; --an3: f-par; --tl3: scroll(root); }
+    & .hero-art.go { animation: f-wrap 1.5s cubic-bezier(.16, 1, .3, 1) both; }
+  }
+  /* D: words slide up from behind a mask, produce rolls in from the right */
+  html[data-design="mag-kinetic"]:not([data-motion="off"]) {
+    & .hero-line { animation: none; }
+    & .hero-line .w > span { animation: mag-word .9s cubic-bezier(.16, 1, .3, 1) both; animation-delay: calc(var(--w, 0) * .09s); }
+    & .hero-art { --an1: f-roll; --du1: 1.5s; --st1: .08s; --an2: f-bob; --du2: 5s; --st2: .5s; --dl2: 1.8s; }
+  }
+}
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    html:is([data-design="mag-curtain"], [data-design="mag-kinetic"]):not([data-motion="off"]) {
+      & li, & .day { animation: mag-rise linear both; animation-timeline: view(); animation-range: entry 0% entry 45%; }
+    }
+    html[data-design="mag-parallax"]:not([data-motion="off"]) {
+      & .hero:not(.compact) .hero-copy { animation: mag-copy-drift linear both; animation-timeline: scroll(root); animation-range: 0 30rem; }
+      & li, & .day { animation: mag-rise linear both; animation-timeline: view(); animation-range: entry 0% entry 35%; }
+    }
+  }
+}
+
+/* =====================================================================================
+   5. PASTEL PANTRY: soft, bubbly and cosy. Blush and oat, very round, a floating bar, big gentle shadows.
+   ===================================================================================== */
+html[data-design="pastry"] {
+  --bg: #fcf3ee; --card: #ffffff; --text: #3b2f40; --muted: #76687c; --line: #efe0de;
+  --radius: 1.4rem; --field: 2.9rem; --shadow: 0 10px 30px rgba(118, 78, 108, .13);
+  --hero-bg: linear-gradient(135deg, var(--accent-soft), color-mix(in srgb, var(--pop) 38%, #fff));
+  --hero-text: #3b2f40;
+  --hero-font: 800 1.7rem/1.1 ui-rounded, "Nunito", "Segoe UI", system-ui, sans-serif;
+  & body { font-family: ui-rounded, "Nunito", "Segoe UI", system-ui, sans-serif; }
+  & header.topbar { background: transparent; border: 0; box-shadow: none; padding: .6rem .8rem 0; }
+  & .topbar-inner { background: var(--card); border-radius: 999px; box-shadow: var(--shadow); padding: .5rem .8rem .5rem 1.1rem; }
+  & a.brand { font-weight: 800; }
+  & header nav a { border-radius: 999px; padding: .5rem 1rem; font-weight: 600; }
+  & header nav a[aria-current="page"] { background: var(--accent); color: var(--accent-text); }
+  & .hero { margin: 1rem max(.8rem, calc((100% - 72rem) / 2)) 0; padding-inline: 1.4rem; border-radius: 2rem; }
+  & .hero-cta { border-radius: 999px; padding: .75rem 1.4rem; box-shadow: 0 8px 18px color-mix(in srgb, var(--accent) 35%, transparent); }
+  & h1 { font-weight: 800; font-size: 1.7rem; }
+  & li, & .day, & form.add { border: 0; border-radius: 1.5rem; box-shadow: var(--shadow); }
+  & li:hover, & .day:hover { transform: translateY(-3px); box-shadow: 0 16px 36px rgba(118, 78, 108, .18); border: 0; }
+  & li, & .day { transition: transform .2s ease-out, box-shadow .2s ease-out; }
+  & li { padding: 1rem 1.2rem; }
+  & button { border-radius: 999px; padding: 0 1.4rem; font-weight: 700; }
+  & button.quiet { background: var(--accent-soft); color: var(--accent); border: 0; font-weight: 600; }
+  & input:not([type=checkbox]), & select { border-radius: 1.1rem; border: 2px solid var(--line); background: #fffdfc; }
+  & input:focus-visible, & select:focus-visible { border-color: var(--accent); }
+  & .chip { font-size: .78rem; padding: .35rem .8rem; background: var(--accent-soft); color: var(--accent); font-weight: 600; }
+  & .chip-none { background: transparent; color: var(--muted); border: 1px solid var(--line); }
+  & .chip-ok { background: var(--ok-bg); color: var(--ok); } & .chip-soon { background: var(--soon-bg); color: var(--soon); } & .chip-expired, & .chip-allergen { background: var(--danger-bg); color: var(--danger); }
+  & form.add .checks label { padding: .45rem 1rem; border: 2px solid var(--line); }
+  & form.add .checks label:has(input:checked) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  & .warning-note, & .warning { border-radius: 1.2rem; }
+  & footer.legal { border-top-style: dashed; }
+}
+
+/* =====================================================================================
+   6. MODERN: a clean product look. Cool grey, a black banner tile, segmented navigation, neutral chips, accent only for actions.
+   ===================================================================================== */
+html[data-design="modern"] {
+  --bg: #f2f2f0; --card: #ffffff; --text: #111111; --muted: #686866; --line: #e3e3df;
+  --radius: 1.25rem; --field: 2.8rem; --shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 14px 34px rgba(0, 0, 0, .06);
+  --hero-bg: #111111; --hero-text: #ffffff;
+  --hero-font: 700 2rem/1.02 system-ui, -apple-system, "Segoe UI", sans-serif;
+  & body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; letter-spacing: -.005em; }
+  & header.topbar { background: transparent; border: 0; box-shadow: none; }
+  & .topbar-inner { padding: .9rem 1rem .3rem; gap: .6rem 1rem; }
+  & a.brand { font-weight: 700; letter-spacing: -.03em; font-size: 1.1rem; }
+  & .logo { width: 1.6rem; height: 1.6rem; border-radius: .5rem; }
+  & header nav { background: #e6e6e2; padding: .25rem; border-radius: 999px; gap: .1rem; flex-wrap: nowrap; overflow-x: auto; max-width: 100%; }
+  & header nav a { color: #44443f; font-size: .85rem; font-weight: 500; padding: .4rem .8rem; flex: none; }
+  & header nav a:hover { background: #f4f4f1; color: #111; }
+  & header nav a[aria-current="page"] { background: #fff; color: #111; font-weight: 600; box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+  & .hero { margin: .6rem max(.8rem, calc((100% - 72rem) / 2)) 0; padding-inline: 1.5rem; border-radius: 1.75rem; }
+  & .hero-line { letter-spacing: -.045em; }
+  & .hero-sub { color: #c9c9c6; opacity: 1; }
+  & .hero-cta { background: var(--accent); color: var(--accent-text); border-radius: 999px; padding: .7rem 1.3rem; }
+  & h1 { font-weight: 700; font-size: 1.9rem; letter-spacing: -.045em; margin: 1.2rem 0 1rem; }
+  & h2, & h3 { font-weight: 650; letter-spacing: -.03em; }
+  & li, & .day, & form.add { border: 0; border-radius: 1.25rem; box-shadow: var(--shadow); }
+  & li:hover, & .day:hover { box-shadow: 0 1px 2px rgba(0, 0, 0, .04), 0 20px 44px rgba(0, 0, 0, .1); border: 0; }
+  & li .qty { color: #111; font-variant-numeric: tabular-nums; font-weight: 650; }
+  & button { background: #111; color: #fff; border-radius: 999px; padding: 0 1.2rem; font-weight: 600; }
+  & button:hover { filter: none; background: var(--accent); color: var(--accent-text); }
+  & button.quiet { background: #ececea; color: #111; border: 0; font-weight: 500; }
+  & button.quiet:hover { background: #e2e2de; color: #111; }
+  & button.danger { background: transparent; color: var(--danger); border: 1px solid var(--danger); }
+  & input:not([type=checkbox]), & select { background: #f2f2f0; border: 2px solid transparent; border-radius: .9rem; }
+  & input:focus-visible, & select:focus-visible { border-color: var(--accent); outline: 0; background: #fff; }
+  & form.add label, & form.add legend { text-transform: none; letter-spacing: 0; font-size: .8rem; font-weight: 600; color: #44443f; }
+  & .chip { background: #efefec; color: #44443f; font-weight: 500; }
+  & .chip-new { background: var(--accent); color: var(--accent-text); }
+  & .chip-ok { background: var(--ok-bg); color: var(--ok); } & .chip-soon { background: var(--soon-bg); color: var(--soon); } & .chip-expired, & .chip-allergen { background: var(--danger-bg); color: var(--danger); }
+  & form.add .checks label { background: #f2f2f0; border: 2px solid transparent; }
+  & form.add .checks label:has(input:checked) { background: #111; color: #fff; border-color: #111; }
+  & .warning-note, & .warning { border-radius: 1rem; }
+  & .empty { border: 0; background: #fff; box-shadow: var(--shadow); }
+  & footer.legal { border-top-color: var(--line); }
+}
+
+/* =====================================================================================
+   7. FAMILY KITCHEN: big, bright and friendly. Chunky targets, a colour for every page and card, rounded type, a roomy banner.
+   ===================================================================================== */
+html[data-design="family"] {
+  --bg: #fff8ec; --card: #ffffff; --text: #26234a; --muted: #5f5b84; --line: #f0e0c6;
+  --radius: 1.3rem; --field: 3.1rem; --shadow: 0 6px 0 rgba(38, 35, 74, .08);
+  --hero-bg: linear-gradient(180deg, color-mix(in srgb, var(--pop) 55%, #ffffff), #fff3dc);
+  --hero-text: #26234a;
+  --hero-font: 900 1.9rem/1.05 ui-rounded, "Nunito", "Segoe UI", system-ui, sans-serif;
+  & body { font-family: ui-rounded, "Nunito", "Segoe UI", system-ui, sans-serif; font-size: 1.08rem; }
+  & header.topbar { background: #fff; border-bottom: 0; box-shadow: 0 4px 0 var(--line); }
+  & .topbar-inner { padding: .7rem 1rem; }
+  & a.brand { font-weight: 900; font-size: 1.3rem; }
+  & header nav { flex-wrap: wrap; gap: .3rem; }
+  & header nav a { font-size: 1rem; font-weight: 800; color: #26234a; padding: .55rem 1rem; background: color-mix(in srgb, var(--c, #cfd3e6) 24%, #fff); }
+  & header nav a:nth-child(1) { --c: #4cc2b0; } & header nav a:nth-child(2) { --c: #6aaaf5; } & header nav a:nth-child(3) { --c: #b49af0; }
+  & header nav a:nth-child(4) { --c: #8ad46f; } & header nav a:nth-child(5) { --c: #f59ac2; } & header nav a:nth-child(6) { --c: #5fd0e8; }
+  & header nav a:hover { background: color-mix(in srgb, var(--c, #cfd3e6) 45%, #fff); }
+  & header nav a[aria-current="page"] { background: var(--c, #cfd3e6); color: #26234a; box-shadow: 0 3px 0 rgba(38, 35, 74, .25); }
+  & .hero { border-radius: 0 0 3rem 3rem; padding-bottom: 0; }
+  & .hero-sub { font-size: 1.1rem; font-weight: 600; }
+  & .hero-cta { font-size: 1.1rem; font-weight: 900; border-radius: 999px; padding: .85rem 1.6rem; box-shadow: 0 5px 0 color-mix(in srgb, var(--accent) 60%, black); }
+  & h1 { font-weight: 900; font-size: 2.1rem; letter-spacing: -.02em; }
+  & h2, & h3 { font-weight: 900; }
+  & li, & .day, & form.add { border: 3px solid var(--line); border-radius: 1.4rem; box-shadow: var(--shadow); border-top: 10px solid var(--tab, #4cc2b0); }
+  & li:nth-child(4n + 1), & .day:nth-child(4n + 1) { --tab: #4cc2b0; } & li:nth-child(4n + 2), & .day:nth-child(4n + 2) { --tab: #6aaaf5; }
+  & li:nth-child(4n + 3), & .day:nth-child(4n + 3) { --tab: #b49af0; } & li:nth-child(4n), & .day:nth-child(4n) { --tab: #8ad46f; }
+  & form.add { --tab: var(--accent); }
+  & li:hover, & .day:hover { border-color: var(--line); transform: translateY(-3px); box-shadow: 0 9px 0 rgba(38, 35, 74, .08); }
+  & li, & .day { transition: transform .15s ease-out, box-shadow .15s ease-out; }
+  & li .qty { color: var(--accent); font-weight: 900; font-size: 1.1rem; }
+  & li .item-head { flex-wrap: wrap; row-gap: .1rem; }
+  & .ico { width: 3.2rem; height: 3.2rem; } & li.with-ico { grid-template-columns: 3.4rem minmax(0, 1fr); } & .meal { grid-template-columns: 2.9rem minmax(0, 1fr); } & .meal > .ico { width: 2.9rem; height: 2.9rem; }
+  & button { font-weight: 900; font-size: 1.05rem; border-radius: 999px; padding: 0 1.5rem; box-shadow: 0 4px 0 color-mix(in srgb, var(--accent) 60%, black); }
+  & button:active { transform: translateY(3px); box-shadow: 0 1px 0 color-mix(in srgb, var(--accent) 60%, black); }
+  & button.quiet { background: #fff; color: #26234a; border: 3px solid var(--line); box-shadow: 0 4px 0 var(--line); font-weight: 800; }
+  & input:not([type=checkbox]), & select { border: 3px solid var(--line); border-radius: 1.1rem; font-size: 1.05rem; font-weight: 600; }
+  & input:focus-visible, & select:focus-visible { border-color: var(--accent); }
+  & form.add label, & form.add legend { font-size: .85rem; color: #26234a; font-weight: 800; }
+  & .chip { font-size: .85rem; padding: .4rem .8rem; background: var(--accent-soft); color: var(--accent); font-weight: 700; }
+  & .chip-none { background: #fff; border: 2px solid var(--line); color: var(--muted); }
+  & .chip-ok { background: var(--ok-bg); color: var(--ok); } & .chip-soon { background: var(--soon-bg); color: var(--soon); } & .chip-expired, & .chip-allergen { background: var(--danger-bg); color: var(--danger); }
+  & form.add .checks label { padding: .55rem 1.1rem; font-size: .98rem; font-weight: 700; border: 3px solid var(--line); }
+  & form.add .checks label:has(input:checked) { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+  & .warning-note, & .warning { border-radius: 1.2rem; border-width: 3px; }
+  & .empty { border: 3px dashed var(--line); background: #fff; }
+  & footer.legal { border-top: 3px dashed var(--line); }
+}
+
+/* =====================================================================================
+   8. MILLENNIAL: a plant-shop brunch. Oat and blush, arches, wavy underlines, lowercase geometric type, sticker chips.
+   ===================================================================================== */
+html[data-design="millennial"] {
+  --bg: #f7efe8; --card: #fffdfb; --text: #3a3933; --muted: #6a665d; --line: #e6d9cb;
+  --radius: 1.6rem; --field: 2.8rem; --shadow: 0 10px 28px rgba(120, 90, 60, .1);
+  --hero-bg: color-mix(in srgb, var(--accent-soft) 70%, #f7efe8); --hero-text: #3a3933;
+  --hero-font: 500 2rem/1.05 "Avenir Next", "Century Gothic", Futura, "Trebuchet MS", system-ui, sans-serif;
+  & body { font-family: "Avenir Next", "Century Gothic", Futura, "Trebuchet MS", system-ui, sans-serif; }
+  & header.topbar { background: transparent; border: 0; box-shadow: none; }
+  & .topbar-inner { padding: 1rem 1.2rem .4rem; }
+  & a.brand { font-weight: 500; font-size: 1.25rem; letter-spacing: -.01em; text-transform: lowercase; }
+  & header nav a { text-transform: lowercase; font-size: .95rem; color: #5a564c; border-radius: 0; padding: .35rem .6rem; }
+  & header nav a:hover { background: none; color: var(--accent); }
+  & header nav a[aria-current="page"] { background: none; color: var(--accent); font-weight: 700; text-decoration: underline wavy var(--pop); text-decoration-thickness: 2px; text-underline-offset: .35em; }
+  & .hero { overflow: hidden; }
+  & .hero::before { content: ""; position: absolute; right: max(2rem, calc((100% - 66rem) / 2)); bottom: 0; width: min(26rem, 80%); height: 88%; background: color-mix(in srgb, var(--pop) 38%, #fffdfb); border-radius: 999px 999px 0 0; }
+  & .hero.compact::before { display: none; }
+  & .hero-art { position: relative; }
+  & .hero-line { text-transform: lowercase; letter-spacing: -.02em; }
+  & .hero-sub { font-size: 1rem; }
+  & .hero-cta { background: var(--accent); color: var(--accent-text); border-radius: 999px; padding: .7rem 1.4rem; text-transform: lowercase; font-weight: 600; }
+  & h1 { font-weight: 500; font-size: 2.4rem; letter-spacing: -.02em; text-transform: lowercase; text-decoration: underline wavy var(--pop); text-decoration-thickness: 3px; text-underline-offset: .22em; margin: 1.4rem 0 1.4rem; }
+  & h2, & h3 { font-weight: 600; text-transform: lowercase; }
+  & li, & .day, & form.add { border: 0; border-radius: 2rem 2rem .8rem .8rem; box-shadow: var(--shadow); background: var(--card); }
+  & li:hover, & .day:hover { box-shadow: 0 16px 36px rgba(120, 90, 60, .16); border: 0; }
+  & li .qty { color: var(--accent); font-weight: 600; }
+  & button { border-radius: 999px; text-transform: lowercase; font-weight: 600; font-size: .98rem; padding: 0 1.4rem; box-shadow: 0 6px 14px color-mix(in srgb, var(--accent) 28%, transparent); }
+  & button.quiet { background: transparent; border: 1.5px solid var(--accent); color: var(--accent); box-shadow: none; }
+  & input:not([type=checkbox]), & select { border-radius: 1rem; background: #fffdfb; border: 1.5px solid var(--line); }
+  & form.add label, & form.add legend { text-transform: lowercase; letter-spacing: .02em; font-size: .82rem; color: #5a564c; }
+  & .chip { text-transform: lowercase; background: color-mix(in srgb, var(--pop) 32%, #fffdfb); color: #4a463d; font-weight: 500; }
+  & .chip:nth-child(odd) { transform: rotate(-1.2deg); } & .chip:nth-child(even) { transform: rotate(.9deg); }
+  & .chip-none { background: transparent; border: 1px dashed var(--muted); }
+  & .chip-new { background: var(--accent); color: var(--accent-text); }
+  & .chip-ok { background: var(--ok-bg); color: var(--ok); } & .chip-soon { background: var(--soon-bg); color: var(--soon); } & .chip-expired, & .chip-allergen { background: var(--danger-bg); color: var(--danger); }
+  & form.add .checks label { text-transform: lowercase; border: 1.5px solid var(--line); }
+  & form.add .checks label:has(input:checked) { background: color-mix(in srgb, var(--pop) 38%, #fffdfb); border-color: var(--accent); color: var(--text); }
+  & .warning-note, & .warning { border-radius: 1.4rem; }
+  & .empty { border: 1.5px dashed var(--muted); background: transparent; border-radius: 2rem 2rem .8rem .8rem; }
+  & footer.legal { border-top: 1.5px dashed var(--line); }
+}
+
+/* =====================================================================================
+   9. SUNDAY SUPPER (a mix): a food magazine for the family.
+   Base is Modern Magazine: full-colour banner, huge headlines, rules instead of boxes.
+   Trattoria twist: serif italic headlines, double rules.
+   Millennial twist: oat and blush paper, an arch behind the banner, wavy underline, sticker chips.
+   Family twist: big tap targets, a colour on every card's top rule, pill buttons, a warm voice.
+   ===================================================================================== */
+html[data-design="supper"] {
+  --bg: #f7efe8; --card: #fffdfb; --text: #1d1b17; --muted: #5d584e; --line: #cdbfae;
+  --radius: .9rem; --field: 3rem; --shadow: none;
+  --hero-bg: var(--accent); --hero-text: var(--accent-text);
+  --hero-font: italic 400 2.3rem/1 "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif;
+  & body { font-family: system-ui, -apple-system, "Segoe UI", sans-serif; font-size: 1.04rem; }
+  & header.topbar { background: var(--bg); border-bottom: 5px double var(--text); box-shadow: none; }
+  & .topbar-inner { padding: .8rem 1rem .5rem; }
+  & a.brand { font-family: "Palatino Linotype", Palatino, Georgia, serif; font-style: italic; font-weight: 400; font-size: 1.6rem; letter-spacing: 0; }
+  & .logo { width: 1.7rem; height: 1.7rem; }
+  & header nav { gap: .1rem; }
+  & header nav a { border-radius: 0; text-transform: uppercase; letter-spacing: .1em; font-size: .75rem; font-weight: 700; color: var(--text); padding: .7rem .6rem; }
+  & header nav a:hover { background: none; color: var(--accent); }
+  & header nav a[aria-current="page"] { background: none; color: var(--accent); text-decoration: underline wavy var(--pop); text-decoration-thickness: 2px; text-underline-offset: .45em; }
+  & .hero { overflow: hidden; border-bottom: 5px double var(--text); }
+  & .hero::before { content: ""; position: absolute; right: max(1.5rem, calc((100% - 66rem) / 2)); bottom: 0; width: min(27rem, 82%); height: 92%; background: color-mix(in srgb, var(--accent-text) 16%, transparent); border-radius: 999px 999px 0 0; }
+  & .hero.compact::before { display: none; }
+  & .hero-art { position: relative; }
+  & .hero-line { letter-spacing: -.02em; margin-bottom: .7rem; }
+  & .hero-sub { font-size: 1.1rem; font-weight: 500; }
+  & .hero-cta { background: var(--accent-text); color: var(--accent); border-radius: 999px; padding: .85rem 1.6rem; font-weight: 800; text-transform: uppercase; letter-spacing: .08em; font-size: .8rem; }
+  & h1 { font-family: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; font-style: italic; font-weight: 400; font-size: 2.8rem; line-height: 1; letter-spacing: -.02em; margin: 1.3rem 0 1.4rem; padding-bottom: .7rem; border-bottom: 5px double var(--text); }
+  & h2, & h3 { font-family: "Palatino Linotype", Palatino, "Book Antiqua", Georgia, serif; font-style: italic; font-weight: 700; }
+  & li, & .day { background: transparent; border: 0; border-top: 7px solid var(--tab, #4cc2b0); border-radius: 0; box-shadow: none; padding: .9rem 0 1.1rem; }
+  & li:nth-child(4n + 1), & .day:nth-child(4n + 1) { --tab: #4cc2b0; } & li:nth-child(4n + 2), & .day:nth-child(4n + 2) { --tab: #6aaaf5; }
+  & li:nth-child(4n + 3), & .day:nth-child(4n + 3) { --tab: #b49af0; } & li:nth-child(4n), & .day:nth-child(4n) { --tab: #8ad46f; }
+  & li:hover { border-top-color: var(--accent); }
+  & li .item-head strong, & .day h3 { font-style: normal; font-weight: 800; }
+  & li .item-head { flex-wrap: wrap; row-gap: .1rem; }
+  & li .qty { color: var(--accent); font-weight: 800; }
+  & form.add { background: var(--card); border: 0; border-radius: .3rem; box-shadow: inset 0 0 0 3px var(--card), inset 0 0 0 5px var(--text); padding: 1.5rem; }
+  & button, & a.button, & a.boxbtn { border-radius: 999px; background: var(--accent); color: var(--accent-text); text-transform: uppercase; letter-spacing: .08em; font-size: .8rem; font-weight: 800; padding: 0 1.4rem; }
+  & button:hover { background: var(--text); color: var(--bg); filter: none; }
+  & button.quiet, & a.button { background: transparent; color: var(--text); border: 2px solid var(--text); }
+  & a.button { display: inline-flex; align-items: center; justify-content: center; min-height: var(--field); padding: 0 1.4rem; }
+  & button.quiet:hover, & a.button:hover { background: var(--text); color: var(--bg); }
+  & button.danger { background: transparent; color: var(--danger); border: 2px solid var(--danger); }
+  & input:not([type=checkbox]), & select { border: 0; border-bottom: 3px solid var(--text); border-radius: .6rem .6rem 0 0; background: color-mix(in srgb, var(--pop) 18%, var(--card)); font-weight: 500; }
+  & input:focus-visible, & select:focus-visible { background: #fff; }
+  & form.add label, & form.add legend { text-transform: uppercase; letter-spacing: .1em; font-size: .7rem; font-weight: 800; color: var(--text); }
+  & .chip, & .tag { text-transform: lowercase; font-size: .8rem; padding: .35rem .8rem; background: color-mix(in srgb, var(--pop) 35%, var(--card)); color: var(--text); font-weight: 600; }
+  & .chip:nth-child(odd) { transform: rotate(-1.2deg); } & .chip:nth-child(even) { transform: rotate(.9deg); }
+  & .chip-none { background: transparent; border: 1px dashed var(--muted); }
+  & .chip-new { background: var(--accent); color: var(--accent-text); }
+  & .chip-ok { background: var(--ok-bg); color: var(--ok); } & .chip-soon { background: var(--soon-bg); color: var(--soon); } & .chip-expired, & .chip-allergen { background: var(--danger-bg); color: var(--danger); }
+  & form.add .checks label { text-transform: none; letter-spacing: 0; font-size: .95rem; font-weight: 700; padding: .55rem 1.1rem; border: 2px solid var(--text); background: transparent; color: var(--text); }
+  & form.add .checks label:has(input:checked) { background: var(--accent); border-color: var(--accent); color: var(--accent-text); }
+  & .warning-note, & .warning { border-radius: .4rem; }
+  & .empty { border: 2px dashed var(--text); background: transparent; border-radius: .4rem; }
+  & footer.legal { border-top: 5px double var(--text); color: var(--text); }
+}
+@media (min-width: 640px) {
+  html[data-design="supper"] .hero:not(.compact) { min-height: 18rem; }
+  html[data-design="supper"] .hero:not(.compact) .hero-line { font-size: clamp(3rem, 6vw, 4.8rem); }
+  html[data-design="supper"] .hero.compact .hero-line { font-size: 1.5rem; }
+  html[data-design="supper"] h1 { font-size: 3.8rem; }
+}
+
+/* ---- The preview panel ---- */
+#dp-toggle {
+  position: fixed; right: 1rem; bottom: 1rem; z-index: 60; height: 2.6rem; padding: 0 1rem; border-radius: 999px;
+  background: #111; color: #fff; border: 2px solid #fff; font-weight: 700; box-shadow: 0 4px 16px rgba(0, 0, 0, .35);
+}
+#dp-panel {
+  position: fixed; right: 1rem; bottom: 4.2rem; z-index: 60; width: min(21rem, calc(100vw - 2rem)); max-height: calc(100vh - 6rem);
+  overflow-y: auto; padding: 1rem; background: #fff; color: #111; border: 1px solid #ccc; border-radius: .8rem;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, .35); display: grid; gap: .7rem; font: .85rem system-ui, sans-serif;
+}
+#dp-panel[hidden] { display: none; }
+#dp-panel h2 { font-size: 1rem; margin: 0; font-family: system-ui, sans-serif; text-transform: none; letter-spacing: 0; font-style: normal; }
+#dp-panel label { display: grid; grid-template-columns: 6rem 1fr; gap: .5rem; align-items: center; font-weight: 600; }
+#dp-panel select { height: 2rem; font: .85rem system-ui, sans-serif; width: 100%; border: 1px solid #bbb; border-radius: .4rem; background: #fff; color: #111; }
+#dp-panel .dp-note { color: #555; font-size: .78rem; margin: 0; }
+#dp-panel a { color: #0645ad; }
+
+/* =====================================================================================
+   LOADING. Photos only start moving once they are decoded, so nothing pops in half drawn.
+   ===================================================================================== */
+.hero-art:not(.go) img { animation: none; opacity: 0; }
+
+/* =====================================================================================
+   D  HORIZON. A night kitchen. The banner is a dark stage under a curved horizon, lit by slow moving season
+   colour. The photos hang in real depth, tilt towards the pointer (or sway on their own on a phone), and spill
+   out over the horizon onto the page. Scrolling dollies the camera: the photos drift past you.
+   Photos are transform and opacity only. The light is one layer repainting slowly.
+   ===================================================================================== */
+@property --px { syntax: "<number>"; inherits: true; initial-value: 0; }
+@property --py { syntax: "<number>"; inherits: true; initial-value: 0; }
+@property --a1 { syntax: "<percentage>"; inherits: false; initial-value: 20%; }
+
+html[data-design="mag-horizon"] {
+  --hero-text: #ffffff; --cta-bg: var(--pop); --cta-text: #121212;
+  & .hero:not(.compact) {
+    isolation: isolate; overflow: visible; border-bottom: 0; background: none; perspective: 900px; perspective-origin: 50% 40%;
+    min-height: 23rem; margin-bottom: 4.5rem; padding-bottom: 2rem;
+    --glow-a: color-mix(in srgb, var(--pop) 62%, transparent);
+    --glow-b: color-mix(in srgb, color-mix(in srgb, var(--accent) 70%, white) 55%, transparent);
+  }
+  & .hero:not(.compact)::before {
+    content: ""; position: absolute; inset: 0 0 -1px; z-index: -1; clip-path: ellipse(88% 100% at 50% 0);
+    background:
+      radial-gradient(42% 85% at var(--a1) 15%, var(--glow-a), transparent 72%),
+      radial-gradient(38% 75% at calc(100% - var(--a1)) 95%, var(--glow-b), transparent 72%),
+      linear-gradient(180deg, #0c0e13, #12161d);
+  }
+  & .hero.compact { background: linear-gradient(180deg, #0c0e13, #12161d); }
+  & .hero-line { color: #fff; }
+  & .hero-line .w { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: .14em; margin-right: .2em; }
+  & .hero-line .w > span { display: inline-block; }
+  & .hero-sub { color: rgba(255, 255, 255, .86); opacity: 1; font-weight: 500; }
+  & .hero-cta {
+    box-shadow: 0 10px 30px rgba(0, 0, 0, .45);
+    transition: translate .25s cubic-bezier(.16, 1, .3, 1), box-shadow .25s;
+  }
+  & .hero-cta:hover { translate: 0 -3px; box-shadow: 0 0 0 6px color-mix(in srgb, var(--pop) 35%, transparent), 0 14px 34px rgba(0, 0, 0, .5); }
+  & .hero:not(.compact) .hero-art {
+    aspect-ratio: 640 / 330; margin-bottom: -5.5rem; transform-style: preserve-3d;
+    transform: rotateY(calc(var(--px) * 9deg)) rotateX(calc(var(--py) * -6deg));
+    transition: transform .12s linear;
+  }
+  & .hero-art img {
+    transform: translateZ(var(--z, 0px)); border-color: rgba(255, 255, 255, .92);
+    box-shadow: 0 calc(10px + var(--z, 0px) * .25) calc(22px + var(--z, 0px) * .4) rgba(0, 0, 0, .5);
+  }
+  & .hero-art img[style*="--far"] { filter: saturate(.85) brightness(.92); }
+  & .hero:not(.compact) .hero-copy { padding-bottom: 3rem; }
+  & h1::after { background: var(--pop); }
+}
+@media (min-width: 640px) {
+  html[data-design="mag-horizon"] .hero:not(.compact) .hero-line { font-size: clamp(3rem, 6.2vw, 5.6rem); line-height: .9; }
+  html[data-design="mag-horizon"] .hero:not(.compact) { grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); min-height: 25rem; }
+}
+@media (max-width: 639px) {
+  html[data-design="mag-horizon"] .hero:not(.compact) { margin-bottom: 3.5rem; padding-bottom: 1rem; }
+  html[data-design="mag-horizon"] .hero:not(.compact) .hero-art { margin-bottom: -3.2rem; }
+  html[data-design="mag-horizon"] .hero:not(.compact) .hero-copy { padding-bottom: 1rem; }
+}
+
+@keyframes h-in { from { opacity: 0; scale: .72; translate: 0 26px; } to { opacity: 1; scale: 1; translate: 0 0; } }
+@keyframes h-float { from { translate: 0 0; } to { translate: 0 -10px; } }
+@keyframes h-light { from { --a1: 14%; } to { --a1: 78%; } }
+@keyframes h-idle { from { --px: -.8; --py: -.25; } to { --px: .8; --py: .35; } }
+@keyframes h-line { from { transform: translateY(112%); } to { transform: none; } }
+@keyframes h-glow { 0%, 100% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--pop) 55%, transparent), 0 10px 30px rgba(0, 0, 0, .45); } 50% { box-shadow: 0 0 0 10px transparent, 0 10px 30px rgba(0, 0, 0, .45); } }
+@keyframes h-dolly { to { translate: 0 -3rem; scale: 1.14; } }
+
+@media (prefers-reduced-motion: no-preference) {
+  html[data-design="mag-horizon"]:not([data-motion="off"]) {
+    & .hero:not(.compact) { animation: h-idle 9s ease-in-out infinite alternate; }
+    & .hero.pt { animation: none; }
+    & .hero:not(.compact)::before { animation: h-light 16s ease-in-out infinite alternate; }
+    & .hero-line { animation: none; }
+    & .hero-line .w > span { animation: h-line 1s cubic-bezier(.16, 1, .3, 1) both; animation-delay: calc(var(--w, 0) * .08s + .1s); }
+    & .hero-art { --an1: h-in; --du1: 1.2s; --st1: .1s; --an2: h-float; --du2: 5.5s; --st2: .6s; --dl2: 1.4s; }
+    & .hero-cta { animation: mag-fade .7s ease-out .55s both, h-glow 3.2s ease-in-out 1.6s infinite; }
+  }
+}
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    html[data-design="mag-horizon"]:not([data-motion="off"]) {
+      & .hero:not(.compact) .hero-art { animation: h-dolly linear both; animation-timeline: scroll(root); animation-range: 0 30rem; }
+      & li, & .day { animation: mag-rise linear both; animation-timeline: view(); animation-range: entry 0% entry 45%; }
+    }
+  }
+}
+
+/* =====================================================================================
+   NAVIGATION. Four main links; Menu, Recipes and Settings each hold a second pair as tabs.
+   On a phone the brand and links are centred.
+   ===================================================================================== */
+nav.subnav { display: flex; justify-content: center; gap: .4rem; padding: .7rem 1rem 0; max-width: 74rem; margin: 0 auto; }
+nav.subnav a {
+  text-decoration: none; padding: .45rem 1.1rem; border-radius: 999px; font-size: .85rem; font-weight: 700; min-height: 2.4rem;
+  display: inline-flex; align-items: center; color: var(--text); border: 2px solid var(--line); background: transparent;
+}
+nav.subnav a:hover { border-color: var(--text); }
+nav.subnav a[aria-current="page"] { background: var(--text); border-color: var(--text); color: var(--bg); }
+html[data-design^="mag-"] nav.subnav a { border-radius: 0; text-transform: uppercase; letter-spacing: .1em; font-size: .72rem; border-color: var(--ink); color: var(--ink); }
+html[data-design^="mag-"] nav.subnav a[aria-current="page"] { background: var(--ink); color: var(--paper); }
+@media (min-width: 640px) { nav.subnav { justify-content: flex-start; } }
+@media (max-width: 639px) {
+  .topbar-inner { flex-direction: column; justify-content: center; align-items: center; }
+  header nav { justify-content: center; flex-wrap: wrap; width: 100%; }
+}
+
+/* =====================================================================================
+   FIXES. Banner photos stay inside the banner; the banner stacks and centres up to 1000px; the Settings dialog is roomier.
+   ===================================================================================== */
+html[data-design^="mag-"] .hero:not(.compact) { padding-bottom: 1.4rem; }
+html[data-design^="mag-"] .hero:not(.compact) .hero-art { align-self: center; }
+@media (min-width: 640px) and (max-width: 999px) {
+  html[data-design^="mag-"] .hero:not(.compact) { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; min-height: 0; padding-top: 1.6rem; }
+  html[data-design^="mag-"] .hero:not(.compact) .hero-copy { display: grid; justify-items: center; }
+  html[data-design^="mag-"] .hero:not(.compact) .hero-sub { margin-inline: auto; }
+  html[data-design^="mag-"] .hero:not(.compact) .hero-line { font-size: clamp(2.6rem, 7.5vw, 4.4rem); }
+  html[data-design^="mag-"] .hero:not(.compact) .hero-art { width: min(100%, 34rem); margin: .4rem auto 0; }
+}
+@media (min-width: 1000px) {
+  html[data-design="mag-kinetic"] .hero:not(.compact) .hero-line { font-size: clamp(3.4rem, 6.4vw, 5.8rem); }
+}
+a.panel-eaters {
+  display: grid; gap: .15rem; padding: .8rem 1rem; margin: 0 0 1rem; text-decoration: none; color: var(--text);
+  border: 2px solid var(--text); border-radius: var(--radius, .6rem); background: var(--accent-soft, transparent);
+}
+a.panel-eaters strong { font-size: 1.05rem; }
+a.panel-eaters span { font-size: .85rem; color: var(--muted); }
+a.panel-eaters:hover { background: var(--text); color: var(--bg); }
+a.panel-eaters:hover span { color: inherit; }
+#settings-dialog { width: min(40rem, calc(100vw - 2rem)); padding: 1.6rem 1.8rem; }
+#settings-dialog form.add label, #settings-dialog form.add legend { text-transform: none; letter-spacing: 0; font-size: .85rem; font-weight: 700; }
+#settings-dialog fieldset { padding: .9rem 1rem; }
+@media (max-width: 639px) { #settings-dialog { padding: 1.2rem 1.1rem; } }
+
+/* Settings and Eaters share one overlay, as two tabs. */
+.dlg-tabs { display: flex; gap: .4rem; margin: 0 0 1.1rem; }
+.dlg-tabs button {
+  flex: 1; min-height: 2.6rem; border: 2px solid var(--text); background: transparent; color: var(--text); border-radius: 999px;
+  font: inherit; font-weight: 800; font-size: .85rem; cursor: pointer;
+}
+.dlg-tabs button[aria-selected="true"] { background: var(--text); color: var(--bg); }
+html[data-design^="mag-"] .dlg-tabs button { border-radius: 0; text-transform: uppercase; letter-spacing: .1em; font-size: .75rem; border-color: var(--ink); color: var(--ink); }
+html[data-design^="mag-"] .dlg-tabs button[aria-selected="true"] { background: var(--ink); color: var(--paper); }
+#eaters-panel .split { display: block; }
+#eaters-panel aside.side, #eaters-panel section { max-width: none; width: 100%; }
+#eaters-panel form.add { margin-bottom: 1rem; }

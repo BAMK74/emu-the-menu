@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Emu the Menu - design preview</title>
+<style>
+  :root { color-scheme: light dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px system-ui, sans-serif; background: #1d2023; color: #eee; }
+  header { padding: .8rem 1rem; background: #111417; display: grid; gap: .6rem; position: sticky; top: 0; z-index: 5; }
+  h1 { margin: 0; font-size: 1.05rem; }
+  .row { display: flex; flex-wrap: wrap; gap: .5rem 1.2rem; align-items: center; }
+  .group { display: flex; flex-wrap: wrap; gap: .3rem; align-items: center; }
+  .group > span { color: #9aa4ad; margin-right: .2rem; font-size: .8rem; }
+  button { font: inherit; padding: .4rem .8rem; border-radius: 999px; border: 1px solid #3a424a; background: #1d2328; color: #eee; cursor: pointer; }
+  button[aria-pressed="true"] { background: #f2c230; border-color: #f2c230; color: #111; font-weight: 700; }
+  button:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+  main { padding: 1rem; display: flex; flex-wrap: wrap; gap: 1.5rem; justify-content: center; align-items: flex-start; }
+  .device { display: grid; gap: .5rem; justify-items: center; }
+  .device h2 { margin: 0; font-size: .8rem; color: #9aa4ad; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; }
+  .screen { overflow: hidden; background: #fff; box-shadow: 0 10px 40px rgba(0, 0, 0, .5); }
+  .screen.computer { border-radius: .6rem; border: 8px solid #2a2f35; border-top-width: 22px; }
+  .screen.phone { border-radius: 2rem; border: 10px solid #0a0c0e; }
+  iframe { border: 0; display: block; transform-origin: 0 0; background: #fff; }
+  [hidden] { display: none !important; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Emu the Menu: Modern Magazine in three versions, phone and computer</h1>
+  <div class="row">
+    <div class="group" id="g-design"><span>Design</span></div>
+    <div class="group" id="g-season"><span>Season</span></div>
+    <div class="group" id="g-festive"><span>Festive</span></div>
+  </div>
+  <div class="row">
+    <div class="group" id="g-page"><span>Page</span></div>
+    <div class="group" id="g-show"><span>Show</span></div>
+    <div class="group" id="g-motion"><span>Motion</span></div>
+    <div class="group"><button type="button" id="replay">Replay</button></div>
+  </div>
+</header>
+<main>
+  <section class="device" id="d-computer"><h2>Computer</h2><div class="screen computer" id="s-computer"><iframe id="f-computer" title="Computer view"></iframe></div></section>
+  <section class="device" id="d-phone"><h2>Phone</h2><div class="screen phone" id="s-phone"><iframe id="f-phone" title="Phone view"></iframe></div></section>
+</main>
+<script>
+  const today = new Date().toISOString().slice(0, 10);
+  const OPTIONS = {
+    design: { "mag-curtain": "A Curtain Call", "mag-parallax": "B Parallax Newsprint", "mag-kinetic": "C Kinetic Type", "mag-horizon": "D Horizon (night kitchen)" },
+    season: { auto: "Follow the date", spring: "Spring", summer: "Summer", autumn: "Autumn", winter: "Winter" },
+    festive: { auto: "Follow the date", off: "None", halloween: "Halloween", christmas: "Christmas" },
+    page: {
+      "/": "Stock",
+      ["/menu?go=1&start=" + today + "&days=2&meal_types=breakfast&meal_types=lunch&meal_types=dinner&eater=1&allowance=50&cooldown=0"]: "Menu",
+      "/recipes": "Recipes", "/ingredients": "Ingredients", "/eaters": "Eaters",
+    },
+    show: { both: "Both", computer: "Computer", phone: "Phone" },
+    motion: { on: "On", off: "Off" },
+  };
+  const state = { design: "mag-curtain", season: "auto", festive: "auto", page: "/", show: "both", motion: "on" };
+  try { Object.assign(state, JSON.parse(localStorage.getItem("emu-hub-3") || "{}")); } catch (e) {}
+  const first = (o) => Object.keys(o)[0];
+  if (!(state.page in OPTIONS.page)) state.page = first(OPTIONS.page);
+
+  for (const [key, options] of Object.entries(OPTIONS)) {
+    const group = document.getElementById("g-" + key);
+    for (const [value, label] of Object.entries(options)) {
+      const b = document.createElement("button");
+      b.type = "button"; b.textContent = label; b.dataset.key = key; b.dataset.value = value;
+      group.append(b);
+    }
+  }
+  const url = () => {
+    const sep = state.page.includes("?") ? "&" : "?";
+    return state.page + sep + new URLSearchParams({ design: state.design, season: state.season, festive: state.festive, motion: state.motion, embed: "1" });
+  };
+  function fit() {
+    const free = document.documentElement.clientWidth - 40;
+    const both = state.show === "both";
+    const cw = both ? Math.max(free * 0.64, 520) : Math.min(free, 1280);
+    const cs = Math.min(1, (cw - 16) / 1280);
+    const c = document.getElementById("f-computer");
+    c.style.width = "1280px"; c.style.height = Math.round(820) + "px"; c.style.transform = "scale(" + cs + ")";
+    document.getElementById("s-computer").style.width = Math.round(1280 * cs) + 16 + "px";
+    document.getElementById("s-computer").style.height = Math.round(820 * cs) + 30 + "px";
+    const ps = Math.min(1, Math.max(0.55, (window.innerHeight - 150) / 800));
+    const p = document.getElementById("f-phone");
+    p.style.width = "390px"; p.style.height = "780px"; p.style.transform = "scale(" + ps + ")";
+    document.getElementById("s-phone").style.width = Math.round(390 * ps) + 20 + "px";
+    document.getElementById("s-phone").style.height = Math.round(780 * ps) + 20 + "px";
+  }
+  function render(reload) {
+    try { localStorage.setItem("emu-hub-3", JSON.stringify(state)); } catch (e) {}
+    for (const b of document.querySelectorAll("button[data-key]")) b.setAttribute("aria-pressed", String(state[b.dataset.key] === b.dataset.value));
+    document.getElementById("d-computer").hidden = state.show === "phone";
+    document.getElementById("d-phone").hidden = state.show === "computer";
+    if (reload) { document.getElementById("f-computer").src = url(); document.getElementById("f-phone").src = url(); }
+    fit();
+  }
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest("button[data-key]");
+    if (!b) return;
+    state[b.dataset.key] = b.dataset.value;
+    render(b.dataset.key !== "show");
+  });
+  document.getElementById("replay").addEventListener("click", () => render(true));
+  window.addEventListener("resize", fit);
+  render(true);
+</script>
+</body>
+</html>

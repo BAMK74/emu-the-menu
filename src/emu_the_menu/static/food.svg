@@ -1,0 +1,275 @@
+<svg xmlns="http://www.w3.org/2000/svg">
+  <!-- Produce drawn in natural colours, used in the banners. Each p-* is 100 x 100. -->
+  <defs>
+    <radialGradient id="gTomato" cx="38%" cy="32%" r="75%"><stop offset="0" stop-color="#ff8a6b"/><stop offset=".5" stop-color="#e03a26"/><stop offset="1" stop-color="#a81c12"/></radialGradient>
+    <radialGradient id="gLemon" cx="38%" cy="32%" r="80%"><stop offset="0" stop-color="#fff6a8"/><stop offset=".55" stop-color="#f6c715"/><stop offset="1" stop-color="#d49806"/></radialGradient>
+    <radialGradient id="gGarlic" cx="40%" cy="30%" r="80%"><stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#e2d6bb"/></radialGradient>
+    <linearGradient id="gLeaf" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7bd45e"/><stop offset="1" stop-color="#2c8a35"/></linearGradient>
+    <linearGradient id="gChilli" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#ff5a3c"/><stop offset="1" stop-color="#b3150f"/></linearGradient>
+    <linearGradient id="gCarrot" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ffa43a"/><stop offset="1" stop-color="#e2650f"/></linearGradient>
+    <radialGradient id="gCap" cx="40%" cy="30%" r="80%"><stop offset="0" stop-color="#d9a577"/><stop offset="1" stop-color="#8d5a34"/></radialGradient>
+    <radialGradient id="gPumpkin" cx="40%" cy="32%" r="80%"><stop offset="0" stop-color="#ffb347"/><stop offset=".6" stop-color="#f07a12"/><stop offset="1" stop-color="#bf5207"/></radialGradient>
+    <radialGradient id="gApple" cx="38%" cy="30%" r="80%"><stop offset="0" stop-color="#ff7d6a"/><stop offset=".55" stop-color="#d92b2b"/><stop offset="1" stop-color="#8f1313"/></radialGradient>
+    <radialGradient id="gOrange" cx="38%" cy="30%" r="80%"><stop offset="0" stop-color="#ffc468"/><stop offset=".6" stop-color="#f58a14"/><stop offset="1" stop-color="#c5600a"/></radialGradient>
+    <radialGradient id="gPear" cx="40%" cy="35%" r="80%"><stop offset="0" stop-color="#e9f08a"/><stop offset="1" stop-color="#a8bf2c"/></radialGradient>
+    <radialGradient id="gPeach" cx="38%" cy="30%" r="80%"><stop offset="0" stop-color="#ffd7a8"/><stop offset=".6" stop-color="#ff9d72"/><stop offset="1" stop-color="#e2604a"/></radialGradient>
+    <radialGradient id="gRadish" cx="38%" cy="30%" r="80%"><stop offset="0" stop-color="#ff7a9a"/><stop offset="1" stop-color="#c91f55"/></radialGradient>
+    <linearGradient id="gCorn" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#ffe066"/><stop offset="1" stop-color="#f0b429"/></linearGradient>
+    <linearGradient id="gBread" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e9b268"/><stop offset="1" stop-color="#b9772f"/></linearGradient>
+    <linearGradient id="gBottle" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#7a8f1e"/><stop offset=".5" stop-color="#b5c738"/><stop offset="1" stop-color="#6b7d17"/></linearGradient>
+    <linearGradient id="gPot" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#e2692f"/><stop offset="1" stop-color="#a8431a"/></linearGradient>
+    <linearGradient id="gWood" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#d9a566"/><stop offset="1" stop-color="#b57f40"/></linearGradient>
+    <linearGradient id="gGinger" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#d9924a"/><stop offset="1" stop-color="#a8652a"/></linearGradient>
+    <radialGradient id="gMelon" cx="50%" cy="0%" r="100%"><stop offset="0" stop-color="#ff6b78"/><stop offset="1" stop-color="#e0293c"/></radialGradient>
+    <radialGradient id="gBerry" cx="38%" cy="30%" r="80%"><stop offset="0" stop-color="#ff6a62"/><stop offset="1" stop-color="#c81a2a"/></radialGradient>
+    <radialGradient id="gAvo" cx="50%" cy="45%" r="60%"><stop offset="0" stop-color="#e6f08a"/><stop offset="1" stop-color="#9dbf2b"/></radialGradient>
+  <style>
+    /* Motion hooks. The page sets the --an1/--an2/--an3 style variables on .hero-art; with none set nothing moves. */
+    @keyframes f-drop { 0% { transform: translateY(-80px) rotate(-10deg); opacity: 0; } 55% { opacity: 1; } 100% { transform: none; opacity: 1; } }
+    @keyframes f-roll { 0% { transform: translateX(180px) rotate(140deg); opacity: 0; } 100% { transform: none; opacity: 1; } }
+    @keyframes f-pop { 0% { transform: scale(.4); opacity: 0; } 70% { transform: scale(1.08); opacity: 1; } 100% { transform: none; } }
+    @keyframes f-bob { from { transform: translateY(0); } to { transform: translateY(-8px); } }
+    @keyframes f-sway { from { transform: rotate(-3deg); } to { transform: rotate(3deg); } }
+    @keyframes f-par { from { translate: 0 0; } to { translate: 0 calc(var(--sp, 1) * 70px); } }
+    @keyframes f-steam { 0% { transform: translateY(0); opacity: 0; } 30% { opacity: .85; } 100% { transform: translateY(-30px); opacity: 0; } }
+    .it {
+      transform-box: fill-box; transform-origin: 50% 100%;
+      animation-name: var(--an1, none), var(--an2, none), var(--an3, none);
+      animation-duration: var(--du1, 0s), var(--du2, 0s), 1s;
+      animation-delay: calc(var(--i, 0) * var(--st1, .1s)), calc(var(--dl2, 0s) + var(--i, 0) * var(--st2, .3s)), 0s;
+      animation-iteration-count: 1, var(--ic2, infinite), 1;
+      animation-direction: normal, alternate, normal;
+      animation-timing-function: var(--ea1, cubic-bezier(.16, 1, .3, 1)), ease-in-out, linear;
+      animation-fill-mode: both, none, both;
+      animation-timeline: auto, auto, var(--tl3, auto);
+      animation-range: normal, normal, 0 32rem;
+    }
+    .steam {
+      transform-box: fill-box; animation-name: var(--stm, none); animation-duration: 2.8s; animation-iteration-count: infinite;
+      animation-timing-function: ease-out;
+    }
+  </style>
+  </defs>
+
+  <symbol id="p-tomato" viewBox="0 0 100 100">
+    <circle cx="50" cy="58" r="36" fill="url(#gTomato)"/>
+    <path d="M50 26l7 9 10-5-4 10 10 5-11 3 1 10-8-7-8 7 1-10-11-3 10-5-4-10 10 5z" fill="#3f9a3a"/>
+    <rect x="48" y="16" width="4" height="12" rx="2" fill="#2f7a2c"/>
+    <ellipse cx="36" cy="48" rx="9" ry="5.500" fill="#fff" opacity=".35" transform="rotate(-35 36 48)"/>
+  </symbol>
+  <symbol id="p-lemon" viewBox="0 0 100 100">
+    <path d="M10 56c0-15 17-28 40-28s40 13 40 28-17 28-40 28-40-13-40-28z" fill="url(#gLemon)"/>
+    <circle cx="9" cy="56" r="4.500" fill="#e5a90c"/><circle cx="91" cy="56" r="4.500" fill="#e5a90c"/>
+    <ellipse cx="38" cy="46" rx="11" ry="5" fill="#fff" opacity=".4" transform="rotate(-20 38 46)"/>
+    <path d="M52 30c4-8 12-10 18-8-2 8-9 11-18 8z" fill="url(#gLeaf)"/>
+  </symbol>
+  <symbol id="p-garlic" viewBox="0 0 100 100">
+    <path d="M50 14c3 9 26 15 26 42 0 17-13 28-26 28S24 73 24 56c0-27 23-33 26-42z" fill="url(#gGarlic)"/>
+    <path d="M50 20c-12 14-15 34-9 62M50 20c12 14 15 34 9 62M50 20v64" stroke="#cdbf9d" stroke-width="2" fill="none"/>
+    <path d="M44 84h12l-1 6H45z" fill="#c9b48a"/>
+  </symbol>
+  <symbol id="p-basil" viewBox="0 0 100 100">
+    <path d="M50 92V54" stroke="#2f7a2c" stroke-width="3" stroke-linecap="round"/>
+    <path d="M50 56C34 52 24 38 28 22c16 0 26 14 22 34z" fill="url(#gLeaf)"/>
+    <path d="M50 56C66 52 76 38 72 22 56 22 46 36 50 56z" fill="url(#gLeaf)"/>
+    <path d="M50 40C40 36 36 24 42 10c10 4 14 16 8 30z" fill="url(#gLeaf)" opacity=".95"/>
+    <path d="M50 56L30 26M50 56l20-30M50 40L42 14" stroke="#b9ec9f" stroke-width="1.500" fill="none" opacity=".7"/>
+  </symbol>
+  <symbol id="p-chilli" viewBox="0 0 100 100">
+    <path d="M28 28c20-8 48 6 54 32 4 17-3 28-8 30-3-15-12-24-28-32-14-7-22-18-18-30z" fill="url(#gChilli)"/>
+    <path d="M28 28c-3-6-1-12 4-14 2 6 0 10-4 14z" fill="#2f7a2c"/>
+    <path d="M40 38c10 2 22 10 28 24" stroke="#fff" stroke-width="2.500" fill="none" opacity=".35" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="p-carrot" viewBox="0 0 100 100">
+    <path d="M62 30c8 4 12 12 8 20L40 90c-2 4-6 4-8 0L22 76c-2-3-1-6 2-8z" fill="url(#gCarrot)" transform="rotate(8 50 60)"/>
+    <path d="M44 56l10 2M38 68l9 2M52 44l9 2" stroke="#c5530a" stroke-width="2" stroke-linecap="round" opacity=".6"/>
+    <g fill="url(#gLeaf)"><path d="M66 32c-2-10 2-18 8-22 4 8 2 16-8 22z"/><path d="M70 34c4-8 12-12 20-10-2 9-10 13-20 10z"/><path d="M62 30c-8-6-10-14-8-20 8 2 12 10 8 20z"/></g>
+  </symbol>
+  <symbol id="p-mushroom" viewBox="0 0 100 100">
+    <path d="M38 58h24l3 26c0 5-6 8-15 8s-15-3-15-8z" fill="#f4e9d6"/>
+    <path d="M12 58C12 32 30 16 50 16s38 16 38 42z" fill="url(#gCap)"/>
+    <ellipse cx="34" cy="38" rx="9" ry="6" fill="#fff" opacity=".28" transform="rotate(-25 34 38)"/>
+    <path d="M12 58h76" stroke="#7b4a28" stroke-width="3" stroke-linecap="round"/>
+  </symbol>
+  <symbol id="p-pumpkin" viewBox="0 0 100 100">
+    <ellipse cx="50" cy="60" rx="42" ry="32" fill="url(#gPumpkin)"/>
+    <path d="M50 28c-14 8-18 48 0 64M50 28c14 8 18 48 0 64M32 34c-14 10-12 44 6 56M68 34c14 10 12 44-6 56" stroke="#b34d05" stroke-width="2.500" fill="none" opacity=".55"/>
+    <path d="M47 30c0-8 2-14 8-16 1 6 0 12-3 16z" fill="#6b7d2a"/>
+    <ellipse cx="34" cy="48" rx="9" ry="5" fill="#fff" opacity=".3" transform="rotate(-30 34 48)"/>
+  </symbol>
+  <symbol id="p-apple" viewBox="0 0 100 100">
+    <path d="M50 30c-10-8-34-6-34 22 0 22 14 40 34 40s34-18 34-40c0-28-24-30-34-22z" fill="url(#gApple)"/>
+    <path d="M50 30c-1-10 2-18 10-22 2 9-1 17-10 22z" fill="url(#gLeaf)"/>
+    <rect x="48.500" y="22" width="3" height="11" rx="1.500" fill="#6b4a2a"/>
+    <ellipse cx="32" cy="50" rx="7" ry="12" fill="#fff" opacity=".28" transform="rotate(12 32 50)"/>
+  </symbol>
+  <symbol id="p-orange" viewBox="0 0 100 100">
+    <circle cx="50" cy="56" r="38" fill="url(#gOrange)"/>
+    <g fill="#c5600a" opacity=".35"><circle cx="38" cy="50" r="1.500"/><circle cx="58" cy="42" r="1.500"/><circle cx="64" cy="64" r="1.500"/><circle cx="44" cy="72" r="1.500"/><circle cx="30" cy="64" r="1.500"/></g>
+    <path d="M50 20c4-8 12-10 18-7-2 8-9 11-18 7z" fill="url(#gLeaf)"/>
+    <ellipse cx="34" cy="42" rx="9" ry="5" fill="#fff" opacity=".35" transform="rotate(-35 34 42)"/>
+  </symbol>
+  <symbol id="p-pear" viewBox="0 0 100 100">
+    <path d="M50 18c9 0 12 10 12 18 0 6 4 10 10 18 8 14 2 36-22 36s-30-22-22-36c6-8 10-12 10-18 0-8 3-18 12-18z" fill="url(#gPear)"/>
+    <rect x="48.500" y="8" width="3" height="14" rx="1.500" fill="#6b4a2a"/>
+    <path d="M52 16c6-6 14-6 18-2-4 6-12 8-18 2z" fill="url(#gLeaf)"/>
+    <ellipse cx="38" cy="66" rx="6" ry="12" fill="#fff" opacity=".3" transform="rotate(10 38 66)"/>
+  </symbol>
+  <symbol id="p-peach" viewBox="0 0 100 100">
+    <path d="M50 24c-22-6-40 8-40 32 0 22 16 38 40 38s40-16 40-38c0-24-18-38-40-32z" fill="url(#gPeach)"/>
+    <path d="M50 26c-6 14-4 40 2 66" stroke="#d9553f" stroke-width="2.500" fill="none" opacity=".45"/>
+    <path d="M50 26c2-8 10-12 18-10-2 8-10 12-18 10z" fill="url(#gLeaf)"/>
+  </symbol>
+  <symbol id="p-radish" viewBox="0 0 100 100">
+    <g fill="url(#gLeaf)"><path d="M50 40c-14-8-18-22-12-32 12 4 18 16 12 32z"/><path d="M50 40c14-8 18-22 12-32-12 4-18 16-12 32z"/></g>
+    <path d="M50 40c-22 0-32 16-28 30 4 12 20 22 28 22s24-10 28-22c4-14-6-30-28-30z" fill="url(#gRadish)"/>
+    <path d="M44 88c4 6 8 6 12 0" stroke="#fff" stroke-width="5" stroke-linecap="round"/>
+    <ellipse cx="36" cy="58" rx="6" ry="9" fill="#fff" opacity=".3" transform="rotate(15 36 58)"/>
+  </symbol>
+  <symbol id="p-corn" viewBox="0 0 100 100">
+    <ellipse cx="50" cy="48" rx="20" ry="38" fill="url(#gCorn)"/>
+    <g fill="#e0a11d" opacity=".55"><circle cx="42" cy="26" r="3"/><circle cx="52" cy="26" r="3"/><circle cx="60" cy="30" r="3"/><circle cx="40" cy="38" r="3"/><circle cx="50" cy="38" r="3"/><circle cx="60" cy="40" r="3"/><circle cx="40" cy="50" r="3"/><circle cx="50" cy="50" r="3"/><circle cx="60" cy="52" r="3"/><circle cx="42" cy="62" r="3"/><circle cx="52" cy="62" r="3"/><circle cx="58" cy="72" r="3"/></g>
+    <path d="M50 94C30 92 22 70 28 50c6 14 14 22 22 44zM50 94c20-2 28-24 22-44-6 14-14 22-22 44z" fill="url(#gLeaf)"/>
+  </symbol>
+  <symbol id="p-peas" viewBox="0 0 100 100">
+    <path d="M10 66C18 28 66 14 92 34 80 74 36 88 10 66z" fill="url(#gLeaf)"/>
+    <path d="M18 62C28 36 64 26 84 38" stroke="#bff0a6" stroke-width="2" fill="none" opacity=".8"/>
+    <g fill="#9bdc6b"><circle cx="34" cy="56" r="8"/><circle cx="50" cy="50" r="8.500"/><circle cx="66" cy="46" r="8"/></g>
+    <g fill="#fff" opacity=".35"><circle cx="32" cy="53" r="2.500"/><circle cx="48" cy="47" r="2.500"/><circle cx="64" cy="43" r="2.500"/></g>
+  </symbol>
+  <symbol id="p-asparagus" viewBox="0 0 100 100">
+    <g fill="url(#gLeaf)"><rect x="22" y="22" width="9" height="74" rx="4" transform="rotate(-8 26 60)"/><rect x="46" y="14" width="10" height="82" rx="5"/><rect x="70" y="22" width="9" height="74" rx="4" transform="rotate(8 74 60)"/></g>
+    <g fill="#3e8a3a"><ellipse cx="22" cy="22" rx="6" ry="9" transform="rotate(-8 22 22)"/><ellipse cx="51" cy="14" rx="7" ry="10"/><ellipse cx="78" cy="22" rx="6" ry="9" transform="rotate(8 78 22)"/></g>
+    <g fill="#a9d98a"><rect x="21" y="90" width="12" height="6" rx="2"/><rect x="45" y="90" width="12" height="6" rx="2"/><rect x="69" y="90" width="12" height="6" rx="2"/></g>
+  </symbol>
+  <symbol id="p-strawberry" viewBox="0 0 100 100">
+    <path d="M50 94C24 80 12 56 14 40c2-12 18-14 36-10 18-4 34-2 36 10 2 16-10 40-36 54z" fill="url(#gBerry)"/>
+    <g fill="#ffe08a"><ellipse cx="34" cy="52" rx="1.600" ry="2.600"/><ellipse cx="50" cy="48" rx="1.600" ry="2.600"/><ellipse cx="66" cy="52" rx="1.600" ry="2.600"/><ellipse cx="42" cy="66" rx="1.600" ry="2.600"/><ellipse cx="58" cy="66" rx="1.600" ry="2.600"/><ellipse cx="50" cy="80" rx="1.600" ry="2.600"/></g>
+    <path d="M50 32l-14-8 10 0-6-8 12 6 4-8 4 8 12-6-6 8 10 0z" fill="url(#gLeaf)"/>
+  </symbol>
+  <symbol id="p-watermelon" viewBox="0 0 100 100">
+    <path d="M6 40a44 44 0 0 0 88 0z" fill="#2f8a3a"/>
+    <path d="M12 40a38 38 0 0 0 76 0z" fill="#d6f0c2"/>
+    <path d="M16 40a34 34 0 0 0 68 0z" fill="url(#gMelon)"/>
+    <g fill="#2a1a14"><ellipse cx="36" cy="54" rx="2" ry="3.500"/><ellipse cx="50" cy="62" rx="2" ry="3.500"/><ellipse cx="64" cy="54" rx="2" ry="3.500"/><ellipse cx="44" cy="48" rx="2" ry="3.500"/><ellipse cx="58" cy="48" rx="2" ry="3.500"/></g>
+  </symbol>
+  <symbol id="p-avocado" viewBox="0 0 100 100">
+    <path d="M50 8c14 0 24 18 26 36 2 22-8 46-26 46S22 66 24 44C26 26 36 8 50 8z" fill="#2f5d1f"/>
+    <path d="M50 14c11 0 19 16 21 32 2 19-6 38-21 38S27 65 29 46c2-16 10-32 21-32z" fill="url(#gAvo)"/>
+    <circle cx="50" cy="58" r="13" fill="#8a5a34"/><ellipse cx="46" cy="53" rx="4" ry="3" fill="#fff" opacity=".3"/>
+  </symbol>
+  <symbol id="p-rosemary" viewBox="0 0 100 100">
+    <path d="M14 90C36 66 60 38 86 12" stroke="#5b7a38" stroke-width="3" fill="none" stroke-linecap="round"/>
+    <g stroke="#3f6a2c" stroke-width="3" stroke-linecap="round"><path d="M26 76l-10-4M32 68l-12-2M38 62l-6-10M44 56l-12-6M50 50l-4-12M56 44l-12-8M62 38l-4-12M68 32l-12-6M74 24l-4-12M80 18l-12-4"/><path d="M26 76l8 8M32 68l10 6M38 62l12 4M44 56l12 6M50 50l12 6M56 44l12 6M62 38l12 6M68 32l12 6M74 24l12 6M80 18l8 8"/></g>
+  </symbol>
+  <symbol id="p-cinnamon" viewBox="0 0 100 100">
+    <g transform="rotate(-20 50 50)"><rect x="12" y="34" width="76" height="18" rx="9" fill="#a8602e"/><rect x="12" y="34" width="76" height="8" rx="4" fill="#c98547"/><ellipse cx="88" cy="43" rx="4" ry="9" fill="#7a3f1a"/><ellipse cx="12" cy="43" rx="4" ry="9" fill="#7a3f1a"/></g>
+    <g transform="rotate(-8 50 50)"><rect x="18" y="58" width="68" height="16" rx="8" fill="#a8602e"/><rect x="18" y="58" width="68" height="7" rx="3.500" fill="#c98547"/><ellipse cx="86" cy="66" rx="4" ry="8" fill="#7a3f1a"/></g>
+  </symbol>
+  <symbol id="p-anise" viewBox="0 0 100 100">
+    <path d="M50 8l10 24 24-12-12 24 24 10-24 10 12 24-24-12-10 24-10-24-24 12 12-24-24-10 24-10-12-24 24 12z" fill="#7a4220"/>
+    <circle cx="50" cy="50" r="10" fill="#4a2410"/>
+  </symbol>
+  <symbol id="p-egg" viewBox="0 0 100 100">
+    <path d="M50 10c18 0 32 28 32 48 0 18-14 32-32 32S18 76 18 58c0-20 14-48 32-48z" fill="#f7ead2"/>
+    <path d="M50 10c18 0 32 28 32 48 0 18-14 32-32 32 22-8 26-40 14-62-4-10-10-18-14-18z" fill="#e8d3ae" opacity=".7"/>
+    <ellipse cx="38" cy="40" rx="6" ry="12" fill="#fff" opacity=".6" transform="rotate(15 38 40)"/>
+  </symbol>
+  <symbol id="p-bread" viewBox="0 0 100 100">
+    <path d="M8 62c0-22 18-38 42-38s42 16 42 38v10c0 6-4 10-10 10H18c-6 0-10-4-10-10z" fill="url(#gBread)"/>
+    <path d="M26 44l10 16M44 38l10 18M62 42l10 16" stroke="#f6d9a2" stroke-width="5" stroke-linecap="round" opacity=".85"/>
+    <ellipse cx="30" cy="40" rx="12" ry="5" fill="#fff" opacity=".25" transform="rotate(-20 30 40)"/>
+  </symbol>
+  <symbol id="p-oil" viewBox="0 0 100 100">
+    <rect x="40" y="4" width="20" height="14" rx="3" fill="#b88a4a"/>
+    <path d="M42 18h16v14c0 8 14 12 14 30v26c0 6-4 8-8 8H36c-4 0-8-2-8-8V62c0-18 14-22 14-30z" fill="url(#gBottle)"/>
+    <rect x="36" y="56" width="28" height="22" rx="3" fill="#f7efd8"/><circle cx="50" cy="67" r="5" fill="#8a9b2a"/>
+    <path d="M38 38v22" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".4"/>
+  </symbol>
+  <symbol id="p-pot" viewBox="0 0 100 100">
+    <g stroke="#fff" stroke-width="3.500" fill="none" stroke-linecap="round" opacity=".75"><path class="steam" style="animation-delay:0s" d="M30 28c-4-6 4-8 0-14"/><path class="steam" style="animation-delay:.9s" d="M46 28c-4-6 4-8 0-14"/><path class="steam" style="animation-delay:1.8s" d="M62 28c-4-6 4-8 0-14"/></g>
+    <rect x="18" y="52" width="64" height="38" rx="10" fill="url(#gPot)"/>
+    <rect x="14" y="44" width="72" height="12" rx="6" fill="#c2551f"/>
+    <rect x="42" y="36" width="16" height="10" rx="5" fill="#3a2a22"/>
+    <rect x="6" y="60" width="14" height="7" rx="3.500" fill="#3a2a22"/><rect x="80" y="60" width="14" height="7" rx="3.500" fill="#3a2a22"/>
+    <path d="M26 60v24" stroke="#fff" stroke-width="4" stroke-linecap="round" opacity=".25"/>
+  </symbol>
+  <symbol id="p-spoon" viewBox="0 0 100 100">
+    <g transform="rotate(35 50 50)"><rect x="46" y="38" width="8" height="58" rx="4" fill="url(#gWood)"/><ellipse cx="50" cy="26" rx="15" ry="22" fill="url(#gWood)"/><ellipse cx="50" cy="26" rx="10" ry="16" fill="#9a6a30" opacity=".4"/></g>
+  </symbol>
+  <symbol id="p-gingerbread" viewBox="0 0 100 100">
+    <path d="M50 8c10 0 16 6 16 14 0 6-4 10-8 12 10 0 22-2 30 4-2 8-14 10-22 10 6 8 8 20 12 28-8 4-14-2-18-8-2-4-6-6-10-6s-8 2-10 6c-4 6-10 12-18 8 4-8 6-20 12-28-8 0-20-2-22-10 8-6 20-4 30-4-4-2-8-6-8-12 0-8 6-14 16-14z" fill="url(#gGinger)"/>
+    <g fill="#fff"><circle cx="44" cy="20" r="2.200"/><circle cx="56" cy="20" r="2.200"/><circle cx="50" cy="44" r="2.800"/><circle cx="50" cy="56" r="2.800"/><path d="M42 28q8 6 16 0" stroke="#fff" stroke-width="2" fill="none" stroke-linecap="round"/></g>
+  </symbol>
+  <symbol id="p-star" viewBox="0 0 100 100">
+    <path d="M50 6l13 28 30 4-22 21 6 30-27-15-27 15 6-30L7 38l30-4z" fill="#f2c230"/>
+    <path d="M50 6l13 28 30 4-22 21-21-53z" fill="#ffe27a" opacity=".6"/>
+  </symbol>
+  <symbol id="p-bat" viewBox="0 0 100 100">
+    <path d="M50 38c6-6 10-14 10-22 4 6 8 8 14 8 8 0 16 6 22 16-8-4-14-4-18 2-4-4-10-4-14 2-2-4-6-6-10-6s-8 2-10 6c-4-6-10-6-14-2-4-6-10-6-18-2 6-10 14-16 22-16 6 0 10-2 14-8 0 8 4 16 10 22z" fill="#2b1b3d"/>
+  </symbol>
+  <symbol id="p-leaf" viewBox="0 0 100 100">
+    <path d="M10 70C10 36 40 10 90 10c0 44-26 76-66 76z" fill="#c8601a"/>
+    <path d="M14 82L70 28" stroke="#f0a050" stroke-width="3" fill="none"/>
+  </symbol>
+
+  <!-- Scenes: 640 x 260, drawn to sit at the right of a banner. A soft shadow under each group. -->
+  <symbol id="s-spring" viewBox="0 0 640 260">
+    <ellipse cx="330" cy="236" rx="290" ry="16" fill="#000" opacity=".12"/>
+    <g class="it" style="--i:0;--sp:0.35"><use href="#p-asparagus" x="60" y="70" width="170" height="170"/></g>
+    <g class="it" style="--i:1;--sp:0.7"><use href="#p-radish" x="220" y="130" width="120" height="120"/></g>
+    <g class="it" style="--i:2;--sp:1.0"><use href="#p-peas" x="330" y="150" width="130" height="110" transform="rotate(-8 395 205)"/></g>
+    <g class="it" style="--i:3;--sp:0.5"><use href="#p-strawberry" x="440" y="110" width="120" height="120"/></g>
+    <g class="it" style="--i:4;--sp:1.2"><use href="#p-egg" x="130" y="168" width="84" height="84"/></g>
+    <g class="it" style="--i:5;--sp:0.45"><use href="#p-basil" x="520" y="60" width="110" height="110" transform="rotate(10 575 115)"/></g>
+  </symbol>
+  <symbol id="s-summer" viewBox="0 0 640 260">
+    <ellipse cx="330" cy="238" rx="290" ry="16" fill="#000" opacity=".12"/>
+    <g class="it" style="--i:0;--sp:0.35"><use href="#p-corn" x="40" y="80" width="150" height="160" transform="rotate(-12 115 160)"/></g>
+    <g class="it" style="--i:1;--sp:0.7"><use href="#p-tomato" x="170" y="110" width="150" height="150"/></g>
+    <g class="it" style="--i:2;--sp:1.0"><use href="#p-lemon" x="300" y="150" width="110" height="110"/></g>
+    <g class="it" style="--i:3;--sp:0.5"><use href="#p-tomato" x="390" y="120" width="120" height="120" transform="rotate(12 450 180)"/></g>
+    <g class="it" style="--i:4;--sp:1.2"><use href="#p-watermelon" x="480" y="150" width="140" height="120"/></g>
+    <g class="it" style="--i:5;--sp:0.45"><use href="#p-basil" x="330" y="60" width="110" height="110" transform="rotate(-10 385 115)"/></g>
+    <g class="it" style="--i:6;--sp:0.85"><use href="#p-peach" x="250" y="160" width="90" height="90"/></g>
+  </symbol>
+  <symbol id="s-autumn" viewBox="0 0 640 260">
+    <ellipse cx="330" cy="238" rx="290" ry="16" fill="#000" opacity=".14"/>
+    <g class="it" style="--i:0;--sp:0.35"><use href="#p-pumpkin" x="40" y="110" width="180" height="150"/></g>
+    <g class="it" style="--i:1;--sp:0.7"><use href="#p-mushroom" x="210" y="130" width="120" height="120"/></g>
+    <g class="it" style="--i:2;--sp:1.0"><use href="#p-apple" x="310" y="140" width="120" height="120"/></g>
+    <g class="it" style="--i:3;--sp:0.5"><use href="#p-pear" x="410" y="100" width="130" height="150" transform="rotate(8 475 175)"/></g>
+    <g class="it" style="--i:4;--sp:1.2"><use href="#p-carrot" x="500" y="130" width="130" height="130"/></g>
+    <g class="it" style="--i:5;--sp:0.45"><use href="#p-leaf" x="150" y="70" width="80" height="80" transform="rotate(-20 190 110)"/></g>
+    <g class="it" style="--i:6;--sp:0.85"><use href="#p-rosemary" x="260" y="50" width="120" height="120"/></g>
+  </symbol>
+  <symbol id="s-winter" viewBox="0 0 640 260">
+    <ellipse cx="330" cy="238" rx="290" ry="16" fill="#000" opacity=".14"/>
+    <g class="it" style="--i:0;--sp:0.35"><use href="#p-pot" x="40" y="80" width="190" height="180"/></g>
+    <g class="it" style="--i:1;--sp:0.7"><use href="#p-bread" x="220" y="150" width="140" height="110"/></g>
+    <g class="it" style="--i:2;--sp:1.0"><use href="#p-orange" x="340" y="130" width="120" height="120"/></g>
+    <g class="it" style="--i:3;--sp:0.5"><use href="#p-garlic" x="440" y="130" width="100" height="120"/></g>
+    <g class="it" style="--i:4;--sp:1.2"><use href="#p-carrot" x="520" y="120" width="110" height="130" transform="rotate(-8 575 185)"/></g>
+    <g class="it" style="--i:5;--sp:0.45"><use href="#p-rosemary" x="300" y="40" width="130" height="130"/></g>
+  </symbol>
+  <symbol id="s-halloween" viewBox="0 0 640 260">
+    <ellipse cx="330" cy="238" rx="290" ry="16" fill="#000" opacity=".2"/>
+    <g class="it" style="--i:0;--sp:0.35"><use href="#p-bat" x="40" y="20" width="90" height="90"/></g>
+    <g class="it" style="--i:1;--sp:0.7"><use href="#p-bat" x="510" y="10" width="70" height="70" transform="rotate(10 545 45)"/></g>
+    <g class="it" style="--i:2;--sp:1.0"><use href="#p-pumpkin" x="60" y="100" width="230" height="170"/></g>
+    <g class="it" style="--i:3;--sp:0.5"><use href="#p-pumpkin" x="290" y="150" width="150" height="110"/></g>
+    <g class="it" style="--i:4;--sp:1.2"><use href="#p-apple" x="430" y="140" width="110" height="110"/></g>
+    <g class="it" style="--i:5;--sp:0.45"><use href="#p-mushroom" x="520" y="140" width="100" height="110"/></g>
+    <g class="it" style="--i:6;--sp:0.85"><use href="#p-bat" x="360" y="40" width="60" height="60" transform="rotate(-12 390 70)"/></g>
+  </symbol>
+  <symbol id="s-christmas" viewBox="0 0 640 260">
+    <ellipse cx="330" cy="238" rx="290" ry="16" fill="#000" opacity=".16"/>
+    <g class="it" style="--i:0;--sp:0.35"><use href="#p-star" x="260" y="10" width="80" height="80"/></g>
+    <g class="it" style="--i:1;--sp:0.7"><use href="#p-gingerbread" x="60" y="90" width="170" height="170"/></g>
+    <g class="it" style="--i:2;--sp:1.0"><use href="#p-cinnamon" x="230" y="160" width="130" height="100"/></g>
+    <g class="it" style="--i:3;--sp:0.5"><use href="#p-orange" x="340" y="130" width="120" height="120"/></g>
+    <g class="it" style="--i:4;--sp:1.2"><use href="#p-anise" x="450" y="170" width="80" height="80"/></g>
+    <g class="it" style="--i:5;--sp:0.45"><use href="#p-rosemary" x="500" y="80" width="130" height="130"/></g>
+    <g class="it" style="--i:6;--sp:0.85"><use href="#p-pot" x="400" y="60" width="90" height="90"/></g>
+  </symbol>
+</svg>

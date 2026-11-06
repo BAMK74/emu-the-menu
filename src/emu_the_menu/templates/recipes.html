@@ -15,7 +15,8 @@
     {% if recipes %}
     <ul>
       {% for r, f, who in recipes %}
-      <li>
+      <li class="with-ico">
+        {{ icon(recipe_icon(r)) }}
         <div class="item-head">
           <a class="card-link" href="/recipes/{{ r.id }}"><strong>{{ r.name }}</strong></a>
           {% if f.calories_per_serving is not none %}<span class="qty">{{ "%d"|format(f.calories_per_serving|round) }} kcal per serving</span>{% else %}<span class="qty none">Calories unknown</span> <a href="/ingredients/calories?recipe={{ r.id }}">add</a>{% endif %}
