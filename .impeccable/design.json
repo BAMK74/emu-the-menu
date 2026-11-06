@@ -1,0 +1,266 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-11-06T13:39:18Z",
+  "title": "Design System: Emu the Menu",
+  "extensions": {
+    "colorMeta": {
+      "leaf-green": {
+        "role": "primary",
+        "displayName": "Leaf Green",
+        "canonical": "oklch(54% 0.087 156)",
+        "tonalRamp": [
+          "#001102",
+          "#003417",
+          "#165835",
+          "#407e59",
+          "#67a57e",
+          "#94c5a5",
+          "#bde2c9",
+          "#dbf7e4"
+        ]
+      },
+      "sage-mist": {
+        "role": "secondary",
+        "displayName": "Sage Mist",
+        "canonical": "oklch(94% 0.017 157)",
+        "tonalRamp": [
+          "#080d09",
+          "#232b26",
+          "#434d47",
+          "#67726b",
+          "#8d9891",
+          "#b1bab4",
+          "#d3d9d5",
+          "#ebf0ec"
+        ]
+      },
+      "warning-amber": {
+        "role": "tertiary",
+        "displayName": "Warning Amber",
+        "canonical": "oklch(76% 0.147 81)",
+        "tonalRamp": [
+          "#1e0200",
+          "#481a00",
+          "#713c00",
+          "#996200",
+          "#c38900",
+          "#deaf5a",
+          "#f5d296",
+          "#ffebbd"
+        ]
+      },
+      "alert-red": {
+        "role": "tertiary",
+        "displayName": "Alert Red",
+        "canonical": "oklch(52% 0.160 30)",
+        "tonalRamp": [
+          "#2a0000",
+          "#5d0000",
+          "#8d0d06",
+          "#b93f32",
+          "#e76958",
+          "#fe9787",
+          "#ffc0b3",
+          "#ffddd3"
+        ]
+      },
+      "paper-green": {
+        "role": "neutral",
+        "displayName": "Paper Green",
+        "canonical": "oklch(97% 0.004 135)",
+        "tonalRamp": [
+          "#0b0b0a",
+          "#282927",
+          "#494b48",
+          "#6d6f6d",
+          "#949693",
+          "#b6b8b6",
+          "#d7d8d6",
+          "#eeefed"
+        ]
+      },
+      "ink-green": {
+        "role": "neutral",
+        "displayName": "Ink Green",
+        "canonical": "oklch(27% 0.019 161)",
+        "tonalRamp": [
+          "#070d09",
+          "#222c26",
+          "#424e47",
+          "#66726b",
+          "#8c9991",
+          "#b0bab4",
+          "#d1dad5",
+          "#eaf0ed"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "title": {
+        "displayName": "Title",
+        "purpose": "The page heading."
+      },
+      "body": {
+        "displayName": "Body",
+        "purpose": "Everything else; 0.9rem on phones, 1rem from 640px."
+      },
+      "label": {
+        "displayName": "Label",
+        "purpose": "Uppercase form labels and group legends."
+      },
+      "chip": {
+        "displayName": "Chip",
+        "purpose": "Tags and small status pills."
+      }
+    },
+    "shadows": [
+      {
+        "name": "whisper",
+        "value": "0 1px 2px rgba(31, 42, 36, .06), 0 2px 8px rgba(31, 42, 36, .04)",
+        "purpose": "Cards, forms and the header; barely visible lift."
+      },
+      {
+        "name": "whisper-dark",
+        "value": "0 1px 2px rgba(0, 0, 0, .3)",
+        "purpose": "The same role in dark mode."
+      }
+    ],
+    "motion": [
+      {
+        "name": "border-ease",
+        "value": ".15s",
+        "purpose": "Card border and shadow change on hover (wide screens)."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "tablet",
+        "value": "640px"
+      },
+      {
+        "name": "wide",
+        "value": "1000px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one main action on a form or card.",
+      "html": "<button class=\"ds-btn-primary\">Save the calories</button>",
+      "css": ".ds-btn-primary{height:2.3rem;padding:0 .9rem;border:0;border-radius:.6rem;background:#3f7d58;color:#fff;font:600 .9rem system-ui,sans-serif;cursor:pointer}.ds-btn-primary:hover{filter:brightness(1.07)}.ds-btn-primary:focus-visible{outline:2px solid #3f7d58;outline-offset:1px}"
+    },
+    {
+      "name": "Quiet Button",
+      "kind": "button",
+      "refersTo": "button-quiet",
+      "description": "A secondary action beside a primary one.",
+      "html": "<button class=\"ds-btn-quiet\">Reshuffle</button>",
+      "css": ".ds-btn-quiet{height:2.3rem;padding:0 .9rem;border:1px solid #d5ddd7;border-radius:.6rem;background:transparent;color:#66756c;font:400 .9rem system-ui,sans-serif;cursor:pointer}.ds-btn-quiet:hover{border-color:#3f7d58;color:#3f7d58}.ds-btn-quiet:focus-visible{outline:2px solid #3f7d58;outline-offset:1px}"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input-field",
+      "description": "A single-line field with an uppercase label above.",
+      "html": "<label class=\"ds-label\">Quantity<input class=\"ds-input\" value=\"250\"></label>",
+      "css": ".ds-label{display:grid;gap:.2rem;font:600 .75rem system-ui,sans-serif;color:#66756c;text-transform:uppercase;letter-spacing:.03em}.ds-input{height:2.3rem;width:100%;padding:0 .6rem;background:#fff;color:#1f2a24;border:1px solid #d5ddd7;border-radius:.6rem;font:400 .9rem system-ui,sans-serif}.ds-input:focus-visible{outline:2px solid #3f7d58;outline-offset:1px}"
+    },
+    {
+      "name": "Stock Card",
+      "kind": "card",
+      "refersTo": "card",
+      "description": "One item with its amount and small status chips.",
+      "html": "<div class=\"ds-card\"><div class=\"ds-head\"><strong>Carrots</strong><span class=\"ds-qty\">1.2 kg</span></div><div class=\"ds-meta\">Fridge</div><div class=\"ds-chips\"><span class=\"ds-chip ds-soon\">3 days left</span></div></div>",
+      "css": ".ds-card{background:#fff;border:1px solid #d5ddd7;border-radius:.6rem;padding:.6rem .8rem;box-shadow:0 1px 2px rgba(31,42,36,.06),0 2px 8px rgba(31,42,36,.04);font-family:system-ui,sans-serif;color:#1f2a24}.ds-card:hover{border-color:#3f7d58}.ds-head{display:flex;justify-content:space-between;align-items:baseline}.ds-head strong{font-size:1.02rem}.ds-qty{font-weight:600;color:#3f7d58}.ds-meta{color:#66756c;font-size:.8rem}.ds-chips{display:flex;gap:.3rem;margin-top:.35rem}.ds-chip{font-size:.72rem;line-height:1;padding:.28rem .55rem;border-radius:999px;background:#e3efe7;color:#66756c}.ds-soon{background:#fdf0cf;color:#8a5a00;font-weight:600}"
+    },
+    {
+      "name": "Chip",
+      "kind": "chip",
+      "refersTo": "chip",
+      "description": "A small pill label; colour-coded variants carry meaning.",
+      "html": "<span class=\"ds-chip\">Pantry</span> <span class=\"ds-chip ds-ok\">Plenty</span> <span class=\"ds-chip ds-expired\">Expired</span>",
+      "css": ".ds-chip{display:inline-block;font:400 .72rem/1 system-ui,sans-serif;padding:.28rem .55rem;border-radius:999px;background:#e3efe7;color:#66756c}.ds-ok{background:#e3f2e8;color:#2f7a4c}.ds-expired{background:#fbeae8;color:#b3392c;font-weight:600}"
+    },
+    {
+      "name": "Navigation",
+      "kind": "nav",
+      "refersTo": "nav-item-current",
+      "description": "Pill links in the header; the current page is tinted green.",
+      "html": "<nav class=\"ds-nav\"><a href=\"#\" aria-current=\"page\">Stock</a><a href=\"#\">Menu</a><a href=\"#\">Recipes</a></nav>",
+      "css": ".ds-nav{display:flex;gap:.2rem;font-family:system-ui,sans-serif}.ds-nav a{color:#66756c;font-size:.9rem;text-decoration:none;padding:.35rem .7rem;border-radius:999px}.ds-nav a:hover{background:#e3efe7;color:#1f2a24}.ds-nav a[aria-current=page]{background:#e3efe7;color:#3f7d58;font-weight:600}"
+    },
+    {
+      "name": "Tick Pills",
+      "kind": "custom",
+      "refersTo": "chip",
+      "description": "Pill-shaped checkboxes for allergens, diets and meal types.",
+      "html": "<div class=\"ds-checks\"><label><input type=\"checkbox\" checked> Dinner</label><label><input type=\"checkbox\"> Lunch</label></div>",
+      "css": ".ds-checks{display:flex;flex-wrap:wrap;gap:.4rem;font-family:system-ui,sans-serif}.ds-checks label{display:inline-flex;align-items:center;gap:.35rem;padding:.3rem .7rem;font-size:.82rem;color:#1f2a24;background:#fff;border:1px solid #d5ddd7;border-radius:999px;cursor:pointer}.ds-checks label:hover{border-color:#3f7d58}.ds-checks label:has(input:checked){background:#e3efe7;border-color:#3f7d58;font-weight:600}.ds-checks input{margin:0;accent-color:#3f7d58}"
+    },
+    {
+      "name": "Warning Note",
+      "kind": "custom",
+      "refersTo": "chip-soon",
+      "description": "The amber safety note used for 'Suggestions, not advice' and held stock.",
+      "html": "<div class=\"ds-note\"><p><strong>Suggestions, not advice.</strong> Always read the label of everything you cook with.</p></div>",
+      "css": ".ds-note{background:#fdf3da;border:1px solid #e0a526;border-radius:.6rem;padding:.6rem .8rem;font:400 .85rem system-ui,sans-serif;color:#1f2a24}.ds-note p{margin:0}"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Kitchen Notebook",
+    "overview": "Emu the Menu looks like a well-kept household notebook that happens to be clever: pale paper-green pages, white cards ruled with a hairline, and one friendly leaf green that means \"go ahead\". It stays calm, plain and findable. Colour carries safety: amber and red are reserved for things a person must not miss. The confirmed direction is friendly and tactile.",
+    "keyCharacteristics": [
+      "Pale paper-green page, white cards, hairline borders, whisper shadows.",
+      "One green accent; amber and red are for safety only.",
+      "System font, plain words, small uppercase labels on forms.",
+      "Pills for navigation, tags and ticks; gently rounded rectangles for cards and fields.",
+      "Works on a 24rem phone column and grows to a 74rem two-column layout.",
+      "Follows the system light or dark setting."
+    ],
+    "rules": [
+      {
+        "name": "The Safety Colour Rule",
+        "body": "Amber and red appear only for something a person could be harmed or misled by (allergens, unreviewed ingredients, expiry, deletion). Never use them for decoration or emphasis.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Green Rule",
+        "body": "Leaf Green is the only colour that means \"do this\" or \"this is selected\". Do not add a second accent.",
+        "section": "colors"
+      },
+      {
+        "name": "The Seasonal Mood Intent (not built yet)",
+        "body": "The accent mood should follow the season through the existing :root tokens only; safety colours stay fixed.",
+        "section": "colors"
+      },
+      {
+        "name": "The Plain Words Rule",
+        "body": "Prefer an everyday word over jargon. Safety messages say what is wrong and what to do.",
+        "section": "typography"
+      },
+      {
+        "name": "The Whisper Shadow Rule",
+        "body": "Shadows are barely there and never coloured; heavier ones only to show something lifted or pressed.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep Leaf Green as the one action and selection colour.",
+      "Do reserve amber and red for safety, expiry and destructive actions.",
+      "Do keep tap targets at least 2.3rem tall and give rows room, because hands are often messy.",
+      "Do use the CSS variables in base.html for any new colour, radius or shadow, and check both light and dark.",
+      "Do keep text plain and use the Glossary terms; say what is unknown (\"Not checked\", \"Calories unknown\").",
+      "Do label rough or suggested figures as such, in Soon Brown."
+    ],
+    "donts": [
+      "Don't add a second accent colour or use amber/red for decoration.",
+      "Don't hide uncertainty behind confident styling; unreviewed or unknown things must look different.",
+      "Don't add web fonts, large images or heavy scripts; the app is served from a Raspberry Pi.",
+      "Don't make controls smaller than the current field height to fit more in.",
+      "Don't hardcode colours outside the :root tokens; seasonal moods will need to swap them."
+    ]
+  }
+}
