@@ -37,7 +37,7 @@ _DESCRIBING = frozenset(
     sea kosher fine finely flaky table coarse coarsely freshly fresh cracked chopped diced sliced
     minced grated shredded crushed roughly thinly lightly organic ripe raw large small medium
     extra virgin peeled deseeded trimmed washed halved quartered cubed torn beaten melted softened
-    boneless skinless good quality
+    boneless skinless good quality pitted higher welfare
     """.split()
 )
 _SEASONING = frozenset({"salt", "pepper", "black"})
@@ -67,7 +67,11 @@ _PART = (
 _QUANTITY_LEAD = re.compile(
     r"^\s*(?:(?:a|an|some|any|the)\s+(?:(?:few|little(?!\s+gem)|good|generous|large|small|big"
     r"|healthy|liberal|couple|bit)\s+(?:of\s+)?)*(?:" + _AMOUNT + r"(?:of\s+)?)?"
-    r"|" + _AMOUNT + r"of\s+)?(?:" + _PART + r")?",
+    r"|(?:(?:few|good|generous|large|small|big|healthy|liberal|little(?!\s+gem))\s+)*"
+    + _AMOUNT
+    + r"of\s+)?(?:"
+    + _PART
+    + r")?",
     re.IGNORECASE,
 )
 
@@ -137,6 +141,8 @@ def clean_name(name: str) -> str:
         if word in ("grain", "grained") and i and bare[i - 1] in ("fine", "coarse"):
             continue
         kept.append(token)
+    while kept and kept[0] == "and":  # "pitted and quartered olives" leaves "and olives"
+        kept.pop(0)
     return " ".join(kept) if kept else " ".join(name.lower().split())
 
 

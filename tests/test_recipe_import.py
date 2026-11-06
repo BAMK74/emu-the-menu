@@ -259,3 +259,55 @@ def test_a_word_before_the_number_does_not_hide_the_amount():
     assert (line.name, line.quantity, line.unit) == ("fine-grain sea salt", 0.5, "tsp")
     line = parse_ingredient_line("about 2 cups milk")
     assert (line.name, line.quantity, line.unit) == ("milk", 2, "cup")
+
+
+# --- lines that are not ingredients ------------------------------------------------------------
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "1 batch base recipe",
+        "base recipe",
+        "1 recipe pico de gallo",
+        "1 batch of pizza dough recipe",
+        "Optional seasonings",
+        "spices",
+        "Toppings of choice",
+        "any extra garnishes",
+        "your favourite mix-ins",
+    ],
+)
+def test_a_line_that_points_to_another_recipe_or_names_a_category_is_not_an_ingredient(text):
+    assert not parse_ingredient_line(text).is_ingredient
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "2 tbsp chilli flakes",
+        "1 tsp pumpkin spice",
+        "1 cup mixed spice blend",
+        "salt to taste",
+        "1 tbsp seasoning salt",
+        "200 g feta, crumbled",
+        "1 pack topping cheese",
+        "a handful of basil",
+    ],
+)
+def test_real_foods_that_share_a_word_with_those_stay_ingredients(text):
+    assert parse_ingredient_line(text).is_ingredient
+
+
+@pytest.mark.parametrize(
+    ("text", "name"),
+    [
+        ("1 cup milk of choice for a very thick consistency", "milk"),
+        ("1 cup milk of your choice", "milk"),
+        ("2 cups plant milk, of choice", "plant milk"),
+        ("1 tbsp oil for a crispier crust", "oil"),
+        ("1 cup flour for the dusting", "flour"),
+    ],
+)
+def test_a_note_about_choice_or_purpose_is_not_part_of_the_name(text, name):
+    assert parse_ingredient_line(text).name == name

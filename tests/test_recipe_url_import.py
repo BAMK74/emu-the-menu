@@ -224,3 +224,22 @@ def test_the_imported_text_is_escaped_in_the_page(db_path):
     client = make_client(db_path, lambda url: html(nasty))
     page = import_url(client).text
     assert "<script>alert(1)</script>" not in page
+
+
+def test_lines_that_are_not_ingredients_are_left_out_and_listed(db_path):
+    recipe = {
+        **RECIPE,
+        "recipeIngredient": ["500 g tomatoes", "1 batch base recipe", "Optional seasonings"],
+    }
+    client = make_client(db_path, lambda url: html(recipe))
+    page = import_url(client).text
+    assert values(page, "ingredient")[:1] == ["tomatoes"]
+    assert "base recipe" not in values(page, "ingredient")
+    assert "optional seasonings" not in values(page, "ingredient")
+    note = text_of(page)
+    assert "Left out because they are not ingredients" in note
+    assert "1 batch base recipe" in note and "Optional seasonings" in note
+
+
+def test_nothing_is_said_about_left_out_lines_when_there_are_none(client):
+    assert "Left out because" not in text_of(import_url(client).text)

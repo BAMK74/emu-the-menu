@@ -19,6 +19,8 @@
     <p><strong>Imported from {{ imported.host }}.</strong> Check every ingredient and quantity before saving: they were read from free text and can be wrong. Nothing is saved yet.{% if not imported.servings_found %} The page gave no number of servings, so check that too.{% endif %}</p>
     {% if imported.unreadable %}<p>Add a quantity for these lines, or clear the row to leave it out:</p>
     <ul>{% for line in imported.unreadable %}<li>{{ line }}</li>{% endfor %}</ul>{% endif %}
+    {% if imported.left_out %}<p>Left out because they are not ingredients (they point to another recipe or name a whole category). Add a row yourself if one of them is a food you need:</p>
+    <ul>{% for line in imported.left_out %}<li>{{ line }}</li>{% endfor %}</ul>{% endif %}
   </div>
   {% endif %}
 

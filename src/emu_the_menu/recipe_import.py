@@ -32,6 +32,14 @@ class IngredientLine:
     def readable(self) -> bool:
         return bool(self.name) and self.quantity is not None and self.unit is not None
 
+    @property
+    def is_ingredient(self) -> bool:
+        """False for a line that is no food to buy: it points to another recipe ("base recipe")
+        or only names a category ("optional seasonings", "toppings of choice")."""
+        if not self.name:
+            return True  # nothing was read; a person sees it as an unreadable line
+        return not (_ANOTHER_RECIPE.search(self.name) or _CATEGORY.match(self.name))
+
 
 @dataclass(frozen=True)
 class ImportedRecipe:
@@ -89,6 +97,12 @@ _HEADING = re.compile(
     r"^(?:optional|recommended|any of the following|for|to serve|garnish)[a-z ]*:\s*", re.I
 )
 _MAX_NAME = 60
+# A line that is not a food: it points to another recipe, or names a whole category.
+_ANOTHER_RECIPE = re.compile(r"\brecipes?\b")
+_CATEGORY = re.compile(
+    r"^(?:(?:optional|any|your|favou?rite|other|extra|assorted|desired|more)\s+)*"
+    r"(?:seasonings?|toppings?|garnish(?:es)?|spices?|extras?|mix-?ins|add-?ins)$"
+)
 # A word that comes before the amount: "scant 1/2 tsp", "about 2 cups".
 _LEAD_WORD = re.compile(
     r"^(?:scant|about|approx\.?|approximately|roughly|generous|heaped|heaping)\s+(?=\d|[½⅓⅔¼¾⅛])",
@@ -139,6 +153,9 @@ def _clean_name(text: str) -> str:
         "",
         text.lower(),
     )
+    # "milk of choice for a very thick consistency": the choice and the reason are notes.
+    text = re.sub(r"\s+of\s+(?:your\s+)?choice\b.*", "", text)
+    text = re.sub(r"\s+for\s+(?:a|an|the|extra|more|added|better|that|your)\b.*", "", text)
     words = strip_quantity(text).split()
     while words and words[0] in {"of", "a", "an", "each"}:
         words.pop(0)

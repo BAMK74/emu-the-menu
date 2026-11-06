@@ -174,3 +174,22 @@ def test_imported_lines_read_the_new_phrases_too():
         line = parse_ingredient_line(text)
         assert line.name == name, text
         assert line.quantity is None, text
+
+
+@pytest.mark.parametrize(
+    ("written", "plain"),
+    [
+        ("good grind of black pepper", "black pepper"),
+        ("large handful of basil", "basil"),
+        ("small bunch of kale", "kale"),
+        ("big pinch of salt", "salt"),
+        ("generous glug of olive oil", "olive oil"),
+        ("pitted and quartered kalamata olives", "kalamata olives"),
+        ("pitted dates", "dates"),
+        ("melted coconut oil", "coconut oil"),
+        ("skinless higher-welfare chicken breasts", "chicken breasts"),
+    ],
+)
+def test_an_adjective_before_the_amount_and_more_describing_words_are_dropped(written, plain):
+    assert clean_name(written) == plain
+    assert name_key(clean_name(written)) == name_key(written)

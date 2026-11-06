@@ -233,9 +233,12 @@ def create_router(
         except NoRecipeFoundError as exc:
             return page(request, blank, None, str(exc), 400, import_url=url)
         known = ingredient_names()
-        rows, unreadable = [], []
+        rows, unreadable, left_out = [], [], []
         for text in imported.lines:
             line = parse_ingredient_line(text)
+            if not line.is_ingredient:
+                left_out.append(text)
+                continue
             name = match_ingredient(line.name, known)
             if line.readable:
                 rows.append(
@@ -255,6 +258,7 @@ def create_router(
         info = {
             "host": urlsplit(url).hostname,
             "unreadable": unreadable,
+            "left_out": left_out,
             "servings_found": imported.servings is not None,
         }
         return page(request, form, None, imported=info)
