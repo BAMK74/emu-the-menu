@@ -114,3 +114,13 @@ def test_every_photo_is_credited(client):
     page = client.get("/static/photos/credits.html").text
     assert page.count("<li>") == 24
     assert 'href="/static/photos/credits.html"' in client.get("/").text
+
+
+def test_the_settings_overlay_has_a_settings_tab_and_an_eaters_tab(client):
+    page = client.get("/recipes").text
+    dialog = re.search(r'<dialog id="settings-dialog"[^>]*>(.*?)</dialog>', page, re.S).group(1)
+    tabs = re.findall(r'<button[^>]*role="tab"[^>]*data-tab="(\w+)"[^>]*>([^<]*)</button>', dialog)
+    assert tabs == [("settings", "Settings"), ("eaters", "Eaters")]
+    assert 'id="settings-panel"' in dialog and 'id="eaters-panel"' in dialog
+    # Without scripting the Eaters tab of the Settings page is still a plain link.
+    assert 'href="/eaters"' in client.get("/settings").text

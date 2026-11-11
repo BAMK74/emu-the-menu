@@ -157,3 +157,15 @@ nav.subnav a[aria-current="page"] { background: var(--ink); color: var(--paper);
     li, .day { animation: mag-rise linear both; animation-timeline: view(); animation-range: entry 0% entry 45%; }
   }
 }
+
+/* ---- Settings and Eaters share one overlay, as two tabs ---- */
+.dlg-tabs { display: flex; gap: .4rem; margin: 0 0 1.1rem; }
+.dlg-tabs button {
+  flex: 1; min-height: 2.6rem; border: 2px solid var(--ink); background: transparent; color: var(--ink);
+  font: inherit; font-weight: 800; font-size: .75rem; text-transform: uppercase; letter-spacing: .1em; cursor: pointer;
+}
+.dlg-tabs button:hover { background: var(--accent-soft); color: var(--ink); }
+.dlg-tabs button[aria-selected="true"] { background: var(--ink); color: var(--paper); }
+#eaters-panel .split { display: block; }
+#eaters-panel aside.side, #eaters-panel section { max-width: none; width: 100%; }
+#eaters-panel form.add { margin-bottom: 1rem; }
