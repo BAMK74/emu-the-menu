@@ -14,6 +14,7 @@ from emu_the_menu.allergens import Allergen, parse_allergens
 from emu_the_menu.countries import COUNTRIES
 from emu_the_menu.food_groups import FoodGroup, parse_food_groups
 from emu_the_menu.ingredients import check_kcal, kcal_basis
+from emu_the_menu.look import AUTO, LookChoice
 from emu_the_menu.names import canonical_name, clean_name, name_key, split_alternatives
 from emu_the_menu.openfoodfacts import ProductInfo
 from emu_the_menu.shelf_life import ShelfLife, ShelfLifeUnit
@@ -818,6 +819,27 @@ class StockRepository:
                 "INSERT INTO settings (key, value) VALUES ('disclaimer', ?)"
                 " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 (f"{version}|{accepted_on.isoformat()}",),
+            )
+
+    def look_choice(self) -> LookChoice:
+        """How the pages are dressed: follow the date (the default), or a pinned season, and
+        whether festive colours show at Halloween and Christmas."""
+        rows = dict(
+            self._db.execute(
+                "SELECT key, value FROM settings WHERE key IN ('look_season', 'look_festive')"
+            )
+        )
+        return LookChoice(rows.get("look_season", AUTO), rows.get("look_festive", "on") != "off")
+
+    def set_look_choice(self, choice: LookChoice) -> None:
+        with self._db:
+            self._db.executemany(
+                "INSERT INTO settings (key, value) VALUES (?, ?)"
+                " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                [
+                    ("look_season", choice.season),
+                    ("look_festive", "on" if choice.festive else "off"),
+                ],
             )
 
     def household_country(self) -> str | None:

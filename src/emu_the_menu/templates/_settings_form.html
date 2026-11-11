@@ -29,6 +29,20 @@
     </label>
     <p class="hint">= <span id="f-cold">{{ cold_other }}</span> °<span data-other-unit-name>{{ other_unit }}</span></p>
   </fieldset>
+  <fieldset class="limits">
+    <legend>Look</legend>
+    <label>Season colours
+      <select name="look_season">
+        <option value="auto"{{ " selected" if look_choice.season == "auto" }}>Follow the date</option>
+        {% for s in seasons %}<option value="{{ s }}"{{ " selected" if look_choice.season == s }}>Always {{ s }}</option>{% endfor %}
+      </select>
+    </label>
+    <p class="hint">The colours, the banner and the photos change with the season where the household lives (from the town, else the country). Pin one to keep it all year.</p>
+    <div class="checks" role="radiogroup" aria-label="Festive colours">
+      <label><input type="radio" name="look_festive" value="on"{{ " checked" if look_choice.festive }}> Festive colours at Halloween and Christmas</label>
+      <label><input type="radio" name="look_festive" value="off"{{ " checked" if not look_choice.festive }}> No festive colours</label>
+    </div>
+  </fieldset>
   <div class="buttons">
     <button type="submit">Save</button>
     {% if next_url %}<button class="quiet" type="button" data-close-dialog>Cancel</button>{% endif %}

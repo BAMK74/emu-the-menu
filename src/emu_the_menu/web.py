@@ -20,6 +20,7 @@ from emu_the_menu.eaters import (
 )
 from emu_the_menu.holidays import GetJson as HolidayGet
 from emu_the_menu.holidays import http_get_json as http_get_holidays
+from emu_the_menu.look import Season, parse_look_choice
 from emu_the_menu.occasion_repository import OccasionRepository
 from emu_the_menu.openfoodfacts import Fetch, LookupUnavailableError, find_product, http_fetch
 from emu_the_menu.page_fetch import fetch_page
@@ -104,6 +105,7 @@ def create_app(
     backup_dir = backup_dir or os.environ.get("EMU_BACKUP_DIR")
     app = FastAPI(title="Emu the Menu")
     app.state.db_path = path  # read by the shared templates, for the disclaimer banner
+    app.state.today = today  # and for the season the pages are dressed in
     app.include_router(create_eaters_router(path))
     app.include_router(create_review_router(path))  # before /ingredients/{id}
     app.include_router(create_calories_router(path))  # before /ingredients/{id}
@@ -194,6 +196,10 @@ def create_app(
             "goals_open": goal_form is not None,
         }
 
+    def look_context(repo: StockRepository) -> dict:
+        """The Look section of Settings: the current choice and the seasons to pin."""
+        return {"look_choice": repo.look_choice(), "seasons": [s.value for s in Season]}
+
     def weather_context(typed: dict | None = None) -> dict:
         with WeatherRepository(path) as weather:
             place = weather.place()
@@ -244,6 +250,7 @@ def create_app(
             {
                 "countries": COUNTRIES,
                 "country": repo.household_country(),
+                **look_context(repo),
                 **weather_context(weather_form),
                 "saved": request.query_params.get("saved") == "1",
                 "error": error,
@@ -262,6 +269,7 @@ def create_app(
             {
                 "countries": COUNTRIES,
                 "country": repo.household_country(),
+                **look_context(repo),
                 **weather_context(),
                 "backup": backup_status(),
                 "next_url": next if next in _RETURN_PAGES else None,
@@ -330,6 +338,8 @@ def create_app(
         temperature_unit: str = Form(""),
         warm_from: str = Form(""),
         cold_up_to: str = Form(""),
+        look_season: str = Form(""),
+        look_festive: str = Form(""),
         next: str = Form(""),
         repo: StockRepository = Depends(get_repo),
     ):
@@ -340,12 +350,15 @@ def create_app(
                 unit = parse_unit(temperature_unit) if temperature_unit else weather.unit()
             typed["unit"] = unit
             limits = parse_limits(warm_from, cold_up_to, unit)
+            # Everything is checked before anything is saved.
+            look = parse_look_choice(look_season, look_festive)
             repo.set_household_country(country)
         except ValueError as exc:
             return settings_page(request, repo, str(exc), weather_form=typed)
         error = save_town(town, repo.household_country())
         if error:
             return settings_page(request, repo, error, weather_form=typed)
+        repo.set_look_choice(look)
         with WeatherRepository(path) as weather:
             weather.set_limits(limits)
             weather.set_unit(unit)
