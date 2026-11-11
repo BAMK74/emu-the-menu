@@ -1,0 +1,159 @@
+/* The look: a modern magazine spread (huge type, rules instead of boxes, one accent colour) that the
+   season recolours. <html> carries data-season (spring, summer, autumn, winter) and data-festive
+   (halloween, christmas or empty), set by the server from the date and the Settings choice.
+
+   A season only supplies the accent and the pop colour. Safety colours (danger, warn, soon, ok)
+   are set in base.html and never change with the season, so a warning looks the same all year.
+   Movement is transform and opacity only, and stops when a device asks for reduced motion. */
+
+/* ---- Seasons: the accent, text on the accent, a soft tint and a pop colour ---- */
+html[data-season="spring"] { --accent: #247a42; --accent-text: #fff; --accent-soft: #dff3e0; --pop: #f4a3bd; }
+html[data-season="summer"] { --accent: #b83f14; --accent-text: #fff; --accent-soft: #ffe6d4; --pop: #f7c33b; }
+html[data-season="autumn"] { --accent: #944d20; --accent-text: #fff; --accent-soft: #f1e0cc; --pop: #f0a24a; }
+html[data-season="winter"] { --accent: #245f8c; --accent-text: #fff; --accent-soft: #dce9f4; --pop: #a9d4f0; }
+/* Festive overlays come after the seasons, so they win. */
+html[data-festive="halloween"] { --accent: #6a3aa3; --accent-text: #fff; --accent-soft: #eadff6; --pop: #f59a3c; }
+html[data-festive="christmas"] { --accent: #1a6140; --accent-text: #fff; --accent-soft: #dcefe3; --pop: #f0c85a; }
+@media (prefers-color-scheme: dark) {
+  html[data-season="spring"] { --accent: #5fc27f; --accent-text: #0c140e; --accent-soft: #1d2f21; --pop: #f08fb0; }
+  html[data-season="summer"] { --accent: #ff8a5c; --accent-text: #1a0d06; --accent-soft: #3a2417; --pop: #f7c33b; }
+  html[data-season="autumn"] { --accent: #d9945a; --accent-text: #1c1009; --accent-soft: #382a1c; --pop: #f0a24a; }
+  html[data-season="winter"] { --accent: #6fb0e0; --accent-text: #08131c; --accent-soft: #1b2d3d; --pop: #a9d4f0; }
+  html[data-festive="halloween"] { --accent: #b58ae6; --accent-text: #150c24; --accent-soft: #2b2040; --pop: #f59a3c; }
+  html[data-festive="christmas"] { --accent: #6fcf97; --accent-text: #08150d; --accent-soft: #1a3324; --pop: #f0c85a; }
+}
+
+/* ---- The magazine: type, rules and flat shapes ---- */
+html {
+  --hero-font: 900 2.3rem/.95 "Helvetica Neue", Helvetica, Arial, sans-serif;
+  & body { font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; }
+  & header.topbar { background: var(--paper); border-bottom: 4px solid var(--ink); box-shadow: none; }
+  & a.brand { text-transform: uppercase; letter-spacing: .12em; font-weight: 900; font-size: .9rem; color: var(--ink); }
+  & .logo { width: 2.1rem; height: 2.1rem; }
+  & header nav a {
+    border-radius: 0; text-transform: uppercase; letter-spacing: .1em; font-size: .72rem; font-weight: 700; color: var(--ink); padding: .5rem .5rem;
+    background: linear-gradient(var(--accent), var(--accent)) no-repeat 0 100% / 0 4px;
+  }
+  & header nav a:hover { background-size: 100% 4px; color: var(--ink); }
+  & header nav a[aria-current="page"] { background: linear-gradient(var(--accent), var(--accent)) no-repeat 0 100% / 100% 4px; color: var(--ink); }
+  & h1 { position: relative; font-weight: 900; font-size: 2.8rem; letter-spacing: -.04em; line-height: .95; text-transform: uppercase; margin: 1.2rem 0 1.2rem; padding-bottom: .6rem; }
+  & h1::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 2px; background: var(--ink); transform-origin: 0 50%; }
+  & h2, & h3 { font-weight: 900; letter-spacing: -.02em; }
+  & li, & .day { background: transparent; border: 0; border-top: 3px solid var(--ink); border-radius: 0; box-shadow: none; padding: .8rem 0 1rem; }
+  & li:hover { border-top-color: var(--accent); }
+  & form.add { background: var(--card); border: 3px solid var(--ink); border-radius: 0; box-shadow: none; }
+  & li .qty { color: var(--ink); font-weight: 900; }
+  & button, & a.button, & a.boxbtn { border-radius: 0; background: var(--ink); color: var(--paper); text-transform: uppercase; letter-spacing: .1em; font-size: .78rem; font-weight: 800; }
+  & button:hover { background: var(--accent); color: var(--accent-text); filter: none; }
+  & button.quiet, & a.button { background: transparent; color: var(--ink); border: 2px solid var(--ink); }
+  & a.button { display: inline-flex; align-items: center; justify-content: center; min-height: var(--field); padding: 0 1.2rem; }
+  & button.quiet:hover, & a.button:hover { background: var(--ink); color: var(--paper); }
+  & button.danger { background: transparent; color: var(--danger); border: 2px solid var(--danger); }
+  & input:not([type=checkbox]):not([type=radio]), & select { border-radius: 0; border: 0; border-bottom: 3px solid var(--ink); background: var(--field-bg); color: var(--ink); }
+  & form.add label, & form.add legend { text-transform: uppercase; letter-spacing: .1em; color: var(--ink); font-size: .68rem; font-weight: 800; }
+  & .chip, & .tag, & form.add .checks label { border-radius: 0; text-transform: uppercase; letter-spacing: .06em; font-size: .66rem; background: transparent; border: 1px solid var(--ink); color: var(--ink); }
+  & .chip-ok { color: var(--ok); border-color: var(--ok); }
+  & .chip-soon { background: var(--soon-bg); border-color: var(--soon); color: var(--soon); }
+  & .chip-expired, & .chip-allergen { color: var(--danger); border-color: var(--danger); background: var(--danger-bg); }
+  & form.add .checks label:has(input:checked) { background: var(--ink); color: var(--paper); }
+  & .empty { border: 1px solid var(--ink); background: var(--paper); }
+  & footer.legal { border-top: 4px solid var(--ink); color: var(--ink); }
+  & #settings-dialog { width: min(40rem, calc(100vw - 2rem)); padding: 1.6rem 1.8rem; border: 3px solid var(--ink); border-radius: 0; }
+  & #settings-dialog form.add label, & #settings-dialog form.add legend { text-transform: none; letter-spacing: 0; font-size: .85rem; font-weight: 700; }
+  & #settings-dialog fieldset { padding: .9rem 1rem; }
+}
+@media (min-width: 640px) { html h1 { font-size: 4rem; } }
+@media (max-width: 639px) {
+  #settings-dialog { padding: 1.2rem 1.1rem; }
+  /* On a phone the brand and the links are centred. */
+  .topbar-inner { flex-direction: column; justify-content: center; align-items: center; }
+  header nav { justify-content: center; flex-wrap: wrap; width: 100%; }
+}
+
+/* ---- The tab row under the header: Menu | Occasions, Recipes | Ingredients, Settings | Eaters ---- */
+nav.subnav { display: flex; justify-content: center; gap: .4rem; padding: .7rem 1rem 0; max-width: 74rem; margin: 0 auto; }
+nav.subnav a {
+  text-decoration: none; padding: .45rem 1.1rem; font-size: .72rem; font-weight: 700; min-height: 2.4rem; text-transform: uppercase; letter-spacing: .1em;
+  display: inline-flex; align-items: center; color: var(--ink); border: 2px solid var(--ink); background: transparent;
+}
+nav.subnav a:hover { background: var(--accent-soft); }
+nav.subnav a[aria-current="page"] { background: var(--ink); color: var(--paper); }
+@media (min-width: 640px) { nav.subnav { justify-content: flex-start; } }
+
+/* ---- The banner: a huge accent headline on the page colour, real produce in round tiles ---- */
+.hero {
+  position: relative; display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1fr); align-items: center; gap: .5rem;
+  padding: 1.2rem max(1rem, calc((100% - 72rem) / 2)) 1.4rem; min-height: 11rem; overflow: hidden;
+  background: var(--paper); color: var(--accent); border-bottom: 4px solid var(--ink);
+}
+.hero-copy { align-self: center; position: relative; z-index: 1; }
+.hero-line { margin: 0 0 .3rem; font: var(--hero-font); letter-spacing: -.04em; }
+.hero-line .w { display: inline-block; overflow: hidden; vertical-align: top; padding-bottom: .12em; margin-right: .22em; }
+.hero-line .w > span { display: inline-block; }
+.hero-sub { margin: 0 0 .8rem; font-size: 1.05rem; max-width: 30rem; color: var(--ink); font-weight: 600; }
+.hero-cta {
+  display: inline-block; padding: .6rem 1.1rem; text-decoration: none; font-weight: 800; text-transform: uppercase; letter-spacing: .1em; font-size: .78rem;
+  background-color: var(--ink); color: var(--paper);
+  background-image: linear-gradient(var(--accent), var(--accent)); background-repeat: no-repeat; background-size: 0% 100%;
+  transition: background-size .4s cubic-bezier(.16, 1, .3, 1), color .4s;
+}
+.hero-cta:hover { background-size: 100% 100%; color: var(--accent-text); }
+.hero-art { position: relative; width: 100%; aspect-ratio: 640 / 260; align-self: center; }
+.hero-art img {
+  position: absolute; aspect-ratio: 1; height: auto; object-fit: cover; border-radius: 50%; background: #ddd;
+  border: 5px solid #ffffff; box-shadow: 0 12px 26px rgba(0, 0, 0, .28); rotate: var(--r, 0deg); translate: 0 0;
+  will-change: transform, translate, opacity; backface-visibility: hidden; transform: translateZ(0);
+}
+.hero.compact { min-height: 0; padding-top: .5rem; padding-bottom: .5rem; grid-template-columns: minmax(0, 1fr) auto; align-items: center; overflow: hidden; }
+.hero.compact .hero-line { font-size: 1.05rem; }
+.hero.compact .hero-art { width: 11rem; }
+@media (max-width: 639px) {
+  /* On a phone everything in the banner is centred, the photos under the words. */
+  .hero { grid-template-columns: minmax(0, 1fr); padding-top: 1rem; min-height: 0; text-align: center; justify-items: center; }
+  .hero-copy { display: grid; justify-items: center; }
+  .hero-sub { margin-inline: auto; }
+  .hero-art { max-width: 21rem; margin: .2rem auto 0; }
+  .hero.compact { grid-template-columns: minmax(0, 1fr); justify-items: center; padding-bottom: .6rem; }
+  .hero.compact .hero-art { width: 9rem; margin: 0 auto; }
+}
+@media (min-width: 640px) and (max-width: 999px) {
+  /* In between, the banner stacks and centres so a long line gets the middle of the page. */
+  .hero:not(.compact) { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; padding-top: 1.6rem; }
+  .hero:not(.compact) .hero-copy { display: grid; justify-items: center; }
+  .hero:not(.compact) .hero-sub { margin-inline: auto; }
+  .hero:not(.compact) .hero-line { font-size: clamp(2.6rem, 7.5vw, 4.4rem); line-height: .9; }
+  .hero:not(.compact) .hero-art { width: min(100%, 34rem); margin: .4rem auto 0; }
+}
+@media (min-width: 640px) {
+  .hero:not(.compact) { min-height: 18rem; padding-top: 1.8rem; }
+  .hero.compact .hero-line { font-size: 1.6rem; letter-spacing: -.03em; }
+}
+@media (min-width: 1000px) {
+  .hero:not(.compact) .hero-line { font-size: clamp(3.4rem, 6.4vw, 5.8rem); line-height: .86; }
+}
+
+/* ---- Movement. Words slide up from behind a mask, the photos glide in and then float; cards rise as
+   they scroll into view. Nothing moves until every photo is decoded (the script adds .go), so
+   nothing pops in half drawn. Without scripting the photos simply show. ---- */
+@keyframes mag-fade { from { opacity: 0; transform: translateY(14px); } to { opacity: 1; transform: none; } }
+@keyframes mag-draw { from { transform: scaleX(0); } to { transform: scaleX(1); } }
+@keyframes mag-rise { from { opacity: 0; transform: translateY(40px); } to { opacity: 1; transform: none; } }
+@keyframes mag-word { from { transform: translateY(108%); } to { transform: none; } }
+@keyframes f-roll { 0% { transform: translateX(46px) scale(.94); opacity: 0; } 100% { transform: translateZ(0); opacity: 1; } }
+@keyframes f-bob { from { translate: 0 0; } to { translate: 0 -9px; } }
+@media (prefers-reduced-motion: no-preference) {
+  h1::after { animation: mag-draw .9s cubic-bezier(.16, 1, .3, 1) .15s both; }
+  .hero-sub { animation: mag-fade .7s ease-out .3s both; }
+  .hero-cta { animation: mag-fade .7s ease-out .5s both; }
+  .hero-line .w > span { animation: mag-word .9s cubic-bezier(.16, 1, .3, 1) both; animation-delay: calc(var(--w, 0) * .09s); }
+  .hero-art.go img {
+    animation: f-roll 1.5s cubic-bezier(.16, 1, .3, 1) calc(var(--i, 0) * .08s) both,
+      f-bob 5s ease-in-out calc(1.8s + var(--i, 0) * .5s) infinite alternate backwards;
+  }
+  html.js .hero-art:not(.go) img { opacity: 0; }
+}
+@supports (animation-timeline: view()) {
+  @media (prefers-reduced-motion: no-preference) {
+    li, .day { animation: mag-rise linear both; animation-timeline: view(); animation-range: entry 0% entry 45%; }
+  }
+}

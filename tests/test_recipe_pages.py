@@ -75,7 +75,7 @@ def test_the_header_links_to_recipes_and_marks_the_page(client):
     for path in ("/", "/eaters", "/ingredients", "/recipes"):
         assert 'href="/recipes"' in client.get(path).text
     marked = re.findall(r'<a href="([^"]+)"[^>]*aria-current="page"', client.get("/recipes").text)
-    assert marked == ["/recipes"]
+    assert marked == ["/recipes", "/recipes"]  # the header link and the Recipes tab
 
 
 def test_an_empty_page_invites_the_first_recipe(client):

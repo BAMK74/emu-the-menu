@@ -210,11 +210,11 @@ def save_defaults(client, **goals):
     return client.post("/settings/calorie-goals", data={**data, **goals})
 
 
-def test_every_page_links_to_the_others(client):
+def test_every_page_links_to_settings_and_its_pages_to_eaters(client):
     for path in ("/", "/eaters", "/settings"):
-        page = client.get(path).text
-        assert 'href="/eaters"' in page
-        assert 'href="/settings"' in page
+        assert 'href="/settings"' in client.get(path).text
+    for path in ("/eaters", "/settings"):  # Eaters is a tab of the Settings section
+        assert 'href="/eaters"' in client.get(path).text
 
 
 def test_the_json_export_includes_the_eaters_and_the_defaults(client):

@@ -4,21 +4,25 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}Emu the Menu{% endblock %}</title>
+  <link rel="icon" href="/static/emu.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/static/look.css">
+  <script>document.documentElement.classList.add("js");</script>
   <style>
     :root {
-      --bg: #f4f6f3; --card: #ffffff; --text: #1f2a24; --muted: #66756c;
-      --line: #d5ddd7; --accent: #3f7d58; --accent-text: #ffffff; --danger: #b3392c;
-      --danger-bg: #fbeae8; --warn: #e0a526; --warn-bg: #fdf3da; --radius: .6rem; --field: 2.3rem;
-      --accent-soft: #e3efe7; --shadow: 0 1px 2px rgba(31, 42, 36, .06), 0 2px 8px rgba(31, 42, 36, .04);
+      color-scheme: light;
+      --paper: #ffffff; --ink: #0b0b0b; --bg: var(--paper); --card: var(--paper); --text: var(--ink);
+      --muted: #555555; --line: #d6d6d6; --field-bg: #f4f4f4; --radius: 0; --field: 2.7rem; --shadow: none;
+      --accent: #247a42; --accent-text: #ffffff; --accent-soft: #dff3e0; --pop: #f4a3bd;
+      --danger: #b3392c; --danger-bg: #fbeae8; --warn: #e0a526; --warn-bg: #fdf3da;
       --ok: #2f7a4c; --ok-bg: #e3f2e8; --soon: #8a5a00; --soon-bg: #fdf0cf;
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --bg: #151a17; --card: #1e2521; --text: #e6ece8; --muted: #93a39a;
-        --line: #33403a; --accent: #5aa578; --accent-text: #0e1612; --danger: #e5766a;
-        --danger-bg: #3a2220; --warn-bg: #3a3118; --accent-soft: #1d2d24;
-        --shadow: 0 1px 2px rgba(0, 0, 0, .3); --ok: #7fc99a; --ok-bg: #1d3125;
-        --soon: #f0c36a; --soon-bg: #3a3118;
+        color-scheme: dark;
+        --paper: #0f0f0f; --ink: #f3f3f3; --muted: #a8a8a8; --line: #353535; --field-bg: #1c1c1c;
+        --accent: #5fc27f; --accent-text: #0c140e; --accent-soft: #1d2f21; --pop: #f08fb0;
+        --danger: #e5766a; --danger-bg: #3a2220; --warn-bg: #3a3118;
+        --ok: #7fc99a; --ok-bg: #1d3125; --soon: #f0c36a; --soon-bg: #3a3118;
       }
     }
     * { box-sizing: border-box; }
@@ -381,18 +385,47 @@
 <header class="topbar">
   <div class="topbar-inner">
     <a class="brand" href="/">
-      <svg class="logo" viewBox="0 0 32 32" aria-hidden="true">
-        <rect width="32" height="32" rx="8" fill="currentColor"/>
-        <circle cx="16" cy="18" r="8" fill="none" stroke="#fff" stroke-width="2.2"/>
-        <path d="M15 10.5c0-3.2 2.8-5.4 6.6-5.6-.1 3.4-2.4 5.6-6.6 5.6z" fill="#fff"/>
+      <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
+        <rect width="64" height="64" rx="15" fill="currentColor"/>
+        <g fill="#fff" stroke="#fff" transform="translate(2 1)"><path d="M3 36c-1-3 1-6 4-6-1-3 1-6 5-6 2-5 8-8 15-8 9 0 16 5 16 13 0 3-1 5-2 7-1 6-6 9-12 9H18c-6 0-12-3-15-9z"/><path d="M36 25c7-3 6-11 8-17" fill="none" stroke-width="5.2" stroke-linecap="round"/><ellipse cx="46.5" cy="8" rx="5.4" ry="3.9"/><path d="M50.5 6.6 60 8.6l-9.4 2.9z"/><path d="M22 46 20 58m10-12 2 12" fill="none" stroke-width="3" stroke-linecap="round"/><path d="M14 59h8m6 0h9" fill="none" stroke-width="3" stroke-linecap="round"/></g>
+        <g fill="currentColor" stroke="currentColor" transform="translate(2 1)"><circle cx="47.6" cy="7" r="1.5"/><path d="M12 33c4 2 8 2 12 0m-9 6c5 2 10 2 15 0m-6-12c3 1 7 1 10-1" fill="none" stroke-linecap="round" stroke-width="1.6"/></g>
       </svg>
       <span>Emu the Menu</span>
     </a>
     <nav aria-label="Main">
-      {% block nav %}<a href="/"{% if request.url.path == "/" %} aria-current="page"{% endif %}>Stock</a><a href="/menu"{% if request.url.path == "/menu" or request.url.path.startswith("/menus") %} aria-current="page"{% endif %}>Menu</a><a href="/occasions"{% if request.url.path.startswith("/occasions") %} aria-current="page"{% endif %}>Occasions</a><a href="/recipes"{% if request.url.path.startswith("/recipes") %} aria-current="page"{% endif %}>Recipes</a><a href="/ingredients"{% if request.url.path.startswith("/ingredients") %} aria-current="page"{% endif %}>Ingredients</a><a href="/eaters"{% if request.url.path == "/eaters" %} aria-current="page"{% endif %}>Eaters</a><a id="settings-link" href="/settings"{% if request.url.path == "/settings" %} aria-current="page"{% endif %}>Settings</a>{% endblock %}
+      {% set path = request.url.path %}{% set in_menu = path == "/menu" or path.startswith("/menus") or path.startswith("/occasions") %}{% set in_recipes = path.startswith("/recipes") or path.startswith("/ingredients") %}{% set in_settings = path == "/settings" or path == "/eaters" %}
+      {% block nav %}<a href="/"{% if path == "/" %} aria-current="page"{% endif %}>Stock</a><a href="/menu"{% if in_menu %} aria-current="page"{% endif %}>Menu</a><a href="/recipes"{% if in_recipes %} aria-current="page"{% endif %}>Recipes</a><a id="settings-link" href="/settings"{% if in_settings %} aria-current="page"{% endif %}>Settings</a>{% endblock %}
     </nav>
   </div>
 </header>
+{% set front = path in ("/", "/menu", "/menus") %}
+<section class="hero{{ "" if front else " compact" }}" id="hero">
+  <div class="hero-copy">
+    <p class="hero-line">{% for w in look.line.split() %}<span class="w"><span style="--w:{{ loop.index0 }}">{{ w }}</span></span>{% endfor %}</p>
+    {% if front %}<p class="hero-sub">{{ look.sub }}</p>
+    {% if path != "/menu" %}<a class="hero-cta" href="/menu">Plan this week's menu</a>{% endif %}{% endif %}
+  </div>
+  {# Real photos in round tiles (see /static/photos/credits.html). Left, top and width are percentages of the box. #}
+  {% set tiles = [(0, 14, 31, -4), (21, 0, 34, 3), (44, 22, 29, -2), (63, 2, 28, 4), (77, 34, 25, -3), (40, 50, 17, 5)] %}
+  <div class="hero-art" id="hero-art" aria-hidden="true">{% for name in look.photos %}{% set x, y, size, rot = tiles[loop.index0] %}<img class="tile" src="/static/photos/{{ name }}.jpg" alt="" width="320" height="320" decoding="async" style="left:{{ x }}%;top:{{ y }}%;width:{{ size }}%;--i:{{ loop.index0 }};--r:{{ rot }}deg">{% endfor %}</div>
+</section>
+<script>
+  // The photos start moving together once every one is decoded (or after 1.5 s).
+  (function () {
+    const art = document.getElementById("hero-art");
+    if (!art) return;
+    const ready = Array.from(art.querySelectorAll("img"), (img) => img.decode().catch(() => {}));
+    Promise.race([Promise.all(ready), new Promise((r) => setTimeout(r, 1500))]).then(() => art.classList.add("go"));
+  })();
+</script>
+{% if in_menu or in_recipes or in_settings %}
+<nav class="subnav" aria-label="{% if in_menu %}Menu{% elif in_recipes %}Recipes{% else %}Settings{% endif %} sections">
+  {% if in_menu %}<a href="/menu"{% if not path.startswith("/occasions") %} aria-current="page"{% endif %}>Menu</a><a href="/occasions"{% if path.startswith("/occasions") %} aria-current="page"{% endif %}>Occasions</a>
+  {% elif in_recipes %}<a href="/recipes"{% if path.startswith("/recipes") %} aria-current="page"{% endif %}>Recipes</a><a href="/ingredients"{% if path.startswith("/ingredients") %} aria-current="page"{% endif %}>Ingredients</a>
+  {% else %}<a href="/settings"{% if path == "/settings" %} aria-current="page"{% endif %}>Settings</a><a href="/eaters"{% if path == "/eaters" %} aria-current="page"{% endif %}>Eaters</a>
+  {% endif %}
+</nav>
+{% endif %}
 <main class="{% block main_class %}{% endblock %}">
   <h1>{% block heading %}Stock{% endblock %}</h1>
   {% block saved_banner %}{% if request.query_params.get("saved") == "1" %}<p class="saved" role="status">Settings saved.</p>{% endif %}{% endblock %}
@@ -484,7 +517,7 @@
   </div>
   {% endif %}{% endblock %}
   <footer class="legal">
-    <p>Emu the Menu is a household cooking app, not a dietitian, a doctor or an allergy service. Always read food labels. <a href="/disclaimer">Read the full disclaimer</a>.</p>
+    <p>Emu the Menu is a household cooking app, not a dietitian, a doctor or an allergy service. Always read food labels. <a href="/disclaimer">Read the full disclaimer</a>. <a href="/static/photos/credits.html">Photo credits</a>.</p>
   </footer>
 </main>
 <script>

@@ -662,15 +662,15 @@ def test_the_backup_status_is_also_in_the_panel(backup_client, backup_dir):
 
 @pytest.mark.parametrize(
     ("path", "current"),
-    [("/", "Stock"), ("/eaters", "Eaters"), ("/settings", "Settings")],
+    [("/", "Stock"), ("/eaters", "Settings"), ("/settings", "Settings")],
 )
 def test_the_header_marks_the_page_you_are_on(client, path, current):
     page = client.get(path).text
     assert '<header class="topbar">' in page
     assert 'class="brand"' in page and "Emu the Menu" in page
     marked = re.findall(r'<a[^>]*aria-current="page"[^>]*>([^<]*)</a>', page)
-    assert marked == [current]
-    for link in ('href="/"', 'href="/eaters"', 'href="/settings"'):
+    assert marked[0] == current  # Eaters is a tab of the Settings section
+    for link in ('href="/"', 'href="/settings"'):
         assert link in page
 
 

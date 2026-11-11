@@ -59,7 +59,7 @@ def test_the_header_links_to_the_menu_and_marks_the_page(client):
     for path in ("/", "/recipes", "/eaters", "/menu"):
         assert 'href="/menu"' in client.get(path).text
     marked = re.findall(r'<a href="([^"]+)"[^>]*aria-current="page"', client.get("/menu").text)
-    assert marked == ["/menu"]
+    assert marked == ["/menu", "/menu"]  # the header link and the Menu tab
 
 
 def test_without_eaters_it_asks_for_them_first(client):

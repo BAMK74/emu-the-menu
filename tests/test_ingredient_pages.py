@@ -76,12 +76,12 @@ def save(client, ingredient_id, kcal="", food_groups=(), allergens=()):
 
 
 def test_the_header_links_to_ingredients_and_marks_the_page(client):
-    for path in ("/", "/eaters", "/settings", "/ingredients"):
+    for path in ("/recipes", "/ingredients"):  # Ingredients is a tab of the Recipes section
         assert 'href="/ingredients"' in client.get(path).text
     marked = re.findall(
         r'<a[^>]*aria-current="page"[^>]*>([^<]*)</a>', client.get("/ingredients").text
     )
-    assert marked == ["Ingredients"]
+    assert marked == ["Recipes", "Ingredients"]
 
 
 def test_an_empty_page_explains_where_ingredients_come_from(client):
