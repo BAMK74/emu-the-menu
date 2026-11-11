@@ -1,0 +1,166 @@
+<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <!-- Drawn for Emu the Menu. Four tones come from the page: ico-1 accent, ico-2 pop,
+       ico-3 soft tint, ico-4 card, so the season recolours every picture. -->
+  <defs>
+    <style>
+      .a { fill: var(--ico-1, #3f7d58); }
+      .p { fill: var(--ico-2, #e0a526); }
+      .s { fill: var(--ico-3, #e3efe7); }
+      .c { fill: var(--ico-4, #fff); }
+      .la { stroke: var(--ico-1, #3f7d58); fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .lp { stroke: var(--ico-2, #e0a526); fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .lc { stroke: var(--ico-4, #fff); fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+
+  <!-- ===== Food and meal icons, 48 x 48 ===== -->
+  <symbol id="i-veg" viewBox="0 0 48 48">
+    <circle class="s" cx="24" cy="24" r="23"/>
+    <circle class="a" cx="15" cy="21" r="8"/><circle class="a" cx="33" cy="21" r="8"/>
+    <circle class="a" cx="24" cy="15" r="9"/><circle class="a" cx="24" cy="23" r="9"/>
+    <path class="p" d="M20 27h8l1.6 12a2.4 2.4 0 0 1-2.4 2.7h-6.4a2.4 2.4 0 0 1-2.4-2.7z"/>
+  </symbol>
+  <symbol id="i-fruit" viewBox="0 0 48 48">
+    <circle class="s" cx="24" cy="24" r="23"/>
+    <path class="a" d="M24 16c-4-3-12-2-12 8 0 8 5 15 12 15s12-7 12-15c0-10-8-11-12-8z"/>
+    <path class="p" d="M24 16c0-5 2-8 7-9 0 5-2 8-7 9z"/>
+    <ellipse class="c" cx="18" cy="24" rx="2.2" ry="4" opacity=".45" transform="rotate(15 18 24)"/>
+  </symbol>
+  <symbol id="i-grain" viewBox="0 0 48 48">
+    <circle class="s" cx="24" cy="24" r="23"/>
+    <path class="lp" stroke-width="2.4" d="M24 41V12"/>
+    <g class="a">
+      <ellipse cx="24" cy="10" rx="3" ry="5"/>
+      <ellipse cx="18" cy="17" rx="3" ry="5.5" transform="rotate(-30 18 17)"/>
+      <ellipse cx="30" cy="17" rx="3" ry="5.5" transform="rotate(30 30 17)"/>
+      <ellipse cx="18" cy="26" rx="3" ry="5.5" transform="rotate(-30 18 26)"/>
+      <ellipse cx="30" cy="26" rx="3" ry="5.5" transform="rotate(30 30 26)"/>
+      <ellipse cx="18" cy="35" rx="3" ry="5" transform="rotate(-30 18 35)"/>
+      <ellipse cx="30" cy="35" rx="3" ry="5" transform="rotate(30 30 35)"/>
+    </g>
+  </symbol>
+  <symbol id="i-dairy" viewBox="0 0 48 48">
+    <circle class="s" cx="24" cy="24" r="23"/>
+    <path class="c" d="M19 10h10v6l4.5 6V38a3 3 0 0 1-3 3h-13a3 3 0 0 1-3-3V22L19 16z"/>
+    <rect class="p" x="18" y="7" width="12" height="5" rx="2"/>
+    <rect class="a" x="16.5" y="25" width="15" height="10" rx="2"/>
+  </symbol>
+  <symbol id="i-egg" viewBox="0 0 48 48">
+    <circle class="s" cx="24" cy="24" r="23"/>
+    <path class="c" d="M10 24c0-8 6-13 14-13s14 5 12.500 13S31 37 22 36 10 31 10 24z"/>
+    <circle class="p" cx="23" cy="24" r="7"/>
+    <ellipse class="c" cx="20.500" cy="21.500" rx="2" ry="1.600" opacity=".6"/>
+  </symbol>
+  <symbol id="i-fish" viewBox="0 0 48 48">
+    <circle class="s" cx="24" cy="24" r="23"/>
+    <path class="p" d="M33 24l9-8v16z"/>
+    <ellipse class="a" cx="22" cy="24" rx="15" ry="9.500"/>
+    <circle class="c" cx="14" cy="22" r="2.200"/>
+    <path class="lc" stroke-width="2" d="M26 17c3 4 3 10 0 14"/>
+  </symbol>
+  <symbol id="i-meat" viewBox="0 0 48 48">
+    <circle class="s" cx="24" cy="24" r="23"/>
+    <path class="lc" stroke-width="5" d="M22 28L12 38"/>
+    <circle class="c" cx="10" cy="36" r="3.200"/><circle class="c" cx="13.500" cy="40.500" r="3.200"/>
+    <ellipse class="p" cx="29" cy="19" rx="13" ry="10" transform="rotate(-35 29 19)"/>
+    <ellipse class="a" cx="31" cy="16" rx="4" ry="2.800" opacity=".35" transform="rotate(-35 31 16)"/>
+  </symbol>
+  <symbol id="i-bread" viewBox="0 0 48 48">
+    <circle class="s" cx="24" cy="24" r="23"/>
+    <path class="p" d="M8 29c0-8 7-14 16-14s16 6 16 14v7a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2z"/>
+    <path class="lc" stroke-width="2.200" d="M16 23l3 5M24 21l3 5M32 23l3 5"/>
+  </symbol>
+  <symbol id="i-jar" viewBox="0 0 48 48">
+    <circle class="s" cx="24" cy="24" r="23"/>
+    <rect class="a" x="14" y="8" width="20" height="7" rx="2.500"/>
+    <rect class="c" x="12" y="14" width="24" height="28" rx="6"/>
+    <rect class="p" x="16" y="22" width="16" height="12" rx="2.500"/>
+  </symbol>
+  <symbol id="i-herb" viewBox="0 0 48 48">
+    <circle class="s" cx="24" cy="24" r="23"/>
+    <path class="a" d="M10 38C10 21 21 11 38 10c0 17-10 28-28 28z"/>
+    <path class="lc" stroke-width="2.200" d="M12 37L30 19"/>
+    <path class="lc" stroke-width="1.800" d="M20 28l-1-7M25 24l-1-7"/>
+  </symbol>
+  <symbol id="i-bowl" viewBox="0 0 48 48">
+    <circle class="s" cx="24" cy="24" r="23"/>
+    <path class="p" d="M11 25c2-7 8-10 13-10s11 3 13 10z"/>
+    <path class="a" d="M8 25h32a16 16 0 0 1-32 0z"/>
+    <path class="lp" stroke-width="2.200" d="M18 11c-2-2 2-3 0-5M25 11c-2-2 2-3 0-5M32 11c-2-2 2-3 0-5"/>
+  </symbol>
+  <symbol id="i-pot" viewBox="0 0 48 48">
+    <circle class="s" cx="24" cy="24" r="23"/>
+    <rect class="a" x="10" y="22" width="28" height="17" rx="4"/>
+    <rect class="p" x="8" y="19" width="32" height="5" rx="2.500"/>
+    <circle class="p" cx="7" cy="29" r="2.500"/><circle class="p" cx="41" cy="29" r="2.500"/>
+    <path class="lp" stroke-width="2.200" d="M18 14c-2-2 2-3 0-6M25 14c-2-2 2-3 0-6M32 14c-2-2 2-3 0-6"/>
+  </symbol>
+  <symbol id="i-sunrise" viewBox="0 0 48 48">
+    <circle class="s" cx="24" cy="24" r="23"/>
+    <path class="p" d="M11 33a13 13 0 0 1 26 0z"/>
+    <path class="la" stroke-width="2.600" d="M24 12v-3M12 17l-2-2M36 17l2-2M8 24H5M40 24h3M8 36h32"/>
+  </symbol>
+  <symbol id="i-sandwich" viewBox="0 0 48 48">
+    <circle class="s" cx="24" cy="24" r="23"/>
+    <path class="p" d="M8 21c0-6 7-10 16-10s16 4 16 10z"/>
+    <path class="a" d="M7 22.500q4.200 4 8.500 0t8.500 0 8.500 0 8.500 0V26H7z"/>
+    <rect class="c" x="8" y="26" width="32" height="4" rx="1"/>
+    <rect class="p" x="8" y="30" width="32" height="7" rx="3.500"/>
+  </symbol>
+  <symbol id="i-cookie" viewBox="0 0 48 48">
+    <circle class="s" cx="24" cy="24" r="23"/>
+    <circle class="p" cx="24" cy="24" r="15"/>
+    <g class="a"><circle cx="18" cy="19" r="2.500"/><circle cx="29" cy="18" r="2.200"/><circle cx="25" cy="27" r="2.800"/><circle cx="17" cy="29" r="2"/><circle cx="32" cy="28" r="2"/></g>
+  </symbol>
+
+  <!-- ===== Season scenes, 1200 x 200 ===== -->
+  <symbol id="s-spring" viewBox="0 0 1200 200" preserveAspectRatio="xMidYMax slice">
+    <path class="s" d="M0 120Q200 70 420 110T820 100T1200 90V200H0z" opacity=".9"/>
+    <path class="a" opacity=".85" d="M0 160Q250 110 520 150T1200 130V200H0z"/>
+    <g>
+      <rect class="a" x="150" y="96" width="8" height="46"/><circle class="p" cx="154" cy="86" r="30"/><circle class="p" cx="132" cy="100" r="18"/><circle class="p" cx="176" cy="100" r="18"/>
+      <rect class="a" x="930" y="90" width="8" height="52"/><circle class="p" cx="934" cy="80" r="34"/><circle class="p" cx="908" cy="98" r="20"/><circle class="p" cx="960" cy="98" r="20"/>
+    </g>
+    <g class="c" opacity=".9"><ellipse cx="420" cy="48" rx="46" ry="12"/><ellipse cx="450" cy="40" rx="30" ry="10"/><ellipse cx="760" cy="62" rx="52" ry="12"/></g>
+    <g class="p"><circle cx="300" cy="150" r="6"/><circle cx="332" cy="158" r="5"/><circle cx="600" cy="148" r="6"/><circle cx="640" cy="156" r="5"/><circle cx="1060" cy="150" r="6"/></g>
+    <g class="c"><circle cx="300" cy="150" r="2.500"/><circle cx="600" cy="148" r="2.500"/><circle cx="1060" cy="150" r="2.500"/></g>
+  </symbol>
+  <symbol id="s-summer" viewBox="0 0 1200 200" preserveAspectRatio="xMidYMax slice">
+    <g class="p"><circle cx="980" cy="70" r="40"/></g>
+    <g class="lp" stroke-width="6"><path d="M980 10v-0M980 130v10M920 70h-12M1040 70h12M938 28l-8-8M1022 28l8-8M938 112l-8 8M1022 112l8 8"/></g>
+    <path class="s" d="M0 110Q240 70 520 105T1200 95V200H0z"/>
+    <path class="a" opacity=".85" d="M0 160Q300 120 620 150T1200 135V200H0z"/>
+    <g class="c" opacity=".95"><ellipse cx="260" cy="50" rx="56" ry="13"/><ellipse cx="300" cy="40" rx="34" ry="11"/><ellipse cx="640" cy="64" rx="48" ry="11"/></g>
+    <g><circle class="p" cx="420" cy="150" r="14"/><circle class="a" cx="420" cy="134" r="4"/><circle class="p" cx="452" cy="160" r="11"/><circle class="a" cx="452" cy="148" r="3"/><circle class="p" cx="760" cy="154" r="13"/><circle class="a" cx="760" cy="139" r="4"/></g>
+  </symbol>
+  <symbol id="s-autumn" viewBox="0 0 1200 200" preserveAspectRatio="xMidYMax slice">
+    <path class="s" d="M0 115Q220 80 470 112T860 100T1200 105V200H0z"/>
+    <path class="a" opacity=".85" d="M0 165Q260 125 560 155T1200 140V200H0z"/>
+    <g><rect class="a" x="190" y="84" width="9" height="56"/><circle class="p" cx="194" cy="76" r="32"/><circle class="a" cx="176" cy="96" r="18" opacity=".8"/><circle class="p" cx="214" cy="98" r="19"/>
+       <rect class="a" x="870" y="80" width="9" height="62"/><circle class="p" cx="874" cy="70" r="36"/><circle class="a" cx="850" cy="94" r="20" opacity=".8"/><circle class="p" cx="900" cy="96" r="21"/></g>
+    <g class="p"><ellipse cx="420" cy="50" rx="9" ry="5" transform="rotate(30 420 50)"/><ellipse cx="560" cy="90" rx="9" ry="5" transform="rotate(-25 560 90)"/><ellipse cx="740" cy="40" rx="9" ry="5" transform="rotate(50 740 40)"/><ellipse cx="1040" cy="60" rx="9" ry="5" transform="rotate(-40 1040 60)"/></g>
+    <g><ellipse class="p" cx="560" cy="156" rx="22" ry="18"/><rect class="a" x="556" y="134" width="8" height="9" rx="2"/><ellipse class="p" cx="610" cy="162" rx="15" ry="12"/><rect class="a" x="607" y="147" width="6" height="7" rx="2"/></g>
+  </symbol>
+  <symbol id="s-winter" viewBox="0 0 1200 200" preserveAspectRatio="xMidYMax slice">
+    <g class="p" opacity=".9"><circle cx="1010" cy="56" r="26"/></g><circle class="s" cx="1020" cy="50" r="22"/>
+    <path class="c" opacity=".95" d="M0 125Q240 90 520 122T1200 108V200H0z"/>
+    <path class="c" d="M0 170Q300 135 640 162T1200 148V200H0z"/>
+    <g class="a"><path d="M180 130l-26 46h52zM180 104l-22 40h44zM180 82l-18 34h36z"/><path d="M300 138l-20 36h40zM300 116l-16 30h32z"/><path d="M880 128l-24 44h48zM880 104l-20 38h40zM880 84l-16 30h32z"/></g>
+    <g class="c"><circle cx="420" cy="40" r="3"/><circle cx="520" cy="80" r="2.500"/><circle cx="640" cy="34" r="3"/><circle cx="760" cy="70" r="2.500"/><circle cx="110" cy="56" r="3"/><circle cx="1130" cy="90" r="3"/><circle cx="330" cy="70" r="2.500"/></g>
+  </symbol>
+
+  <!-- Festive overlays, drawn over a season -->
+  <symbol id="s-halloween" viewBox="0 0 1200 200" preserveAspectRatio="xMidYMax slice">
+    <circle class="p" cx="140" cy="56" r="30"/><circle class="s" cx="152" cy="50" r="26" opacity=".0"/>
+    <g class="a" opacity=".9"><path d="M520 48q16-14 28 0q12-14 28 0q-6 6-14 4l-14 12-14-12q-8 2-14-4z"/><path d="M700 82q12-10 20 0q8-10 20 0q-4 4-10 3l-10 8-10-8q-6 1-10-3z"/></g>
+    <g><ellipse class="p" cx="1000" cy="150" rx="34" ry="28"/><rect class="a" x="996" y="118" width="8" height="12" rx="2"/><path class="a" d="M985 144l8-9 8 9zM1002 144l8-9 8 9zM984 160q16 10 32 0l-6-5-5 4-5-4-5 4z"/>
+       <ellipse class="p" cx="1074" cy="160" rx="22" ry="18"/><rect class="a" x="1070" y="138" width="7" height="9" rx="2"/></g>
+  </symbol>
+  <symbol id="s-christmas" viewBox="0 0 1200 200" preserveAspectRatio="xMidYMax slice">
+    <path class="lp" stroke-width="3" d="M0 14Q150 44 300 14T600 14T900 14T1200 14"/>
+    <g class="p"><circle cx="75" cy="30" r="6"/><circle cx="225" cy="30" r="6"/><circle cx="375" cy="28" r="6"/><circle cx="525" cy="30" r="6"/><circle cx="675" cy="28" r="6"/><circle cx="825" cy="30" r="6"/><circle cx="975" cy="28" r="6"/><circle cx="1125" cy="30" r="6"/></g>
+    <g><path class="a" d="M120 170l-34 0 34-44 34 44zM120 140l-28 0 28-38 28 38zM120 114l-22 0 22-32 22 32z"/><rect class="p" x="116" y="168" width="8" height="12"/><path class="p" d="M120 66l4 9 10 1-7 7 2 10-9-5-9 5 2-10-7-7 10-1z"/></g>
+    <g><rect class="p" x="1020" y="130" width="46" height="34" rx="3"/><rect class="c" x="1040" y="130" width="6" height="34"/><rect class="c" x="1020" y="144" width="46" height="6"/>
+       <rect class="a" x="1080" y="142" width="34" height="22" rx="3"/><rect class="p" x="1094" y="142" width="6" height="22"/></g>
+  </symbol>
+</svg>

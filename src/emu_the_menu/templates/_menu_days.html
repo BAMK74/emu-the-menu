@@ -4,6 +4,7 @@
       <h3>{{ label(day) }}{% if forecast and forecast.get(day) %}{% set w = forecast.get(day) %} <span class="weather" title="Forecast for {{ day.isoformat() }}">{{ degrees(w.high, temp_unit) }}° / {{ degrees(w.low, temp_unit) }}° {{ temp_unit }}{% if w.kind %} · {{ w.kind.value }}{% endif %}</span>{% endif %}{% if occasions and occasions.get(day) %} <span class="chip occasion" title="Occasion">{{ occasions.get(day).name }}</span>{% endif %}</h3>
       {% for meal, unchecked in meals %}
       <div class="meal">
+        {{ icon(slot_icon(meal.slot)) }}
         <p class="meal-type">{{ meal.slot.label }}{% if change_base and not meal.cooked_on %} <a class="meal-change" href="{{ change_base }}/{{ meal.id }}">Change</a>{% endif %}</p>
         {% if change_base and not meal.cooked_on %}<form class="reshuffle" method="post" action="{{ change_base }}/{{ meal.id }}/reshuffle"><button class="quiet" type="submit">Pick another</button></form>{% endif %}
         {% if meal.recipe %}
