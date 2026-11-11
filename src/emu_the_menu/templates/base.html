@@ -332,7 +332,6 @@
     /* Tablets and computers: more room, larger text. */
     @media (min-width: 640px) {
       :root { --field: 2.7rem; }
-      body { background: linear-gradient(180deg, var(--accent-soft) 0, var(--bg) 20rem) no-repeat, var(--bg); }
       .topbar-inner { padding: .7rem 1.5rem; }
       header nav a { font-size: .95rem; padding: .45rem .9rem; }
       main { max-width: 36rem; padding: 2rem 1.5rem 3rem; }
@@ -407,7 +406,7 @@
   </div>
   {# Real photos in round tiles (see /static/photos/credits.html). Left, top and width are percentages of the box. #}
   {% set tiles = [(0, 14, 31, -4), (21, 0, 34, 3), (44, 22, 29, -2), (63, 2, 28, 4), (77, 34, 25, -3), (40, 50, 17, 5)] %}
-  <div class="hero-art" id="hero-art" aria-hidden="true">{% for name in look.photos %}{% set x, y, size, rot = tiles[loop.index0] %}<img class="tile" src="/static/photos/{{ name }}.jpg" alt="" width="320" height="320" decoding="async" style="left:{{ x }}%;top:{{ y }}%;width:{{ size }}%;--i:{{ loop.index0 }};--r:{{ rot }}deg">{% endfor %}</div>
+  {% if front %}<div class="hero-art" id="hero-art" aria-hidden="true">{% for name in look.photos %}{% set x, y, size, rot = tiles[loop.index0] %}<img class="tile" src="/static/photos/{{ name }}.jpg" alt="" width="320" height="320" decoding="async" style="left:{{ x }}%;top:{{ y }}%;width:{{ size }}%;--i:{{ loop.index0 }};--r:{{ rot }}deg">{% endfor %}</div>{% endif %}
 </section>
 <script>
   // The photos start moving together once every one is decoded (or after 1.5 s).

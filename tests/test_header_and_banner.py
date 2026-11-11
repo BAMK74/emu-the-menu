@@ -88,6 +88,7 @@ def test_the_front_pages_carry_the_full_banner_and_the_others_a_compact_one(clie
         assert re.search(r'<section class="hero compact" id="hero">', page), path
         assert banner_line(page) == "Warm bowls and slow simmers"
         assert "Pumpkin, apples and mushrooms" not in page
+        assert 'class="tile"' not in page  # the compact banner is the line only
 
 
 def test_the_banner_shows_the_six_photos_of_the_scene(client):

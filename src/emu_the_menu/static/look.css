@@ -104,9 +104,8 @@ nav.subnav a[aria-current="page"] { background: var(--ink); color: var(--paper);
   border: 5px solid #ffffff; box-shadow: 0 12px 26px rgba(0, 0, 0, .28); rotate: var(--r, 0deg); translate: 0 0;
   will-change: transform, translate, opacity; backface-visibility: hidden; transform: translateZ(0);
 }
-.hero.compact { min-height: 0; padding-top: .5rem; padding-bottom: .5rem; grid-template-columns: minmax(0, 1fr) auto; align-items: center; overflow: hidden; }
+.hero.compact { min-height: 0; padding-top: .7rem; padding-bottom: .7rem; grid-template-columns: minmax(0, 1fr); align-items: center; overflow: hidden; }
 .hero.compact .hero-line { font-size: 1.05rem; }
-.hero.compact .hero-art { width: 11rem; }
 @media (max-width: 639px) {
   /* On a phone everything in the banner is centred, the photos under the words. */
   .hero { grid-template-columns: minmax(0, 1fr); padding-top: 1rem; min-height: 0; text-align: center; justify-items: center; }
@@ -114,7 +113,6 @@ nav.subnav a[aria-current="page"] { background: var(--ink); color: var(--paper);
   .hero-sub { margin-inline: auto; }
   .hero-art { max-width: 21rem; margin: .2rem auto 0; }
   .hero.compact { grid-template-columns: minmax(0, 1fr); justify-items: center; padding-bottom: .6rem; }
-  .hero.compact .hero-art { width: 9rem; margin: 0 auto; }
 }
 @media (min-width: 640px) and (max-width: 999px) {
   /* In between, the banner stacks and centres so a long line gets the middle of the page. */
