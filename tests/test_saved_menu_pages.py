@@ -660,3 +660,104 @@ def test_picking_another_recipe_is_not_blocked_by_the_meal_being_replaced(client
     with MenuRepository(db_path) as menus:
         meal = menus.get(menu_id).meals[0]
     assert post_to(client, menu_id, meal.id, "reshuffle").status_code == 303
+
+
+# --- guests on a saved Meal ---------------------------------------------------------------------
+# Carrot soup is 2 servings of 200 g carrots at 40 kcal per 100 g: 40 kcal a serving, so a guest
+# (an average adult, 2000 kcal, dinner being the only slot) is cooked for as 50 servings.
+
+
+def set_guests(client, menu_id, meal_id, guests):
+    return post_to(client, menu_id, meal_id, "guests", guests=guests)
+
+
+def saved_meal(db_path, menu_id, meal_id):
+    with MenuRepository(db_path) as menus:
+        return next(m for m in menus.get(menu_id).meals if m.id == meal_id)
+
+
+def test_each_uncooked_meal_offers_a_guests_box(client, db_path, kitchen):
+    location = save(client, kitchen).headers["location"]
+    menu_id, meal = first_meal(db_path, location)
+    html = client.get(location).text
+    assert f'action="/menus/{menu_id}/meals/{meal.id}/guests"' in html
+    assert re.search(r'name="guests"[^>]*value="0"', html)
+
+
+def test_setting_guests_scales_the_meal_and_the_shopping_list(client, db_path, kitchen):
+    location, menu_id, meal, need = cooked_menu(client, db_path, kitchen)
+    response = set_guests(client, menu_id, meal.id, "1")
+    assert response.status_code == 303 and response.headers["location"] == location
+    changed = saved_meal(db_path, menu_id, meal.id)
+    assert (changed.guests, changed.guest_servings) == (1, 50)
+    text = text_of(client.get(location).text)
+    assert "Includes 1 guest (50 servings)" in text
+    assert amount_text(need + 50 * 100) in text  # 50 servings of a 100 g serving
+
+
+def test_a_meal_with_guests_offers_to_remove_them(client, db_path, kitchen):
+    location, menu_id, meal, need = cooked_menu(client, db_path, kitchen)
+    assert "Remove guest" not in client.get(location).text
+    set_guests(client, menu_id, meal.id, "1")
+    assert re.search(r'name="remove"[^>]*>Remove guest<', client.get(location).text)
+    set_guests(client, menu_id, meal.id, "2")
+    assert re.search(r'name="remove"[^>]*>Remove guests<', client.get(location).text)
+
+
+def test_the_remove_button_clears_the_guests(client, db_path, kitchen):
+    location, menu_id, meal, need = cooked_menu(client, db_path, kitchen)
+    set_guests(client, menu_id, meal.id, "2")
+    response = post_to(client, menu_id, meal.id, "guests", guests="2", remove="1")
+    assert response.status_code == 303
+    changed = saved_meal(db_path, menu_id, meal.id)
+    assert (changed.guests, changed.guest_servings) == (0, 0)
+    text = text_of(client.get(location).text)
+    assert "Includes" not in text and "Remove guest" not in text and amount_text(need) in text
+
+
+def test_guests_count_in_what_an_accepted_menu_holds(client, db_path, kitchen):
+    from emu_the_menu.reserve import free_stock
+
+    location, menu_id, meal, need = cooked_menu(client, db_path, kitchen)
+    stock_carrots(db_path, 20000)
+    client.post(f"/menus/{menu_id}/accept")
+    with StockRepository(db_path) as stock:
+        carrots = next(i for i in stock.ingredients() if i.name == "carrots")
+
+    def free():
+        return sum(quantity for quantity, _ in free_stock(db_path, TODAY)[carrots.id])
+
+    assert free() == pytest.approx(20000 - need)
+    set_guests(client, menu_id, meal.id, "1")
+    assert free() == pytest.approx(20000 - need - 5000)
+
+
+def test_cooking_takes_stock_for_the_guests(client, db_path, kitchen):
+    location, menu_id, meal, need = cooked_menu(client, db_path, kitchen)
+    set_guests(client, menu_id, meal.id, "1")
+    stock_carrots(db_path, need + 5000 + 100)
+    post_to(client, menu_id, meal.id, "cooked")
+    assert carrots_left(db_path) == pytest.approx(100)
+
+
+def test_a_cooked_meal_cannot_take_guests(client, db_path, kitchen):
+    location, menu_id, meal, need = cooked_menu(client, db_path, kitchen)
+    post_to(client, menu_id, meal.id, "cooked")
+    assert set_guests(client, menu_id, meal.id, "1").status_code == 400
+    assert saved_meal(db_path, menu_id, meal.id).guests == 0
+    assert f"/meals/{meal.id}/guests" not in client.get(location).text
+
+
+@pytest.mark.parametrize("guests", ["-1", "abc", "1.5", "", "201"])
+def test_bad_guest_numbers_are_refused(client, db_path, kitchen, guests):
+    location, menu_id, meal, need = cooked_menu(client, db_path, kitchen)
+    response = set_guests(client, menu_id, meal.id, guests)
+    assert response.status_code == 400
+    assert "0 to 200" in text_of(response.text)
+    assert saved_meal(db_path, menu_id, meal.id).guests == 0
+
+
+def test_guests_on_unknown_meals_are_a_404(client, db_path, kitchen):
+    location, menu_id, meal, need = cooked_menu(client, db_path, kitchen)
+    assert set_guests(client, menu_id, 999, "1").status_code == 404
+    assert set_guests(client, 999, meal.id, "1").status_code == 404

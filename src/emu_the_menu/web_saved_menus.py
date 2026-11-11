@@ -16,7 +16,16 @@ from emu_the_menu.cooking import Pantry, shopping_amounts, uses_for
 from emu_the_menu.eaters import EaterRepository
 from emu_the_menu.menu_repository import MenuNotFoundError, MenuRepository, SavedMenu
 from emu_the_menu.occasion_repository import occasions_for
-from emu_the_menu.planner import Meal, Portion, choices_for, guests_for, plan, portions_for
+from emu_the_menu.occasions import MAX_HEADCOUNT
+from emu_the_menu.planner import (
+    Meal,
+    Portion,
+    choices_for,
+    guest_servings_for,
+    guests_for,
+    plan,
+    portions_for,
+)
 from emu_the_menu.recipe_repository import RecipeRepository
 from emu_the_menu.recipes import analyse
 from emu_the_menu.repository import StockRepository
@@ -75,6 +84,9 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
 
     @router.get("/menus/{menu_id}", response_class=HTMLResponse)
     def one(request: Request, menu_id: int):
+        return show(request, menu_id)
+
+    def show(request: Request, menu_id: int, error: str | None = None, status: int = 200):
         with MenuRepository(db_path) as repo:
             saved = repo.get(menu_id)
             accepted = repo.accepted_menus()
@@ -96,7 +108,9 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
                 "holds_for": "this menu",
                 "change_base": f"/menus/{saved.id}/meals",
                 "label": day_label,
+                "error": error,
             },
+            status_code=status,
         )
 
     def find_meal(repo: MenuRepository, menu_id: int, meal_id: int):
@@ -247,6 +261,34 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
             raise HTTPException(404, "No such meal") from None
         except ValueError as exc:
             raise HTTPException(400, str(exc)) from None
+        return RedirectResponse(f"/menus/{menu_id}", status_code=303)
+
+    @router.post("/menus/{menu_id}/meals/{meal_id}/guests")
+    async def set_guests(request: Request, menu_id: int, meal_id: int):
+        """Cook a Meal for more (or fewer) guests, each an average adult as with Occasions.
+
+        Only the Meal's guests change: the shopping list, what an accepted Menu holds and what
+        cooking takes from Stock all follow from its servings.
+        """
+        form = await request.form()
+        # The "Remove guests" button sends the Meal back to the household only.
+        typed = "0" if form.get("remove") else str(form.get("guests", "")).strip()
+        with MenuRepository(db_path) as repo:
+            saved, meal = find_meal(repo, menu_id, meal_id)
+            if not typed.isdigit() or int(typed) > MAX_HEADCOUNT:
+                message = f"Guests must be a whole number from 0 to {MAX_HEADCOUNT}"
+                return show(request, menu_id, message, 400)
+            if meal.recipe_id is None:
+                return show(request, menu_id, "Choose a recipe for the meal first", 400)
+            with RecipeRepository(db_path) as recipes:
+                recipe = recipes.get(meal.recipe_id)
+            slots = sorted({m.slot for m in saved.meals if m.day == meal.day})
+            occasion = occasions_for(db_path, meal.day, 1).get(meal.day)
+            servings = guest_servings_for(recipe, int(typed), meal.slot, slots, occasion)
+            try:
+                repo.set_guests(menu_id, meal_id, int(typed), servings)
+            except ValueError as exc:
+                return show(request, menu_id, str(exc), 400)
         return RedirectResponse(f"/menus/{menu_id}", status_code=303)
 
     @router.post("/menus/{menu_id}/meals/{meal_id}/cooked")

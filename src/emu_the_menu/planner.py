@@ -322,8 +322,19 @@ def guests_for(
 ) -> tuple[int, float]:
     """How many guests an Occasion adds to a Meal, and the servings cooked for them together."""
     guests = occasion.guests(len(eaters)) if occasion else 0
+    return guests, guest_servings_for(recipe, guests, slot, slots, occasion)
+
+
+def guest_servings_for(
+    recipe: Recipe,
+    guests: int,
+    slot: Slot,
+    slots: Collection[Slot],
+    occasion: Occasion | None = None,
+) -> float:
+    """The servings cooked for `guests` people at a Meal of `recipe`, each an average adult."""
     kcal = analyse(recipe.for_analysis, recipe.servings).calories_per_serving
-    return guests, _guest_servings(guests, slot, slots, occasion, kcal)
+    return _guest_servings(guests, slot, slots, occasion, kcal)
 
 
 def choices_for(recipes: Sequence[Recipe], eaters: Sequence[Eater], slot: Slot) -> list[Recipe]:

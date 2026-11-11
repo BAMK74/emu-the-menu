@@ -246,6 +246,19 @@ class MenuRepository:
                 [(meal_id, eater_id, servings) for eater_id, servings in portions],
             )
 
+    def set_guests(self, menu_id: int, meal_id: int, guests: int, guest_servings: float) -> None:
+        """Cook a Meal for `guests` more people, with the servings for them all together."""
+        with self._db:
+            recipe_id, cooked = self._row(menu_id, meal_id)
+            if cooked:
+                raise ValueError("A cooked meal cannot be changed. Mark it not cooked first")
+            if recipe_id is None:
+                raise ValueError("Choose a recipe for the meal before adding guests")
+            self._db.execute(
+                "UPDATE menu_meals SET guests = ?, guest_servings = ? WHERE id = ?",
+                (guests, guest_servings, meal_id),
+            )
+
     def set_cooked(
         self,
         menu_id: int,

@@ -12,6 +12,7 @@
           {% for p in meal.portions %}<span class="portion"><strong>{{ p.eater.name }}</strong> {{ "%g"|format(p.servings) }} serving{{ "" if p.servings == 1 else "s" }} {% if p.kcal is not none %}{{ "%d"|format(p.kcal|round) }} kcal{% else %}calories unknown{% endif %}</span>{% endfor %}
         </div>
         {% if meal.guests %}<p class="hint">Includes {{ meal.guests }} guest{{ "" if meal.guests == 1 else "s" }} ({{ "%g"|format(meal.guest_servings) }} serving{{ "" if meal.guest_servings == 1 else "s" }}). Guests' allergies and diets are not known: ask them before you cook.</p>{% endif %}
+        {% if change_base and not meal.cooked_on %}<form class="guests" method="post" action="{{ change_base }}/{{ meal.id }}/guests"><label>Guests <input type="number" name="guests" value="{{ meal.guests }}" min="0" max="200" inputmode="numeric" required></label> <button class="quiet" type="submit">Save</button>{% if meal.guests %} <button class="quiet" type="submit" name="remove" value="1" formnovalidate>Remove guest{{ "" if meal.guests == 1 else "s" }}</button>{% endif %}</form>{% endif %}
         <p class="hint">Cook {{ "%g"|format(meal.total_servings) }} servings ({{ "%g"|format(meal.scale|round(2)) }}× the recipe).</p>
         {% if change_base %}
         {% if meal.cooked_on %}
