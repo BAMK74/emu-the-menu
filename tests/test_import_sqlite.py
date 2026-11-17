@@ -36,7 +36,7 @@ TODAY = date(2026, 11, 10)
 
 
 def source_counts(path: Path = SOURCE) -> dict[str, int]:
-    db = sqlite3.connect(path)
+    db = sqlite3.connect(f"{path.resolve().as_uri()}?mode=ro", uri=True)  # never create it
     try:
         return {
             name: db.execute(f"SELECT COUNT(*) FROM {name}").fetchone()[0]
