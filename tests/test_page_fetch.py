@@ -63,7 +63,7 @@ def test_only_plain_web_addresses_are_accepted(url):
         "192.168.1.10",  # the home network
         "172.16.0.5",
         "169.254.169.254",  # cloud metadata
-        "100.64.0.1",  # the tailnet, where the Pi itself lives
+        "100.64.0.1",  # the tailnet (100.64.0.0/10)
         "0.0.0.0",
         "::1",
         "fe80::1",

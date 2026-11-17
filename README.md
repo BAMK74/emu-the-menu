@@ -2,7 +2,7 @@
 
 A self-hosted household app. It keeps track of what is in the fridge, freezer and pantry, and suggests a week of meals that fits each person's calorie goal, allergies and diet, the weather, special occasions and what you already have. It works out the shopping list from what the meals need, less what is in stock.
 
-It runs on your own computer or a small home server such as a Raspberry Pi, and you use it in a web browser on your phone or computer. Your data stays in one file on that machine. Nothing is sent anywhere except a barcode to Open Food Facts when you look one up, a request for a recipe page when you import one, your town to Open-Meteo for the weather if you set one, and your country to Nager.Date for public holidays.
+It runs on your own computer or a server you control, and you use it in a web browser on your phone or computer. Your data stays in one file on that machine. Nothing is sent anywhere except a barcode to Open Food Facts when you look one up, a request for a recipe page when you import one, your town to Open-Meteo for the weather if you set one, and your country to Nager.Date for public holidays.
 
 ## What it does
 
@@ -30,9 +30,9 @@ Everything is kept in `emu.db` in that folder. To keep it somewhere else, set `E
 
 ## Run it on a home server
 
-To reach it from your phone around the house, run it on a machine that stays on, such as a Raspberry Pi, and start it with `--host` set to that machine's address on your network instead of the default. Do not open it to the internet: it has no logins yet, so anyone who can reach it can change everything. A private network such as [Tailscale](https://tailscale.com) is a safe way to reach it from outside the house.
+Emu is moving to the Traquenard Server, where it will run alongside the household's other projects. This repo no longer carries a home-server setup.
 
-The `deploy/` folder has the systemd service files used for one such setup. They name that machine's user and address, so change those to yours.
+Do not open Emu to the internet. It has no logins yet, so anyone who can reach it can change everything. Run it on your own computer as above, or on a private network only you and your household can reach.
 
 ## Important
 
