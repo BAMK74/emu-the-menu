@@ -13,3 +13,6 @@ dist/
 *.db-shm
 uploads/
 .env
+
+# Claude Code personal settings
+.claude/settings.local.json
