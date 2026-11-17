@@ -12,26 +12,21 @@ START = date(2026, 11, 2)
 
 
 @pytest.fixture
-def db_path(tmp_path):
-    return tmp_path / "emu.db"
-
-
-@pytest.fixture
-def repo(db_path):
-    with MenuRepository(db_path) as r:
+def repo(db_url):
+    with MenuRepository(db_url) as r:
         yield r
 
 
 @pytest.fixture
-def sam(db_path):
-    with EaterRepository(db_path) as eaters:
+def sam(db_url):
+    with EaterRepository(db_url) as eaters:
         eaters.add("Sam", Category.MAN)
         return eaters.list()[0]
 
 
 @pytest.fixture
-def soup(db_path):
-    with RecipeRepository(db_path) as recipes:
+def soup(db_url):
+    with RecipeRepository(db_url) as recipes:
         recipe_id = recipes.add(
             "Soup", 2, (MealType.DINNER,), Weather.ANY, (), [("carrots", 200, "g")]
         )
@@ -96,18 +91,18 @@ def test_deleting_a_menu_removes_its_meals(repo, soup, sam):
     assert repo.get(menu_id) is None
 
 
-def test_deleting_a_recipe_leaves_the_meal_without_one(repo, db_path, soup, sam):
+def test_deleting_a_recipe_leaves_the_meal_without_one(repo, db_url, soup, sam):
     saved = repo.get(repo.save("Keep", START, 1, one_meal_menu(soup, sam)))
-    with RecipeRepository(db_path) as recipes:
+    with RecipeRepository(db_url) as recipes:
         recipes.delete(soup.id)
     meal = repo.get(saved.id).meals[0]
     assert meal.recipe_id is None
     assert "deleted" in meal.reason
 
 
-def test_removing_an_eater_drops_their_portions(repo, db_path, soup, sam):
+def test_removing_an_eater_drops_their_portions(repo, db_url, soup, sam):
     saved = repo.get(repo.save("Keep", START, 1, one_meal_menu(soup, sam)))
-    with EaterRepository(db_path) as eaters:
+    with EaterRepository(db_url) as eaters:
         eaters.delete(sam.id)
     assert repo.get(saved.id).meals[0].portions == ()
 
@@ -116,8 +111,8 @@ def test_removing_an_eater_drops_their_portions(repo, db_path, soup, sam):
 
 
 @pytest.fixture
-def stew(db_path):
-    with RecipeRepository(db_path) as recipes:
+def stew(db_url):
+    with RecipeRepository(db_url) as recipes:
         recipe_id = recipes.add(
             "Stew", 2, (MealType.DINNER,), Weather.ANY, (), [("beef", 300, "g")]
         )
@@ -220,25 +215,6 @@ def test_a_note_about_what_was_short_is_kept_with_the_cooked_meal(repo, soup, sa
     assert repo.get(menu_id).meals[0].short == ""
 
 
-def test_an_older_database_gains_the_short_column(db_path):
-    import sqlite3
-
-    db = sqlite3.connect(db_path)
-    db.executescript(
-        "CREATE TABLE menus (id INTEGER PRIMARY KEY, name TEXT NOT NULL,"
-        " start_day TEXT NOT NULL, days INTEGER NOT NULL);"
-        "CREATE TABLE menu_meals (id INTEGER PRIMARY KEY, menu_id INTEGER NOT NULL,"
-        " day TEXT NOT NULL, slot TEXT NOT NULL, recipe_id INTEGER,"
-        " reason TEXT NOT NULL DEFAULT '', cooked_on TEXT);"
-    )
-    db.commit()
-    db.close()
-    with MenuRepository(db_path) as repo:
-        assert repo.menus() == []
-        columns = {r[1] for r in repo._db.execute("PRAGMA table_info(menu_meals)")}
-    assert "short" in columns
-
-
 def test_what_cooking_took_from_stock_is_kept_and_returned(repo, soup, sam):
     from emu_the_menu.stock import Location, TakenLot
 
@@ -333,21 +309,3 @@ def test_accepting_an_unknown_menu_is_reported(repo):
         repo.accept(99, COOKED)
     with pytest.raises(MenuNotFoundError):
         repo.unaccept(99)
-
-
-def test_an_older_database_gains_the_accepted_columns(db_path):
-    import sqlite3
-
-    db = sqlite3.connect(db_path)
-    db.executescript(
-        "CREATE TABLE menus (id INTEGER PRIMARY KEY, name TEXT NOT NULL,"
-        " start_day TEXT NOT NULL, days INTEGER NOT NULL);"
-        "INSERT INTO menus (name, start_day, days) VALUES ('Old', '2026-11-02', 1);"
-    )
-    db.commit()
-    db.close()
-    with MenuRepository(db_path) as repo:
-        [old] = repo.menus()
-        assert old.accepted_on is None
-        repo.accept(old.id, COOKED)
-        assert repo.get(old.id).accepted_order == 1

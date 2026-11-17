@@ -1,7 +1,6 @@
 """Web forms for Eaters: add, edit and remove the people the Household cooks for."""
 
 from collections.abc import Iterator
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -57,11 +56,11 @@ def _read_form(
     )
 
 
-def create_router(db_path: str | Path) -> APIRouter:
+def create_router(database: str) -> APIRouter:
     router = APIRouter()
 
     def get_repo() -> Iterator[EaterRepository]:
-        with EaterRepository(db_path) as repo:
+        with EaterRepository(database) as repo:
             yield repo
 
     def page(

@@ -28,8 +28,8 @@ class FakeFetch:
 
 
 @pytest.fixture
-def repo(tmp_path):
-    with StockRepository(tmp_path / "emu.db") as repo:
+def repo(db_url):
+    with StockRepository(db_url) as repo:
         yield repo
 
 
@@ -101,13 +101,12 @@ def test_a_found_product_is_fetched_once_and_then_cached(repo):
     assert len(fetch.calls) == 1
 
 
-def test_the_cache_works_offline_and_survives_reopening(tmp_path):
-    path = tmp_path / "emu.db"
-    with StockRepository(path) as repo:
+def test_the_cache_works_offline_and_survives_reopening(db_url):
+    with StockRepository(db_url) as repo:
         find_product(
             BARCODE, repo, FakeFetch(found(product_quantity=500, product_quantity_unit="g"))
         )
-    with StockRepository(path) as repo:
+    with StockRepository(db_url) as repo:
         offline = FakeFetch(error=OSError("offline"))
         assert find_product(BARCODE, repo, offline).quantity == 500
         assert offline.calls == []
@@ -197,21 +196,3 @@ def test_a_stock_lookup_never_fetches_again_just_for_calories(repo):
     find_product(BARCODE, repo, fetch)
     find_product(BARCODE, repo, fetch)
     assert len(fetch.calls) == 1
-
-
-def test_a_product_cache_from_before_calories_is_upgraded(tmp_path):
-    import sqlite3
-
-    path = tmp_path / "old.db"
-    db = sqlite3.connect(path)
-    db.executescript(
-        "CREATE TABLE product_cache"
-        " (barcode TEXT PRIMARY KEY, name TEXT, quantity REAL, unit TEXT);"
-        "INSERT INTO product_cache VALUES ('3274080005003', 'Penne', 500, 'g');"
-    )
-    db.commit()
-    db.close()
-    with StockRepository(path) as repo:
-        assert repo.cached_product(BARCODE) == ProductInfo(BARCODE, "Penne", 500, "g")
-        find_product(BARCODE, repo, FakeFetch(with_energy(350)), need_energy=True)
-        assert repo.cached_product(BARCODE).kcal_per_100 == 350.0

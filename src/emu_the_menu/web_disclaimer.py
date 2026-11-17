@@ -2,7 +2,6 @@
 
 from collections.abc import Callable
 from datetime import date
-from pathlib import Path
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -12,11 +11,11 @@ from emu_the_menu.repository import StockRepository
 from emu_the_menu.templating import TEMPLATES
 
 
-def create_router(db_path: str | Path, today: Callable[[], date]) -> APIRouter:
+def create_router(database: str, today: Callable[[], date]) -> APIRouter:
     router = APIRouter()
 
     def page(request: Request, next_url: str | None, error: str | None = None, popup: bool = False):
-        with StockRepository(db_path) as repo:
+        with StockRepository(database) as repo:
             acceptance = repo.disclaimer_acceptance()
         return TEMPLATES.TemplateResponse(
             request,
@@ -48,7 +47,7 @@ def create_router(db_path: str | Path, today: Callable[[], date]) -> APIRouter:
         if not understood:
             error = "Tick the box to confirm that you have read and understood the disclaimer."
             return page(request, next, error, popup=bool(popup))
-        with StockRepository(db_path) as repo:
+        with StockRepository(database) as repo:
             repo.accept_disclaimer(DISCLAIMER_VERSION, today())
         if popup:  # stay in the pop-up, which now says it was accepted
             return page(request, None, popup=True)

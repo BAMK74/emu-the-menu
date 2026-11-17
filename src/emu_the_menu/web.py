@@ -1,7 +1,6 @@
 """Web forms for Stock: add, adjust, delete, and a list sorted by expiry."""
 
 import json
-import os
 from collections.abc import Callable, Iterator
 from datetime import date
 from pathlib import Path
@@ -10,8 +9,8 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
-from emu_the_menu.backup import BackupError, latest_backup, snapshot_gz
 from emu_the_menu.countries import COUNTRIES
+from emu_the_menu.db import database_url
 from emu_the_menu.eaters import (
     DEFAULT_CALORIE_GOALS,
     Category,
@@ -93,18 +92,18 @@ def _forget_previous_lookup(form: dict) -> None:
 
 
 def create_app(
-    db_path: str | Path | None = None,
+    database: str | None = None,
     today: Callable[[], date] = date.today,
     fetch_product: Fetch = http_fetch,
-    backup_dir: str | Path | None = None,
     fetch_recipe_page: Callable[[str], str] = fetch_page,
     get_json: GetJson = http_get_json,
     get_holidays: HolidayGet = http_get_holidays,
 ) -> FastAPI:
-    path = db_path or os.environ.get("EMU_DB", "emu.db")
-    backup_dir = backup_dir or os.environ.get("EMU_BACKUP_DIR")
+    """The app, on the Postgres database at `database` (a connection URI), or at
+    `EMU_DATABASE_URL` if not given."""
+    path = database_url(database)
     app = FastAPI(title="Emu the Menu")
-    app.state.db_path = path  # read by the shared templates, for the disclaimer banner
+    app.state.database = path  # read by the shared templates, for the disclaimer banner
     app.state.today = today  # and for the season the pages are dressed in
     app.include_router(create_eaters_router(path))
     app.include_router(create_review_router(path))  # before /ingredients/{id}
@@ -118,22 +117,9 @@ def create_app(
     app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
 
     def get_repo() -> Iterator[StockRepository]:
-        # One connection per request: sqlite connections are not shared across threads.
+        # One pooled connection per request, given back when the response is done.
         with StockRepository(path) as repo:
             yield repo
-
-    def backup_status() -> dict:
-        """What Settings says about the nightly backup, flagging an old or missing one."""
-        if not backup_dir:
-            return {"text": "Nightly backups are not set up here.", "stale": False}
-        newest = latest_backup(backup_dir)
-        if newest is None:
-            return {"text": "No nightly backup yet. Check the Pi.", "stale": True}
-        age = max((today() - newest).days, 0)
-        if age > 2:
-            return {"text": f"Last nightly backup was {age} days ago. Check the Pi.", "stale": True}
-        when = "today" if age == 0 else "yesterday" if age == 1 else f"{age} days ago"
-        return {"text": f"Last nightly backup: {when}.", "stale": False}
 
     def page(
         request: Request,
@@ -254,7 +240,6 @@ def create_app(
                 **weather_context(weather_form),
                 "saved": request.query_params.get("saved") == "1",
                 "error": error,
-                "backup": backup_status(),
                 **calorie_context(goal_form),
             },
             status_code=400 if error else 200,
@@ -262,7 +247,7 @@ def create_app(
 
     @app.get("/settings/panel", response_class=HTMLResponse)
     def settings_panel(request: Request, next: str = "", repo: StockRepository = Depends(get_repo)):
-        """The settings form and backup section alone, for the overlay on any page."""
+        """The settings form and export section alone, for the overlay on any page."""
         return _TEMPLATES.TemplateResponse(
             request,
             "_settings_panel.html",
@@ -271,7 +256,6 @@ def create_app(
                 "country": repo.household_country(),
                 **look_context(repo),
                 **weather_context(),
-                "backup": backup_status(),
                 "next_url": next if next in _RETURN_PAGES else None,
                 **calorie_context(),
             },
@@ -398,18 +382,6 @@ def create_app(
             data["occasions"] = occasions.export_data()
         body = json.dumps(data, indent=2, ensure_ascii=False)
         return download(body, "application/json", f"emu-{today().isoformat()}.json")
-
-    @app.get("/export.db.gz")
-    def export_database(repo: StockRepository = Depends(get_repo)):
-        """A fresh copy of the whole database, restorable like a nightly backup.
-
-        Opening the repository above creates the database on a first-ever request.
-        """
-        try:
-            packed = snapshot_gz(path)
-        except BackupError as exc:
-            raise HTTPException(500, str(exc)) from exc
-        return download(packed, "application/gzip", f"emu-{today().isoformat()}.db.gz")
 
     @app.post("/lookup")
     def look_up_barcode(

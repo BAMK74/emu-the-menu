@@ -9,14 +9,9 @@ from emu_the_menu.web import create_app
 
 
 @pytest.fixture
-def db_path(tmp_path):
-    return tmp_path / "emu.db"
-
-
-@pytest.fixture
-def client(db_path):
+def client(db_url):
     app = create_app(
-        db_path, today=lambda: date(2026, 10, 26), fetch_product=lambda code: {"status": 0}
+        db_url, today=lambda: date(2026, 10, 26), fetch_product=lambda code: {"status": 0}
     )
     return TestClient(app, follow_redirects=False)
 
@@ -210,9 +205,9 @@ def test_a_rejected_save_keeps_what_was_typed(client):
     assert current(section, "woman") == "lots"
 
 
-def test_the_goals_are_stored_with_the_eaters(client, db_path):
+def test_the_goals_are_stored_with_the_eaters(client, db_url):
     save(client, goal_teen="2300")
-    with EaterRepository(db_path) as repo:
+    with EaterRepository(db_url) as repo:
         assert repo.default_goals()[Category.TEEN] == 2300
 
 

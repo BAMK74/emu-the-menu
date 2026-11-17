@@ -1,17 +1,16 @@
-"""SQLite storage for Ingredients and Stock Items.
+"""Postgres storage for Ingredients and Stock Items.
 
 The stock rules stay in `stock.py` as pure functions. The repository loads the
 items, applies a rule and writes back only what changed, all in one transaction.
 """
 
-import sqlite3
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 from datetime import date
-from pathlib import Path
 
 from emu_the_menu.allergens import Allergen, parse_allergens
 from emu_the_menu.countries import COUNTRIES
+from emu_the_menu.db import Database, attach
 from emu_the_menu.food_groups import FoodGroup, parse_food_groups
 from emu_the_menu.ingredients import check_kcal, kcal_basis
 from emu_the_menu.look import AUTO, LookChoice
@@ -27,58 +26,6 @@ from emu_the_menu.stock import (
     sort_by_expiry,
 )
 from emu_the_menu.units import BaseUnit, IncompatibleUnitError, base_unit_for, to_base
-
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS ingredients (
-    id        INTEGER PRIMARY KEY,
-    name      TEXT NOT NULL UNIQUE COLLATE NOCASE,
-    base_unit TEXT NOT NULL,
-    shelf_life_amount INTEGER,
-    shelf_life_unit   TEXT,
-    last_quantity     REAL,
-    last_unit         TEXT,
-    kcal              REAL,
-    reviewed          INTEGER NOT NULL DEFAULT 0
-);
-CREATE TABLE IF NOT EXISTS ingredient_food_groups (
-    ingredient_id INTEGER NOT NULL REFERENCES ingredients(id) ON DELETE CASCADE,
-    food_group    TEXT NOT NULL,
-    PRIMARY KEY (ingredient_id, food_group)
-);
-CREATE TABLE IF NOT EXISTS ingredient_allergens (
-    ingredient_id INTEGER NOT NULL REFERENCES ingredients(id) ON DELETE CASCADE,
-    allergen      TEXT NOT NULL,
-    PRIMARY KEY (ingredient_id, allergen)
-);
-CREATE TABLE IF NOT EXISTS stock_items (
-    id            INTEGER PRIMARY KEY,
-    ingredient_id INTEGER NOT NULL REFERENCES ingredients(id),
-    quantity      REAL NOT NULL CHECK (quantity >= 0),
-    location      TEXT NOT NULL,
-    expires_on    TEXT
-);
-CREATE TABLE IF NOT EXISTS product_cache (
-    barcode  TEXT PRIMARY KEY,
-    name     TEXT,
-    quantity REAL,
-    unit     TEXT,
-    kcal_100g REAL
-);
-CREATE TABLE IF NOT EXISTS settings (
-    key   TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-);
-"""
-
-# Columns added to `ingredients` after the first release, for upgrading older databases.
-_ADDED_COLUMNS = {
-    "shelf_life_amount": "INTEGER",
-    "shelf_life_unit": "TEXT",
-    "last_quantity": "REAL",
-    "last_unit": "TEXT",
-    "kcal": "REAL",
-    "reviewed": "INTEGER NOT NULL DEFAULT 0",
-}
 
 
 class IngredientNotFoundError(LookupError):
@@ -118,24 +65,17 @@ _UNIT_SUFFIX = {"g": " (by weight)", "ml": " (by volume)", "count": " (counted)"
 
 
 class StockRepository:
-    def __init__(self, path: str | Path, auto_split: bool = True):
-        self._db = sqlite3.connect(path)
-        self._db.execute("PRAGMA foreign_keys = ON")
-        self._db.executescript(_SCHEMA)
-        self._upgrade()
+    def __init__(self, database: str | Database | None = None, auto_split: bool = True):
+        """Open the Stock in `database`: a connection URI, another repository's Database to
+        share, or None for `EMU_DATABASE_URL`."""
+        self._db, self._owned = attach(database)
         if auto_split:
             self._split_stored_alternatives()
 
-    def _upgrade(self) -> None:
-        """Add columns that databases created by older versions lack."""
-        columns = {row[1] for row in self._db.execute("PRAGMA table_info(ingredients)")}
-        with self._db:
-            for name, sql_type in _ADDED_COLUMNS.items():
-                if name not in columns:
-                    self._db.execute(f"ALTER TABLE ingredients ADD COLUMN {name} {sql_type}")
-            cached = {row[1] for row in self._db.execute("PRAGMA table_info(product_cache)")}
-            if "kcal_100g" not in cached:
-                self._db.execute("ALTER TABLE product_cache ADD COLUMN kcal_100g REAL")
+    @property
+    def database(self) -> Database:
+        """The connection this repository works on, for repositories that share it."""
+        return self._db
 
     def __enter__(self) -> "StockRepository":
         return self
@@ -144,7 +84,8 @@ class StockRepository:
         self.close()
 
     def close(self) -> None:
-        self._db.close()
+        if self._owned:
+            self._db.close()
 
     def list_items(self) -> list[StockItem]:
         return sort_by_expiry(self._load())
@@ -173,16 +114,17 @@ class StockRepository:
         self._apply(
             lambda items: add_stock(items, ingredient, quantity, unit, location, expires_on)
         )
-        with self._db:
+        with self._db.transaction():
             name = ingredient.strip().lower()
             self._db.execute(
-                "UPDATE ingredients SET last_quantity = ?, last_unit = ? WHERE name = ?",
+                "UPDATE ingredients SET last_quantity = %s, last_unit = %s"
+                " WHERE lower(name) = lower(%s)",
                 (quantity, unit.strip().lower(), name),
             )
             if shelf_life:
                 self._db.execute(
-                    "UPDATE ingredients SET shelf_life_amount = ?, shelf_life_unit = ?"
-                    " WHERE name = ?",
+                    "UPDATE ingredients SET shelf_life_amount = %s, shelf_life_unit = %s"
+                    " WHERE lower(name) = lower(%s)",
                     (shelf_life.amount, shelf_life.unit.value, name),
                 )
 
@@ -246,17 +188,19 @@ class StockRepository:
 
     def set_quantity(self, item_id: int, quantity: float, unit: str) -> None:
         amount = to_base(quantity, unit)
-        with self._db:
+        with self._db.transaction():
             row = self._db.execute(
                 """SELECT i.base_unit FROM stock_items s
-                   JOIN ingredients i ON i.id = s.ingredient_id WHERE s.id = ?""",
+                   JOIN ingredients i ON i.id = s.ingredient_id WHERE s.id = %s""",
                 (item_id,),
             ).fetchone()
             if row is None:
                 raise ItemNotFoundError(item_id)
             if base_unit_for(unit) != BaseUnit(row[0]):
                 raise IncompatibleUnitError(f"{unit!r} does not match how this item is stored")
-            self._db.execute("UPDATE stock_items SET quantity = ? WHERE id = ?", (amount, item_id))
+            self._db.execute(
+                "UPDATE stock_items SET quantity = %s WHERE id = %s", (amount, item_id)
+            )
 
     def update_item(
         self,
@@ -273,10 +217,10 @@ class StockRepository:
         """
         amount = to_base(quantity, unit)
         location = Location(location)
-        with self._db:
+        with self._db.transaction():
             row = self._db.execute(
                 """SELECT i.base_unit FROM stock_items s
-                   JOIN ingredients i ON i.id = s.ingredient_id WHERE s.id = ?""",
+                   JOIN ingredients i ON i.id = s.ingredient_id WHERE s.id = %s""",
                 (item_id,),
             ).fetchone()
             if row is None:
@@ -284,8 +228,9 @@ class StockRepository:
             if base_unit_for(unit) != BaseUnit(row[0]):
                 raise IncompatibleUnitError(f"{unit!r} does not match how this item is stored")
             self._db.execute(
-                "UPDATE stock_items SET quantity = ?, location = ?, expires_on = ? WHERE id = ?",
-                (amount, location.value, expires_on.isoformat() if expires_on else None, item_id),
+                "UPDATE stock_items SET quantity = %s, location = %s, expires_on = %s"
+                " WHERE id = %s",
+                (amount, location.value, expires_on, item_id),
             )
 
     def change_base_unit(self, ingredient: str, unit: str) -> None:
@@ -299,10 +244,11 @@ class StockRepository:
         """
         base = base_unit_for(unit)
         ingredient = self._canonical(ingredient)
-        with self._db:
+        with self._db.transaction():
             self._db.execute(
-                "UPDATE ingredients SET kcal = CASE WHEN base_unit = ? THEN kcal END,"
-                " base_unit = ?, last_quantity = NULL, last_unit = NULL WHERE name = ?",
+                "UPDATE ingredients SET kcal = CASE WHEN base_unit = %s THEN kcal END,"
+                " base_unit = %s, last_quantity = NULL, last_unit = NULL"
+                " WHERE lower(name) = lower(%s)",
                 (base.value, base.value, ingredient.strip().lower()),
             )
 
@@ -335,44 +281,44 @@ class StockRepository:
             raise IngredientNotFoundError(keep_id if keep is None else drop_id)
         if keep.base_unit is not drop.base_unit:
             raise IncompatibleUnitError(f"{keep.name} and {drop.name} use different units")
-        with self._db:
-            if self._recipe_lines_exist():
-                lines = self._db.execute(
-                    "SELECT recipe_id, quantity FROM recipe_lines WHERE ingredient_id = ?",
-                    (drop_id,),
-                ).fetchall()
-                for recipe_id, quantity in lines:
-                    both = self._db.execute(
+        with self._db.transaction():
+            lines = self._db.execute(
+                "SELECT recipe_id, quantity FROM recipe_lines WHERE ingredient_id = %s",
+                (drop_id,),
+            ).fetchall()
+            for recipe_id, quantity in lines:
+                both = self._db.execute(
+                    "SELECT alt_group FROM recipe_lines"
+                    " WHERE recipe_id = %s AND ingredient_id = %s",
+                    (recipe_id, keep_id),
+                ).fetchone()
+                if both:
+                    (dropped_group,) = self._db.execute(
                         "SELECT alt_group FROM recipe_lines"
-                        " WHERE recipe_id = ? AND ingredient_id = ?",
-                        (recipe_id, keep_id),
+                        " WHERE recipe_id = %s AND ingredient_id = %s",
+                        (recipe_id, drop_id),
                     ).fetchone()
-                    if both:
-                        (dropped_group,) = self._db.execute(
-                            "SELECT alt_group FROM recipe_lines"
-                            " WHERE recipe_id = ? AND ingredient_id = ?",
-                            (recipe_id, drop_id),
-                        ).fetchone()
-                        if both[0] is not None and both[0] == dropped_group:
-                            quantity = 0  # two alternatives that are now one: counted once
-                        self._db.execute(
-                            "UPDATE recipe_lines SET quantity = quantity + ?,"
-                            " alt_group = CASE WHEN alt_group IS ? THEN alt_group ELSE NULL END"
-                            " WHERE recipe_id = ? AND ingredient_id = ?",
-                            (quantity, dropped_group, recipe_id, keep_id),
-                        )
-                        self._db.execute(
-                            "DELETE FROM recipe_lines WHERE recipe_id = ? AND ingredient_id = ?",
-                            (recipe_id, drop_id),
-                        )
-                    else:
-                        self._db.execute(
-                            "UPDATE recipe_lines SET ingredient_id = ?"
-                            " WHERE recipe_id = ? AND ingredient_id = ?",
-                            (keep_id, recipe_id, drop_id),
-                        )
+                    if both[0] is not None and both[0] == dropped_group:
+                        quantity = 0  # two alternatives that are now one: counted once
+                    self._db.execute(
+                        "UPDATE recipe_lines SET quantity = quantity + %s,"
+                        " alt_group = CASE WHEN alt_group IS NOT DISTINCT FROM %s"
+                        " THEN alt_group ELSE NULL END"
+                        " WHERE recipe_id = %s AND ingredient_id = %s",
+                        (quantity, dropped_group, recipe_id, keep_id),
+                    )
+                    self._db.execute(
+                        "DELETE FROM recipe_lines WHERE recipe_id = %s AND ingredient_id = %s",
+                        (recipe_id, drop_id),
+                    )
+                else:
+                    self._db.execute(
+                        "UPDATE recipe_lines SET ingredient_id = %s"
+                        " WHERE recipe_id = %s AND ingredient_id = %s",
+                        (keep_id, recipe_id, drop_id),
+                    )
             self._db.execute(
-                "UPDATE stock_items SET ingredient_id = ? WHERE ingredient_id = ?",
+                "UPDATE stock_items SET ingredient_id = %s WHERE ingredient_id = %s",
                 (keep_id, drop_id),
             )
             for table, column in (
@@ -380,22 +326,23 @@ class StockRepository:
                 ("ingredient_allergens", "allergen"),
             ):
                 self._db.execute(
-                    f"INSERT OR IGNORE INTO {table} (ingredient_id, {column})"
-                    f" SELECT ?, {column} FROM {table} WHERE ingredient_id = ?",
+                    f"INSERT INTO {table} (ingredient_id, {column})"
+                    f" SELECT %s, {column} FROM {table} WHERE ingredient_id = %s"
+                    " ON CONFLICT DO NOTHING",
                     (keep_id, drop_id),
                 )
             self._db.execute(
                 "UPDATE ingredients SET"
-                " kcal = COALESCE(kcal, (SELECT kcal FROM ingredients WHERE id = ?)),"
-                " reviewed = MAX(reviewed, (SELECT reviewed FROM ingredients WHERE id = ?)),"
+                " kcal = COALESCE(kcal, (SELECT kcal FROM ingredients WHERE id = %s)),"
+                " reviewed = reviewed OR (SELECT reviewed FROM ingredients WHERE id = %s),"
                 " shelf_life_amount = COALESCE(shelf_life_amount,"
-                "   (SELECT shelf_life_amount FROM ingredients WHERE id = ?)),"
+                "   (SELECT shelf_life_amount FROM ingredients WHERE id = %s)),"
                 " shelf_life_unit = COALESCE(shelf_life_unit,"
-                "   (SELECT shelf_life_unit FROM ingredients WHERE id = ?))"
-                " WHERE id = ?",
+                "   (SELECT shelf_life_unit FROM ingredients WHERE id = %s))"
+                " WHERE id = %s",
                 (drop_id, drop_id, drop_id, drop_id, keep_id),
             )
-            self._db.execute("DELETE FROM ingredients WHERE id = ?", (drop_id,))
+            self._db.execute("DELETE FROM ingredients WHERE id = %s", (drop_id,))
 
     def _split_stored_alternatives(self) -> None:
         """Split Ingredients stored under a name that offers a choice, as older versions saved
@@ -421,21 +368,7 @@ class StockRepository:
                 plan.append((ingredient, names))
         return plan
 
-    def _recipe_lines_exist(self) -> bool:
-        """Whether Recipes have been used here, bringing an older table up to date if so."""
-        has_recipes = self._db.execute(
-            "SELECT 1 FROM sqlite_master WHERE name = 'recipe_lines'"
-        ).fetchone()
-        if has_recipes:
-            columns = {row[1] for row in self._db.execute("PRAGMA table_info(recipe_lines)")}
-            if "alt_group" not in columns:
-                with self._db:
-                    self._db.execute("ALTER TABLE recipe_lines ADD COLUMN alt_group INTEGER")
-        return bool(has_recipes)
-
     def _ingredient_ids_in_recipes(self) -> set[int]:
-        if not self._recipe_lines_exist():
-            return set()
         return {
             row[0] for row in self._db.execute("SELECT DISTINCT ingredient_id FROM recipe_lines")
         }
@@ -480,34 +413,33 @@ class StockRepository:
             }
             if any(taken.get(n, family) != family for n in names):
                 continue  # a name is used by an Ingredient in another kind of unit: leave it
-            with self._db:
+            with self._db.transaction():
                 ids = []
                 for name in names:
                     row = self._db.execute(
-                        "SELECT id FROM ingredients WHERE name = ?", (name,)
+                        "SELECT id FROM ingredients WHERE lower(name) = lower(%s)", (name,)
                     ).fetchone()
-                    ids.append(
-                        row[0]
-                        if row
-                        else self._db.execute(
-                            "INSERT INTO ingredients (name, base_unit) VALUES (?, ?)",
+                    if row is None:
+                        row = self._db.execute(
+                            "INSERT INTO ingredients (name, base_unit) VALUES (%s, %s)"
+                            " RETURNING id",
                             (name, family),
-                        ).lastrowid
-                    )
+                        ).fetchone()
+                    ids.append(row[0])
                 lines = self._db.execute(
                     "SELECT recipe_id, quantity, position FROM recipe_lines"
-                    " WHERE ingredient_id = ?",
+                    " WHERE ingredient_id = %s",
                     (ingredient.id,),
                 ).fetchall()
                 for recipe_id, quantity, position in lines:
                     self._db.execute(
-                        "DELETE FROM recipe_lines WHERE recipe_id = ? AND ingredient_id = ?",
+                        "DELETE FROM recipe_lines WHERE recipe_id = %s AND ingredient_id = %s",
                         (recipe_id, ingredient.id),
                     )
                     present = {
                         r[0]
                         for r in self._db.execute(
-                            "SELECT ingredient_id FROM recipe_lines WHERE recipe_id = ?",
+                            "SELECT ingredient_id FROM recipe_lines WHERE recipe_id = %s",
                             (recipe_id,),
                         )
                     }
@@ -516,7 +448,7 @@ class StockRepository:
                     if len(new) > 1:
                         (top,) = self._db.execute(
                             "SELECT COALESCE(MAX(alt_group), 0) FROM recipe_lines"
-                            " WHERE recipe_id = ?",
+                            " WHERE recipe_id = %s",
                             (recipe_id,),
                         ).fetchone()
                         group = top + 1
@@ -524,14 +456,14 @@ class StockRepository:
                         self._db.execute(
                             "INSERT INTO recipe_lines"
                             " (recipe_id, ingredient_id, quantity, position, alt_group)"
-                            " VALUES (?, ?, ?, ?, ?)",
+                            " VALUES (%s, %s, %s, %s, %s)",
                             (recipe_id, part_id, quantity, position, group),
                         )
                 held = self._db.execute(
-                    "SELECT 1 FROM stock_items WHERE ingredient_id = ?", (ingredient.id,)
+                    "SELECT 1 FROM stock_items WHERE ingredient_id = %s", (ingredient.id,)
                 ).fetchone()
                 if not held:
-                    self._db.execute("DELETE FROM ingredients WHERE id = ?", (ingredient.id,))
+                    self._db.execute("DELETE FROM ingredients WHERE id = %s", (ingredient.id,))
             done += 1
         return done
 
@@ -557,7 +489,7 @@ class StockRepository:
                 " choice between ingredients belongs in a recipe."
             )
         other = self._db.execute(
-            "SELECT id, base_unit FROM ingredients WHERE name = ? AND id != ?",
+            "SELECT id, base_unit FROM ingredients WHERE lower(name) = lower(%s) AND id != %s",
             (name, ingredient_id),
         ).fetchone()
         if other is None:
@@ -578,8 +510,10 @@ class StockRepository:
         if other is not None:
             self.merge_ingredients(other, ingredient_id)
             return other
-        with self._db:
-            self._db.execute("UPDATE ingredients SET name = ? WHERE id = ?", (name, ingredient_id))
+        with self._db.transaction():
+            self._db.execute(
+                "UPDATE ingredients SET name = %s WHERE id = %s", (name, ingredient_id)
+            )
         return ingredient_id
 
     def tidy_group(self, member_ids: list[int], target: str) -> None:
@@ -649,15 +583,15 @@ class StockRepository:
                 if other.id != keep.id:
                     self.merge_ingredients(keep.id, other.id)
             if keep.name != target:
-                with self._db:
+                with self._db.transaction():
                     self._db.execute(
-                        "UPDATE ingredients SET name = ? WHERE id = ?", (target, keep.id)
+                        "UPDATE ingredients SET name = %s WHERE id = %s", (target, keep.id)
                     )
         return split + len(plan)
 
     def delete(self, item_id: int) -> None:
-        with self._db:
-            cursor = self._db.execute("DELETE FROM stock_items WHERE id = ?", (item_id,))
+        with self._db.transaction():
+            cursor = self._db.execute("DELETE FROM stock_items WHERE id = %s", (item_id,))
             if cursor.rowcount == 0:
                 raise ItemNotFoundError(item_id)
 
@@ -667,7 +601,7 @@ class StockRepository:
         allergens = self._tags("ingredient_allergens", "allergen")
         rows = self._db.execute(
             "SELECT id, name, base_unit, shelf_life_amount, shelf_life_unit, last_quantity,"
-            " last_unit, kcal, reviewed FROM ingredients ORDER BY name"
+            " last_unit, kcal, reviewed FROM ingredients ORDER BY lower(name)"
         )
         return [
             Ingredient(
@@ -715,8 +649,10 @@ class StockRepository:
         if ingredient is None:
             raise IngredientNotFoundError(ingredient_id)
         kcal = check_kcal(kcal, ingredient.base_unit)
-        with self._db:
-            self._db.execute("UPDATE ingredients SET kcal = ? WHERE id = ?", (kcal, ingredient_id))
+        with self._db.transaction():
+            self._db.execute(
+                "UPDATE ingredients SET kcal = %s WHERE id = %s", (kcal, ingredient_id)
+            )
 
     def set_ingredient_details(
         self,
@@ -736,40 +672,45 @@ class StockRepository:
         kcal = check_kcal(kcal, ingredient.base_unit)
         groups = parse_food_groups(FoodGroup(g).value for g in food_groups)
         found_allergens = parse_allergens(Allergen(a).value for a in allergens)
-        with self._db:
+        with self._db.transaction():
             self._db.execute(
-                "UPDATE ingredients SET kcal = ?, reviewed = 1 WHERE id = ?", (kcal, ingredient_id)
+                "UPDATE ingredients SET kcal = %s, reviewed = true WHERE id = %s",
+                (kcal, ingredient_id),
             )
             self._db.execute(
-                "DELETE FROM ingredient_food_groups WHERE ingredient_id = ?", (ingredient_id,)
+                "DELETE FROM ingredient_food_groups WHERE ingredient_id = %s", (ingredient_id,)
             )
             self._db.execute(
-                "DELETE FROM ingredient_allergens WHERE ingredient_id = ?", (ingredient_id,)
+                "DELETE FROM ingredient_allergens WHERE ingredient_id = %s", (ingredient_id,)
             )
             for group in groups:
                 self._db.execute(
-                    "INSERT INTO ingredient_food_groups (ingredient_id, food_group) VALUES (?, ?)",
+                    "INSERT INTO ingredient_food_groups (ingredient_id, food_group)"
+                    " VALUES (%s, %s)",
                     (ingredient_id, group.value),
                 )
             for allergen in found_allergens:
                 self._db.execute(
-                    "INSERT INTO ingredient_allergens (ingredient_id, allergen) VALUES (?, ?)",
+                    "INSERT INTO ingredient_allergens (ingredient_id, allergen) VALUES (%s, %s)",
                     (ingredient_id, allergen.value),
                 )
 
     def cached_product(self, barcode: str) -> ProductInfo | None:
         """A product found by an earlier barcode lookup."""
         row = self._db.execute(
-            "SELECT name, quantity, unit, kcal_100g FROM product_cache WHERE barcode = ?",
+            "SELECT name, quantity, unit, kcal_100g FROM product_cache WHERE barcode = %s",
             (barcode,),
         ).fetchone()
         return ProductInfo(barcode, *row) if row else None
 
     def cache_product(self, info: ProductInfo) -> None:
-        with self._db:
+        with self._db.transaction():
             self._db.execute(
-                "INSERT OR REPLACE INTO product_cache (barcode, name, quantity, unit, kcal_100g)"
-                " VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO product_cache (barcode, name, quantity, unit, kcal_100g)"
+                " VALUES (%s, %s, %s, %s, %s)"
+                " ON CONFLICT (barcode) DO UPDATE SET name = excluded.name,"
+                " quantity = excluded.quantity, unit = excluded.unit,"
+                " kcal_100g = excluded.kcal_100g",
                 (info.barcode, info.name, info.quantity, info.unit, info.kcal_per_100),
             )
 
@@ -814,9 +755,9 @@ class StockRepository:
         return version, date.fromisoformat(accepted_on)
 
     def accept_disclaimer(self, version: str, accepted_on: date) -> None:
-        with self._db:
+        with self._db.transaction():
             self._db.execute(
-                "INSERT INTO settings (key, value) VALUES ('disclaimer', ?)"
+                "INSERT INTO settings (key, value) VALUES ('disclaimer', %s)"
                 " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 (f"{version}|{accepted_on.isoformat()}",),
             )
@@ -832,9 +773,9 @@ class StockRepository:
         return LookChoice(rows.get("look_season", AUTO), rows.get("look_festive", "on") != "off")
 
     def set_look_choice(self, choice: LookChoice) -> None:
-        with self._db:
+        with self._db.transaction():
             self._db.executemany(
-                "INSERT INTO settings (key, value) VALUES (?, ?)"
+                "INSERT INTO settings (key, value) VALUES (%s, %s)"
                 " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 [
                     ("look_season", choice.season),
@@ -852,10 +793,10 @@ class StockRepository:
         code = code.strip().upper()
         if code and code not in COUNTRIES:
             raise ValueError("Choose a country from the list")
-        with self._db:
+        with self._db.transaction():
             if code:
                 self._db.execute(
-                    "INSERT INTO settings (key, value) VALUES ('country', ?)"
+                    "INSERT INTO settings (key, value) VALUES ('country', %s)"
                     " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                     (code,),
                 )
@@ -874,7 +815,7 @@ class StockRepository:
                 quantity=quantity,
                 base_unit=BaseUnit(base_unit),
                 location=Location(location),
-                expires_on=date.fromisoformat(expires_on) if expires_on else None,
+                expires_on=expires_on,
                 id=item_id,
             )
             for item_id, name, quantity, base_unit, location, expires_on in rows
@@ -882,37 +823,38 @@ class StockRepository:
 
     def _apply(self, rule: Callable[[list[StockItem]], list[StockItem]]) -> None:
         """Run a pure stock rule and persist the difference, atomically."""
-        with self._db:
+        with self._db.transaction():
             old = self._load()
             new = rule(old)
             kept = {item.id for item in new if item.id is not None}
             for item in old:
                 if item.id not in kept:
-                    self._db.execute("DELETE FROM stock_items WHERE id = ?", (item.id,))
+                    self._db.execute("DELETE FROM stock_items WHERE id = %s", (item.id,))
             before = {item.id: item for item in old}
             for item in new:
                 if item.id is None:
                     self._insert(item)
                 elif item != before[item.id]:
                     self._db.execute(
-                        "UPDATE stock_items SET quantity = ? WHERE id = ?", (item.quantity, item.id)
+                        "UPDATE stock_items SET quantity = %s WHERE id = %s",
+                        (item.quantity, item.id),
                     )
 
     def _insert(self, item: StockItem) -> None:
         self._db.execute(
-            "INSERT OR IGNORE INTO ingredients (name, base_unit) VALUES (?, ?)",
+            "INSERT INTO ingredients (name, base_unit) VALUES (%s, %s) ON CONFLICT DO NOTHING",
             (item.ingredient, item.base_unit.value),
         )
         (ingredient_id,) = self._db.execute(
-            "SELECT id FROM ingredients WHERE name = ?", (item.ingredient,)
+            "SELECT id FROM ingredients WHERE lower(name) = lower(%s)", (item.ingredient,)
         ).fetchone()
         self._db.execute(
             "INSERT INTO stock_items (ingredient_id, quantity, location, expires_on)"
-            " VALUES (?, ?, ?, ?)",
+            " VALUES (%s, %s, %s, %s)",
             (
                 ingredient_id,
                 item.quantity,
                 item.location.value,
-                item.expires_on.isoformat() if item.expires_on else None,
+                item.expires_on,
             ),
         )

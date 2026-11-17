@@ -120,8 +120,8 @@ def test_fetch_forecast_skips_days_without_figures_and_rejects_bad_ones():
         fetch_forecast(UTRECHT, lambda url: {"nothing": 1})
 
 
-def test_the_town_is_stored_and_cleared(tmp_path):
-    with WeatherRepository(tmp_path / "e.db") as repo:
+def test_the_town_is_stored_and_cleared(db_url):
+    with WeatherRepository(db_url) as repo:
         assert repo.place() is None
         repo.set_place(UTRECHT)
         assert repo.place() == UTRECHT
@@ -129,10 +129,10 @@ def test_the_town_is_stored_and_cleared(tmp_path):
         assert repo.place() is None
 
 
-def test_the_forecast_is_kept_and_only_fetched_when_old(tmp_path):
+def test_the_forecast_is_kept_and_only_fetched_when_old(db_url):
     service = FakeService()
     now = datetime(2026, 11, 2, 8, tzinfo=UTC)
-    with WeatherRepository(tmp_path / "e.db") as repo:
+    with WeatherRepository(db_url) as repo:
         assert repo.refresh(service, now) is False  # no town yet
         repo.set_place(UTRECHT)
         assert repo.refresh(service, now) is True
@@ -144,97 +144,92 @@ def test_the_forecast_is_kept_and_only_fetched_when_old(tmp_path):
         assert repo.days(TODAY + timedelta(days=1))[0].high == 8  # past days are not returned
 
 
-def test_a_failed_refresh_keeps_the_last_forecast(tmp_path):
+def test_a_failed_refresh_keeps_the_last_forecast(db_url):
     now = datetime(2026, 11, 2, 8, tzinfo=UTC)
-    with WeatherRepository(tmp_path / "e.db") as repo:
+    with WeatherRepository(db_url) as repo:
         repo.set_place(UTRECHT)
         repo.refresh(FakeService(), now)
         assert repo.refresh(FakeService(fail=True), now + timedelta(hours=9)) is False
         assert len(repo.days(TODAY)) == 3
 
 
-def test_changing_the_town_forgets_the_old_forecast(tmp_path):
-    with WeatherRepository(tmp_path / "e.db") as repo:
+def test_changing_the_town_forgets_the_old_forecast(db_url):
+    with WeatherRepository(db_url) as repo:
         repo.set_place(UTRECHT)
         repo.refresh(FakeService())
         repo.set_place(Place("Madrid", "", "ES", 40.4, -3.7))
         assert repo.days(TODAY) == []
 
 
-def test_weather_for_is_empty_without_a_town_and_makes_no_request(tmp_path):
+def test_weather_for_is_empty_without_a_town_and_makes_no_request(db_url):
     service = FakeService()
-    assert weather_for(tmp_path / "e.db", TODAY, service) == {}
+    assert weather_for(db_url, TODAY, service) == {}
     assert service.urls == []
 
 
 # ---- through the pages ----
 
 
-@pytest.fixture
-def db_path(tmp_path):
-    return tmp_path / "emu.db"
-
-
-def make_client(db_path, service):
+def make_client(db_url, service):
     app = create_app(
-        db_path, today=lambda: TODAY, fetch_product=lambda c: {"status": 0}, get_json=service
+        db_url, today=lambda: TODAY, fetch_product=lambda c: {"status": 0}, get_json=service
     )
     return TestClient(app, follow_redirects=False)
 
 
-def test_settings_save_the_town_and_show_it(db_path):
+def test_settings_save_the_town_and_show_it(db_url):
     service = FakeService()
-    client = make_client(db_path, service)
+    client = make_client(db_url, service)
     r = client.post("/settings", data={"country": "NL", "town": "Utrecht"})
     assert r.status_code == 303
     assert 'value="Utrecht, Utrecht, NL"' in client.get("/settings").text
     assert "countryCode=NL" in service.urls[0]
 
 
-def test_settings_do_not_look_up_an_unchanged_town_again(db_path):
+def test_settings_do_not_look_up_an_unchanged_town_again(db_url):
     service = FakeService()
-    client = make_client(db_path, service)
+    client = make_client(db_url, service)
     client.post("/settings", data={"country": "NL", "town": "Utrecht"})
     client.post("/settings", data={"country": "NL", "town": "Utrecht, Utrecht, NL"})
     assert len(service.urls) == 1
 
 
-def test_settings_say_so_when_the_town_is_not_found_and_keep_the_old_one(db_path):
-    client = make_client(db_path, FakeService())
+def test_settings_say_so_when_the_town_is_not_found_and_keep_the_old_one(db_url):
+    client = make_client(db_url, FakeService())
     client.post("/settings", data={"country": "NL", "town": "Utrecht"})
-    other = make_client(db_path, FakeService(found=False))
+    other = make_client(db_url, FakeService(found=False))
     r = other.post("/settings", data={"country": "NL", "town": "Nowhere"})
     assert r.status_code == 400 and "No town called Nowhere" in r.text
     assert 'value="Utrecht, Utrecht, NL"' in other.get("/settings").text
 
 
-def test_settings_keep_the_old_town_when_the_service_is_down(db_path):
-    make_client(db_path, FakeService()).post("/settings", data={"country": "NL", "town": "Utrecht"})
-    down = make_client(db_path, FakeService(fail=True))
+def test_settings_keep_the_old_town_when_the_service_is_down(db_url):
+    make_client(db_url, FakeService()).post("/settings", data={"country": "NL", "town": "Utrecht"})
+    down = make_client(db_url, FakeService(fail=True))
     r = down.post("/settings", data={"country": "NL", "town": "Madrid"})
     assert r.status_code == 400 and "town was not changed" in r.text
     assert 'value="Utrecht, Utrecht, NL"' in down.get("/settings").text
 
 
-def test_a_blank_town_switches_weather_off(db_path):
-    client = make_client(db_path, FakeService())
+def test_a_blank_town_switches_weather_off(db_url):
+    client = make_client(db_url, FakeService())
     client.post("/settings", data={"country": "NL", "town": "Utrecht"})
     client.post("/settings", data={"country": "NL", "town": ""})
-    with WeatherRepository(db_path) as repo:
+    with WeatherRepository(db_url) as repo:
         assert repo.place() is None
 
 
-def add_recipe(db_path, name, weather):
-    with RecipeRepository(db_path) as repo:
+def add_recipe(db_url, name, weather):
+    with RecipeRepository(db_url) as repo:
         repo.add(name, 1, [MealType.DINNER], weather, [], [("rice", 100, "g")])
 
 
-def test_the_menu_shows_the_forecast_and_favours_matching_recipes(db_path):
-    with EaterRepository(db_path) as eaters:
+def test_the_menu_shows_the_forecast_and_favours_matching_recipes(db_url):
+    with EaterRepository(db_url) as eaters:
         eaters.add("Sam", Category.MAN)
-    add_recipe(db_path, "Hot soup", Weather.COLD)
-    add_recipe(db_path, "Cold salad", Weather.WARM)
-    client = make_client(db_path, FakeService(highs=(25, 8, 15, 8, 8, 8, 8)))
+    add_recipe(db_url, "Hot soup", Weather.COLD)
+    add_recipe(db_url, "Cold salad", Weather.WARM)
+    client = make_client(db_url, FakeService(highs=(25, 8, 15, 8, 8, 8, 8)))
     client.post("/settings", data={"country": "NL", "town": "Utrecht"})
     page = client.get("/menu?go=1&meal_types=dinner&eater=1&days=3&cooldown=0&allowance=50").text
     assert "25° / 20° C · warm" in page
@@ -244,32 +239,30 @@ def test_the_menu_shows_the_forecast_and_favours_matching_recipes(db_path):
     assert "Cold salad" in first and "Hot soup" in second
 
 
-def test_the_menu_works_without_a_town(db_path):
-    with EaterRepository(db_path) as eaters:
+def test_the_menu_works_without_a_town(db_url):
+    with EaterRepository(db_url) as eaters:
         eaters.add("Sam", Category.MAN)
-    add_recipe(db_path, "Rice", Weather.ANY)
-    page = make_client(db_path, FakeService()).get("/menu?go=1&meal_types=dinner&eater=1").text
+    add_recipe(db_url, "Rice", Weather.ANY)
+    page = make_client(db_url, FakeService()).get("/menu?go=1&meal_types=dinner&eater=1").text
     assert "Rice" in page and 'class="weather"' not in page
 
 
-def test_the_menu_still_plans_when_the_weather_service_is_down(db_path):
-    with EaterRepository(db_path) as eaters:
+def test_the_menu_still_plans_when_the_weather_service_is_down(db_url):
+    with EaterRepository(db_url) as eaters:
         eaters.add("Sam", Category.MAN)
-    add_recipe(db_path, "Rice", Weather.ANY)
-    make_client(db_path, FakeService()).post("/settings", data={"country": "NL", "town": "Utrecht"})
+    add_recipe(db_url, "Rice", Weather.ANY)
+    make_client(db_url, FakeService()).post("/settings", data={"country": "NL", "town": "Utrecht"})
     page = (
-        make_client(db_path, FakeService(fail=True))
-        .get("/menu?go=1&meal_types=dinner&eater=1")
-        .text
+        make_client(db_url, FakeService(fail=True)).get("/menu?go=1&meal_types=dinner&eater=1").text
     )
     assert "Rice" in page
 
 
-def test_kinds_maps_days_to_warm_cold_or_none(tmp_path):
+def test_kinds_maps_days_to_warm_cold_or_none(db_url):
     service = FakeService()
-    with WeatherRepository(tmp_path / "e.db") as repo:
+    with WeatherRepository(db_url) as repo:
         repo.set_place(UTRECHT)
-    forecast = weather_for(tmp_path / "e.db", TODAY, service)
+    forecast = weather_for(db_url, TODAY, service)
     assert kinds(forecast) == {
         TODAY: Weather.WARM,
         TODAY + timedelta(days=1): Weather.COLD,
@@ -303,8 +296,8 @@ def test_parse_limits():
             parse_limits(warm, cold)
 
 
-def test_limits_are_stored_and_change_what_counts_as_warm(tmp_path):
-    with WeatherRepository(tmp_path / "e.db") as repo:
+def test_limits_are_stored_and_change_what_counts_as_warm(db_url):
+    with WeatherRepository(db_url) as repo:
         assert repo.limits() == Limits(20, 12)
         repo.set_limits(Limits(14, 9))
         assert repo.limits() == Limits(14, 9)
@@ -313,8 +306,8 @@ def test_limits_are_stored_and_change_what_counts_as_warm(tmp_path):
         assert [d.kind for d in repo.days(TODAY)] == [Weather.WARM, Weather.COLD, Weather.WARM]
 
 
-def test_settings_show_the_limits_with_fahrenheit_and_save_them(db_path):
-    client = make_client(db_path, FakeService())
+def test_settings_show_the_limits_with_fahrenheit_and_save_them(db_url):
+    client = make_client(db_url, FakeService())
     page = client.get("/settings").text
     assert 'name="warm_from"' in page and 'value="20"' in page and 'value="12"' in page
     assert ">68<" in page and ">53.6<" in page
@@ -323,27 +316,27 @@ def test_settings_show_the_limits_with_fahrenheit_and_save_them(db_path):
     assert 'value="24"' in page and ">75.2<" in page and ">50<" in page
 
 
-def test_bad_limits_are_refused_and_what_was_typed_is_kept(db_path):
-    client = make_client(db_path, FakeService())
+def test_bad_limits_are_refused_and_what_was_typed_is_kept(db_url):
+    client = make_client(db_url, FakeService())
     r = client.post("/settings", data={"warm_from": "5", "cold_up_to": "9"})
     assert r.status_code == 400 and "Cold up to must be lower" in r.text
     assert 'value="5"' in r.text and 'value="9"' in r.text
     assert 'value="20"' in client.get("/settings").text  # nothing was saved
 
 
-def test_a_blank_limit_goes_back_to_the_built_in_figure(db_path):
-    client = make_client(db_path, FakeService())
+def test_a_blank_limit_goes_back_to_the_built_in_figure(db_url):
+    client = make_client(db_url, FakeService())
     client.post("/settings", data={"warm_from": "24", "cold_up_to": "10"})
     client.post("/settings", data={"warm_from": "", "cold_up_to": ""})
-    with WeatherRepository(db_path) as repo:
+    with WeatherRepository(db_url) as repo:
         assert repo.limits() == Limits(20, 12)
 
 
-def test_the_menu_uses_the_saved_limits(db_path):
-    with EaterRepository(db_path) as eaters:
+def test_the_menu_uses_the_saved_limits(db_url):
+    with EaterRepository(db_url) as eaters:
         eaters.add("Sam", Category.MAN)
-    add_recipe(db_path, "Rice", Weather.ANY)
-    client = make_client(db_path, FakeService(highs=(15, 15, 15)))
+    add_recipe(db_url, "Rice", Weather.ANY)
+    client = make_client(db_url, FakeService(highs=(15, 15, 15)))
     client.post("/settings", data={"town": "Utrecht", "warm_from": "14", "cold_up_to": "5"})
     page = client.get("/menu?go=1&meal_types=dinner&eater=1&days=1").text
     assert "· warm" in page
@@ -369,8 +362,8 @@ def test_limits_typed_in_fahrenheit_are_kept_in_celsius():
         parse_limits("50", "60", "F")
 
 
-def test_the_unit_is_stored_and_defaults_to_celsius(tmp_path):
-    with WeatherRepository(tmp_path / "e.db") as repo:
+def test_the_unit_is_stored_and_defaults_to_celsius(db_url):
+    with WeatherRepository(db_url) as repo:
         assert repo.unit() == "C"
         repo.set_unit("F")
         assert repo.unit() == "F"
@@ -378,17 +371,17 @@ def test_the_unit_is_stored_and_defaults_to_celsius(tmp_path):
             repo.set_unit("K")
 
 
-def test_switching_to_fahrenheit_shows_the_limits_and_the_menu_in_fahrenheit(db_path):
-    with EaterRepository(db_path) as eaters:
+def test_switching_to_fahrenheit_shows_the_limits_and_the_menu_in_fahrenheit(db_url):
+    with EaterRepository(db_url) as eaters:
         eaters.add("Sam", Category.MAN)
-    add_recipe(db_path, "Rice", Weather.ANY)
-    client = make_client(db_path, FakeService(highs=(25, 8, 15)))
+    add_recipe(db_url, "Rice", Weather.ANY)
+    client = make_client(db_url, FakeService(highs=(25, 8, 15)))
     r = client.post(
         "/settings",
         data={"town": "Utrecht", "temperature_unit": "F", "warm_from": "75", "cold_up_to": "50"},
     )
     assert r.status_code == 303
-    with WeatherRepository(db_path) as repo:
+    with WeatherRepository(db_url) as repo:
         assert repo.unit() == "F"
         assert repo.limits() == Limits(23.89, 10)
     page = client.get("/settings").text
@@ -399,21 +392,21 @@ def test_switching_to_fahrenheit_shows_the_limits_and_the_menu_in_fahrenheit(db_
     assert "25° / 20° C" not in menu
 
 
-def test_a_form_without_the_unit_box_keeps_the_unit(db_path):
-    client = make_client(db_path, FakeService())
+def test_a_form_without_the_unit_box_keeps_the_unit(db_url):
+    client = make_client(db_url, FakeService())
     client.post("/settings", data={"temperature_unit": "F", "warm_from": "75", "cold_up_to": "50"})
     client.post("/settings", data={"warm_from": "80", "cold_up_to": "40"})
-    with WeatherRepository(db_path) as repo:
+    with WeatherRepository(db_url) as repo:
         assert repo.unit() == "F" and repo.limits() == Limits(26.67, 4.44)
 
 
-def test_a_bad_unit_is_refused(db_path):
-    r = make_client(db_path, FakeService()).post("/settings", data={"temperature_unit": "K"})
+def test_a_bad_unit_is_refused(db_url):
+    r = make_client(db_url, FakeService()).post("/settings", data={"temperature_unit": "K"})
     assert r.status_code == 400 and "Choose Celsius or Fahrenheit" in r.text
 
 
-def test_bad_fahrenheit_limits_keep_what_was_typed_in_fahrenheit(db_path):
-    r = make_client(db_path, FakeService()).post(
+def test_bad_fahrenheit_limits_keep_what_was_typed_in_fahrenheit(db_url):
+    r = make_client(db_url, FakeService()).post(
         "/settings", data={"temperature_unit": "F", "warm_from": "40", "cold_up_to": "60"}
     )
     assert r.status_code == 400

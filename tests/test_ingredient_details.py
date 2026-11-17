@@ -1,5 +1,3 @@
-import sqlite3
-
 import pytest
 
 from emu_the_menu.allergens import Allergen
@@ -9,8 +7,8 @@ from emu_the_menu.stock import Location
 
 
 @pytest.fixture
-def repo(tmp_path):
-    with StockRepository(tmp_path / "emu.db") as repo:
+def repo(db_url):
+    with StockRepository(db_url) as repo:
         yield repo
 
 
@@ -101,14 +99,13 @@ def test_details_for_a_missing_ingredient_raise(repo):
         repo.set_ingredient_details(999, 100, [], [])
 
 
-def test_details_survive_reopening_the_database(tmp_path):
-    path = tmp_path / "emu.db"
-    with StockRepository(path) as repo:
+def test_details_survive_reopening_the_database(db_url):
+    with StockRepository(db_url) as repo:
         repo.add("chicken", 500, "g", Location.FRIDGE)
         repo.set_ingredient_details(
             ingredient(repo, "chicken").id, 165.5, [FoodGroup.POULTRY], [Allergen.EGGS]
         )
-    with StockRepository(path) as repo:
+    with StockRepository(db_url) as repo:
         chicken = ingredient(repo, "chicken")
         assert (chicken.kcal, chicken.food_groups, chicken.allergens) == (
             165.5,
@@ -141,28 +138,6 @@ def test_the_export_lists_calories_food_groups_and_allergens(repo):
     assert exported["chicken"]["allergens"] == ["celery"]
     assert exported["rice"]["kcal"] is None
     assert exported["rice"]["food_groups"] == [] and exported["rice"]["allergens"] == []
-
-
-def test_an_older_database_without_these_columns_and_tables_is_upgraded(tmp_path):
-    path = tmp_path / "old.db"
-    db = sqlite3.connect(path)
-    db.executescript(
-        """CREATE TABLE ingredients (id INTEGER PRIMARY KEY,
-               name TEXT NOT NULL UNIQUE COLLATE NOCASE, base_unit TEXT NOT NULL,
-               shelf_life_amount INTEGER, shelf_life_unit TEXT, last_quantity REAL, last_unit TEXT);
-           CREATE TABLE stock_items (id INTEGER PRIMARY KEY,
-               ingredient_id INTEGER NOT NULL REFERENCES ingredients(id),
-               quantity REAL NOT NULL, location TEXT NOT NULL, expires_on TEXT);
-           INSERT INTO ingredients (name, base_unit) VALUES ('flour', 'g');"""
-    )
-    db.commit()
-    db.close()
-    with StockRepository(path) as repo:
-        flour = ingredient(repo, "flour")
-        assert (flour.kcal, flour.food_groups, flour.allergens) == (None, (), ())
-        repo.set_ingredient_details(flour.id, 364, [], [Allergen.GLUTEN])
-    with StockRepository(path) as repo:
-        assert ingredient(repo, "flour").allergens == (Allergen.GLUTEN,)
 
 
 # --- reviewed: has a person looked at this ingredient's details? ------------------------------
@@ -203,20 +178,3 @@ def test_the_export_says_whether_each_ingredient_was_reviewed(repo):
     repo.set_ingredient_details(ingredient(repo, "rice").id, None, [], [])
     exported = {i["name"]: i["reviewed"] for i in repo.export_data()["ingredients"]}
     assert exported == {"chicken": False, "rice": True}
-
-
-def test_ingredients_from_an_older_database_start_unreviewed(tmp_path):
-    path = tmp_path / "old.db"
-    db = sqlite3.connect(path)
-    db.executescript(
-        """CREATE TABLE ingredients (id INTEGER PRIMARY KEY,
-               name TEXT NOT NULL UNIQUE COLLATE NOCASE, base_unit TEXT NOT NULL,
-               shelf_life_amount INTEGER, shelf_life_unit TEXT, last_quantity REAL, last_unit TEXT,
-               kcal REAL);
-           INSERT INTO ingredients (name, base_unit, kcal) VALUES ('flour', 'g', 364);"""
-    )
-    db.commit()
-    db.close()
-    with StockRepository(path) as repo:
-        flour = ingredient(repo, "flour")
-        assert (flour.kcal, flour.reviewed) == (364, False)

@@ -8,7 +8,6 @@ and keeps it (see `web_saved_menus`). Reshuffling just changes the seed.
 from dataclasses import dataclass
 from datetime import date
 from itertools import groupby
-from pathlib import Path
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Query, Request
@@ -58,9 +57,9 @@ def shopping_text(pairs) -> list[str]:
     return found
 
 
-def held_text(db_path: str | Path, today: date, before: int | None = None):
+def held_text(database: str, today: date, before: int | None = None):
     """What accepted Menus hold, as (menu, ["carrots 400 g", ...]) for the page to say so."""
-    return [(menu, shopping_text(items)) for menu, items in holdings(db_path, today, before)]
+    return [(menu, shopping_text(items)) for menu, items in holdings(database, today, before)]
 
 
 def days_of(meals):
@@ -87,16 +86,16 @@ class PlanRequest:
     cooldown: int
     seed: int
 
-    def run(self, db_path: str | Path, today: date, forecast=None, occasions=None) -> Menu:
+    def run(self, database: str, today: date, forecast=None, occasions=None) -> Menu:
         """Plan, on the Stock that accepted Menus are not holding."""
-        with RecipeRepository(db_path) as recipes, MenuRepository(db_path) as menus:
+        with RecipeRepository(database) as recipes, MenuRepository(database) as menus:
             return plan(
                 self.start,
                 self.days,
                 self.slots,
                 recipes.recipes(),
                 self.people,
-                free_stock(db_path, today),
+                free_stock(database, today),
                 seed=self.seed,
                 settings=PlanSettings(self.allowance, self.cooldown),
                 last_served=menus.last_served(),
@@ -147,7 +146,7 @@ def parse_plan(
     return PlanRequest(first, length, slots, people, shop, cool, number)
 
 
-def create_router(db_path: str | Path, today=date.today, get_json=http_get_json) -> APIRouter:
+def create_router(database: str, today=date.today, get_json=http_get_json) -> APIRouter:
     router = APIRouter()
 
     @router.get("/menu", response_class=HTMLResponse)
@@ -162,7 +161,7 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
         cooldown: str = str(_DEFAULTS.cooldown_days),
         seed: str = "0",
     ):
-        with EaterRepository(db_path) as eater_repo:
+        with EaterRepository(database) as eater_repo:
             everyone = eater_repo.list()
         submitted = bool(go)
         chosen_meals = meal_types if submitted else [s.value for s in _DEFAULT_SLOTS]
@@ -213,15 +212,15 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
             )
         except ValueError as exc:
             return answer(str(exc), 400)
-        forecast = weather_for(db_path, today(), get_json)
-        occasions = occasions_for(db_path, settings.start, settings.days)
-        result = settings.run(db_path, today(), forecast, occasions)
-        held = free_stock(db_path, today())
+        forecast = weather_for(database, today(), get_json)
+        occasions = occasions_for(database, settings.start, settings.days)
+        result = settings.run(database, today(), forecast, occasions)
+        held = free_stock(database, today())
         return answer(
             days_shown=days_of(result.meals),
             forecast=forecast,
             occasions=occasions,
-            holds=held_text(db_path, today()),
+            holds=held_text(database, today()),
             shopping=shopping_text(shopping_amounts(result.meals, held)),
             reshuffle="/menu?" + urlencode(settings.query(settings.seed + 1)),
             save_fields=settings.query(settings.seed),
@@ -232,7 +231,7 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
         """Plan again from the same settings and keep the result as a saved Menu."""
         form = await request.form()
         # Opened here, not injected: a connection must stay in the thread that made it.
-        with EaterRepository(db_path) as eater_repo:
+        with EaterRepository(database) as eater_repo:
             everyone = eater_repo.list()
         try:
             settings = parse_plan(
@@ -248,12 +247,12 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
         except ValueError as exc:
             return HTMLResponse(f"error: {exc}", status_code=400)
         result = settings.run(
-            db_path,
+            database,
             today(),
-            weather_for(db_path, today(), get_json),
-            occasions_for(db_path, settings.start, settings.days),
+            weather_for(database, today(), get_json),
+            occasions_for(database, settings.start, settings.days),
         )
-        with MenuRepository(db_path) as menus:
+        with MenuRepository(database) as menus:
             menu_id = menus.save(
                 str(form.get("name", "")), settings.start, settings.days, result, settings.people
             )

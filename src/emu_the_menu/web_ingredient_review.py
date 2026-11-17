@@ -17,7 +17,6 @@ person confirms it.
 
 import math
 from collections.abc import Iterator
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -41,11 +40,11 @@ def _ids(values) -> list[int]:
     return list(dict.fromkeys(int(v) for v in values if str(v).strip().isdecimal()))
 
 
-def create_router(db_path: str | Path) -> APIRouter:
+def create_router(database: str) -> APIRouter:
     router = APIRouter()
 
     def get_repo() -> Iterator[StockRepository]:
-        with StockRepository(db_path) as repo:
+        with StockRepository(database) as repo:
             yield repo
 
     def unchecked(repo: StockRepository, recipe_id: int = 0):
@@ -53,7 +52,7 @@ def create_router(db_path: str | Path) -> APIRouter:
         Recipe asked for (None if there is none or the number is unknown)."""
         used: dict[int, int] = {}
         chosen = None
-        with RecipeRepository(db_path) as recipes:
+        with RecipeRepository(database) as recipes:
             for recipe in recipes.recipes():
                 for line in recipe.lines:
                     used[line.ingredient.id] = used.get(line.ingredient.id, 0) + 1
@@ -195,7 +194,7 @@ def create_router(db_path: str | Path) -> APIRouter:
     async def save(request: Request):
         form = await request.form()
         # Opened here, not injected: a connection must stay in the thread that made it.
-        with StockRepository(db_path) as repo:
+        with StockRepository(database) as repo:
             return store(request, repo, form)
 
     def store(request: Request, repo: StockRepository, form):

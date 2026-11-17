@@ -11,6 +11,8 @@ dist/
 *.db-journal
 *.db-wal
 *.db-shm
+# ...except the test fixture written by the SQLite-era app
+!tests/data/*.db
 uploads/
 .env
 

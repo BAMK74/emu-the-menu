@@ -12,13 +12,8 @@ TODAY = date(2026, 10, 26)
 
 
 @pytest.fixture
-def db_path(tmp_path):
-    return tmp_path / "emu.db"
-
-
-@pytest.fixture
-def client(db_path):
-    app = create_app(db_path, today=lambda: TODAY, fetch_product=lambda code: {"status": 0})
+def client(db_url):
+    app = create_app(db_url, today=lambda: TODAY, fetch_product=lambda code: {"status": 0})
     return TestClient(app, follow_redirects=False)
 
 
@@ -34,28 +29,28 @@ def accept(client, **data):
 # --- storing the acceptance -----------------------------------------------------------------
 
 
-def test_nothing_is_accepted_at_first(db_path):
-    with StockRepository(db_path) as repo:
+def test_nothing_is_accepted_at_first(db_url):
+    with StockRepository(db_url) as repo:
         assert repo.disclaimer_acceptance() is None
 
 
-def test_the_version_and_date_accepted_are_recorded(db_path):
-    with StockRepository(db_path) as repo:
+def test_the_version_and_date_accepted_are_recorded(db_url):
+    with StockRepository(db_url) as repo:
         repo.accept_disclaimer("2026-10-27", TODAY)
         assert repo.disclaimer_acceptance() == ("2026-10-27", TODAY)
 
 
-def test_accepting_again_replaces_the_record(db_path):
-    with StockRepository(db_path) as repo:
+def test_accepting_again_replaces_the_record(db_url):
+    with StockRepository(db_url) as repo:
         repo.accept_disclaimer("2026-10-27", date(2026, 10, 1))
         repo.accept_disclaimer("2027-01-01", date(2027, 1, 2))
         assert repo.disclaimer_acceptance() == ("2027-01-01", date(2027, 1, 2))
 
 
-def test_the_acceptance_survives_reopening_the_database(db_path):
-    with StockRepository(db_path) as repo:
+def test_the_acceptance_survives_reopening_the_database(db_url):
+    with StockRepository(db_url) as repo:
         repo.accept_disclaimer("2026-10-27", TODAY)
-    with StockRepository(db_path) as repo:
+    with StockRepository(db_url) as repo:
         assert repo.disclaimer_acceptance() == ("2026-10-27", TODAY)
 
 
@@ -151,20 +146,20 @@ def test_the_disclaimer_page_has_the_accept_form_instead_of_the_banner(client):
     assert re.search(r'<input[^>]*type="checkbox"[^>]*name="understood"', page)
 
 
-def test_accepting_needs_the_box_ticked(client, db_path):
+def test_accepting_needs_the_box_ticked(client, db_url):
     response = client.post("/disclaimer/accept", data={})
     assert response.status_code == 400
     assert 'class="error"' in response.text
     assert "tick" in response.text.lower()
-    with StockRepository(db_path) as repo:
+    with StockRepository(db_url) as repo:
         assert repo.disclaimer_acceptance() is None
 
 
-def test_accepting_records_the_version_and_date_and_removes_the_banner(client, db_path):
+def test_accepting_records_the_version_and_date_and_removes_the_banner(client, db_url):
     response = accept(client)
     assert response.status_code == 303
     assert response.headers["location"] == "/disclaimer?accepted=1"
-    with StockRepository(db_path) as repo:
+    with StockRepository(db_url) as repo:
         assert repo.disclaimer_acceptance() == (DISCLAIMER_VERSION, TODAY)
     for path in ("/", "/eaters", "/settings"):
         page = client.get(path).text
@@ -178,8 +173,8 @@ def test_the_page_shows_when_it_was_accepted(client):
     assert f"You accepted version {DISCLAIMER_VERSION} on 2026-10-26" in text
 
 
-def test_a_changed_disclaimer_asks_again(client, db_path):
-    with StockRepository(db_path) as repo:
+def test_a_changed_disclaimer_asks_again(client, db_url):
+    with StockRepository(db_url) as repo:
         repo.accept_disclaimer("2000-01-01", date(2000, 1, 2))
     page = client.get("/").text
     assert 'class="disclaimer-banner"' in page

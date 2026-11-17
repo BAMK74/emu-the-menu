@@ -1,5 +1,3 @@
-import sqlite3
-
 import pytest
 
 from emu_the_menu.food_groups import FoodGroup
@@ -11,13 +9,8 @@ from emu_the_menu.units import BaseUnit, IncompatibleUnitError, UnknownUnitError
 
 
 @pytest.fixture
-def db_path(tmp_path):
-    return tmp_path / "emu.db"
-
-
-@pytest.fixture
-def repo(db_path):
-    with RecipeRepository(db_path) as r:
+def repo(db_url):
+    with RecipeRepository(db_url) as r:
         yield r
 
 
@@ -52,23 +45,23 @@ def test_quantities_are_stored_in_the_base_unit(repo):
     assert quantities == {"flour": 1500, "milk": 480}
 
 
-def test_new_ingredients_are_created_unchecked_and_without_calories(repo, db_path):
+def test_new_ingredients_are_created_unchecked_and_without_calories(repo, db_url):
     add(repo)
-    with StockRepository(db_path) as stock:
+    with StockRepository(db_url) as stock:
         found = {i.name: i for i in stock.ingredients()}
     assert found["rice"].base_unit is BaseUnit.GRAM
     assert found["tomatoes"].base_unit is BaseUnit.COUNT
     assert not found["rice"].reviewed and found["rice"].kcal is None
 
 
-def test_an_existing_ingredient_is_reused_by_name_ignoring_case(repo, db_path):
-    with StockRepository(db_path) as stock:
+def test_an_existing_ingredient_is_reused_by_name_ignoring_case(repo, db_url):
+    with StockRepository(db_url) as stock:
         stock.add("Rice", 1, "kg", Location.PANTRY)
         stock.set_ingredient_details(stock.ingredients()[0].id, 360, (FoodGroup.EGGS,), ())
     recipe_id = add(repo, lines=[("  RICE ", 100, "g")])
     ingredient = repo.get(recipe_id).lines[0].ingredient
     assert ingredient.reviewed and ingredient.kcal == 360
-    with StockRepository(db_path) as stock:
+    with StockRepository(db_url) as stock:
         assert len(stock.ingredients()) == 1
 
 
@@ -83,11 +76,11 @@ def test_an_unknown_unit_is_rejected(repo):
         add(repo, lines=[("rice", 1, "handful")])
 
 
-def test_a_failed_save_leaves_nothing_behind_not_even_new_ingredients(repo, db_path):
+def test_a_failed_save_leaves_nothing_behind_not_even_new_ingredients(repo, db_url):
     with pytest.raises(UnknownUnitError):
         add(repo, lines=[("rice", 100, "g"), ("salt", 1, "pinch")])
     assert repo.recipes() == []
-    with StockRepository(db_path) as stock:
+    with StockRepository(db_url) as stock:
         assert stock.ingredients() == []
 
 
@@ -160,11 +153,11 @@ def test_a_failed_update_changes_nothing(repo):
     assert len(recipe.lines) == 2
 
 
-def test_deleting_a_recipe_keeps_its_ingredients(repo, db_path):
+def test_deleting_a_recipe_keeps_its_ingredients(repo, db_url):
     recipe_id = add(repo)
     repo.delete(recipe_id)
     assert repo.recipes() == []
-    with StockRepository(db_path) as stock:
+    with StockRepository(db_url) as stock:
         assert {i.name for i in stock.ingredients()} == {"rice", "tomatoes"}
 
 
@@ -176,12 +169,12 @@ def test_a_missing_recipe_is_reported(repo):
         repo.update(99, "x", 1, (MealType.LUNCH,), Weather.ANY, (), [("rice", 1, "g")])
 
 
-def test_a_recipe_sees_ingredient_details_saved_later(repo, db_path):
+def test_a_recipe_sees_ingredient_details_saved_later(repo, db_url):
     recipe_id = add(repo)
     rice = next(
         line.ingredient for line in repo.get(recipe_id).lines if line.ingredient.name == "rice"
     )
-    with StockRepository(db_path) as stock:
+    with StockRepository(db_url) as stock:
         stock.set_ingredient_details(rice.id, 360, (), ())
     fresh = next(
         line.ingredient for line in repo.get(recipe_id).lines if line.ingredient.name == "rice"
@@ -243,16 +236,3 @@ def test_updating_can_change_or_clear_the_source(repo):
 def test_the_export_includes_the_source(repo):
     with_source(repo, "https://example.com/soup")
     assert repo.export_data()[0]["source_url"] == "https://example.com/soup"
-
-
-def test_an_older_database_gains_the_source_column(db_path):
-    db = sqlite3.connect(db_path)
-    db.executescript(
-        "CREATE TABLE recipes (id INTEGER PRIMARY KEY, name TEXT NOT NULL UNIQUE COLLATE NOCASE,"
-        " servings INTEGER NOT NULL, weather TEXT NOT NULL DEFAULT 'any');"
-    )
-    db.commit()
-    db.close()
-    with RecipeRepository(db_path) as repo:
-        recipe_id = with_source(repo, "https://example.com/soup")
-        assert repo.get(recipe_id).source_url == "https://example.com/soup"

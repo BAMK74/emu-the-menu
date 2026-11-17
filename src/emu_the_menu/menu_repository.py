@@ -1,57 +1,19 @@
-"""Saved Menus: a planned set of Meals kept in SQLite, so it can be opened again and changed.
+"""Saved Menus: a planned set of Meals kept in the database, so it can be opened again and changed.
 
 A saved Meal holds the id of its Recipe and, for each Eater, how many servings they get. Calories,
 names and allergen checks are not stored: they are worked out from the live Recipes and Eaters
 each time, so a change to an Ingredient or a goal shows up in the saved Menu too.
 """
 
-import sqlite3
 from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import date
-from pathlib import Path
 
+from emu_the_menu.db import Database
 from emu_the_menu.eaters import Eater, EaterRepository
 from emu_the_menu.planner import Menu, Slot
 from emu_the_menu.recipe_repository import RecipeRepository
 from emu_the_menu.stock import Location, TakenLot
-
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS menus (
-    id         INTEGER PRIMARY KEY,
-    name       TEXT NOT NULL,
-    start_day  TEXT NOT NULL,
-    days       INTEGER NOT NULL,
-    accepted_on    TEXT,
-    accepted_order INTEGER
-);
-CREATE TABLE IF NOT EXISTS menu_meals (
-    id         INTEGER PRIMARY KEY,
-    menu_id    INTEGER NOT NULL REFERENCES menus(id) ON DELETE CASCADE,
-    day        TEXT NOT NULL,
-    slot       TEXT NOT NULL,
-    recipe_id  INTEGER REFERENCES recipes(id) ON DELETE SET NULL,
-    reason     TEXT NOT NULL DEFAULT '',
-    cooked_on  TEXT,
-    short      TEXT NOT NULL DEFAULT '',
-    guests     INTEGER NOT NULL DEFAULT 0,
-    guest_servings REAL NOT NULL DEFAULT 0
-);
-CREATE TABLE IF NOT EXISTS menu_meal_taken (
-    meal_id    INTEGER NOT NULL REFERENCES menu_meals(id) ON DELETE CASCADE,
-    ingredient TEXT NOT NULL,
-    quantity   REAL NOT NULL,
-    unit       TEXT NOT NULL,
-    location   TEXT NOT NULL,
-    expires_on TEXT
-);
-CREATE TABLE IF NOT EXISTS menu_portions (
-    meal_id    INTEGER NOT NULL REFERENCES menu_meals(id) ON DELETE CASCADE,
-    eater_id   INTEGER NOT NULL REFERENCES eaters(id) ON DELETE CASCADE,
-    servings   REAL NOT NULL,
-    PRIMARY KEY (meal_id, eater_id)
-);
-"""
 
 _MENU_COLUMNS = "SELECT id, name, start_day, days, accepted_on, accepted_order FROM menus"
 _DELETED_RECIPE = "The recipe was deleted"
@@ -93,27 +55,10 @@ class SavedMenu:
 
 
 class MenuRepository:
-    def __init__(self, path: str | Path):
-        # These create the tables the Menu tables point at.
-        self._recipes = RecipeRepository(path)
-        self._eaters = EaterRepository(path)
-        self._db = sqlite3.connect(path)
-        self._db.execute("PRAGMA foreign_keys = ON")
-        self._db.executescript(_SCHEMA)
-        menu_columns = {row[1] for row in self._db.execute("PRAGMA table_info(menus)")}
-        for column, kind in (("accepted_on", "TEXT"), ("accepted_order", "INTEGER")):
-            if column not in menu_columns:
-                with self._db:
-                    self._db.execute(f"ALTER TABLE menus ADD COLUMN {column} {kind}")
-        columns = {row[1] for row in self._db.execute("PRAGMA table_info(menu_meals)")}
-        for column, definition in (
-            ("short", "TEXT NOT NULL DEFAULT ''"),
-            ("guests", "INTEGER NOT NULL DEFAULT 0"),
-            ("guest_servings", "REAL NOT NULL DEFAULT 0"),
-        ):
-            if column not in columns:
-                with self._db:
-                    self._db.execute(f"ALTER TABLE menu_meals ADD COLUMN {column} {definition}")
+    def __init__(self, database: str | Database | None = None):
+        self._recipes = RecipeRepository(database)
+        self._db = self._recipes.database
+        self._eaters = EaterRepository(self._db)
 
     def __enter__(self) -> "MenuRepository":
         return self
@@ -122,9 +67,8 @@ class MenuRepository:
         self.close()
 
     def close(self) -> None:
-        self._db.close()
-        self._recipes.close()
         self._eaters.close()
+        self._recipes.close()
 
     def save(
         self, name: str, start: date, days: int, menu: Menu, table: Sequence[Eater] = ()
@@ -135,37 +79,36 @@ class MenuRepository:
         is still known who a Recipe put there later has to suit.
         """
         name = " ".join(name.split()) or f"Menu from {start.day} {start:%b %Y}"
-        with self._db:
-            menu_id = self._db.execute(
-                "INSERT INTO menus (name, start_day, days) VALUES (?, ?, ?)",
-                (name, start.isoformat(), days),
-            ).lastrowid
+        with self._db.transaction():
+            (menu_id,) = self._db.execute(
+                "INSERT INTO menus (name, start_day, days) VALUES (%s, %s, %s) RETURNING id",
+                (name, start, days),
+            ).fetchone()
             for meal in menu.meals:
-                meal_id = self._db.execute(
+                (meal_id,) = self._db.execute(
                     "INSERT INTO menu_meals"
                     " (menu_id, day, slot, recipe_id, reason, guests, guest_servings)"
-                    " VALUES (?, ?, ?, ?, ?, ?, ?)",
+                    " VALUES (%s, %s, %s, %s, %s, %s, %s) RETURNING id",
                     (
                         menu_id,
-                        meal.day.isoformat(),
+                        meal.day,
                         meal.slot.value,
                         meal.recipe.id if meal.recipe else None,
                         meal.reason,
                         meal.guests,
                         meal.guest_servings,
                     ),
-                ).lastrowid
+                ).fetchone()
                 self._db.executemany(
-                    "INSERT INTO menu_portions (meal_id, eater_id, servings) VALUES (?, ?, ?)",
+                    "INSERT INTO menu_portions (meal_id, eater_id, servings) VALUES (%s, %s, %s)",
                     [(meal_id, p.eater.id, p.servings) for p in meal.portions]
                     or [(meal_id, e.id, 0.0) for e in table],
                 )
-        assert menu_id is not None
         return menu_id
 
     def get(self, menu_id: int) -> SavedMenu | None:
         row = self._db.execute(
-            _MENU_COLUMNS + " WHERE id = ?",
+            _MENU_COLUMNS + " WHERE id = %s",
             (menu_id,),
         ).fetchone()
         return self._menu(row) if row else None
@@ -181,9 +124,9 @@ class MenuRepository:
         Menus are numbered in the order they were accepted, which decides who gets Stock that
         two of them need. Accepting a Menu that is already accepted changes nothing.
         """
-        with self._db:
+        with self._db.transaction():
             row = self._db.execute(
-                "SELECT accepted_order FROM menus WHERE id = ?", (menu_id,)
+                "SELECT accepted_order FROM menus WHERE id = %s", (menu_id,)
             ).fetchone()
             if row is None:
                 raise MenuNotFoundError(menu_id)
@@ -193,15 +136,15 @@ class MenuRepository:
                 "SELECT COALESCE(MAX(accepted_order), 0) FROM menus"
             ).fetchone()
             self._db.execute(
-                "UPDATE menus SET accepted_on = ?, accepted_order = ? WHERE id = ?",
-                (day.isoformat(), top + 1, menu_id),
+                "UPDATE menus SET accepted_on = %s, accepted_order = %s WHERE id = %s",
+                (day, top + 1, menu_id),
             )
 
     def unaccept(self, menu_id: int) -> None:
         """Give back the Stock a Menu was holding. Its place in line is forgotten."""
-        with self._db:
+        with self._db.transaction():
             cursor = self._db.execute(
-                "UPDATE menus SET accepted_on = NULL, accepted_order = NULL WHERE id = ?",
+                "UPDATE menus SET accepted_on = NULL, accepted_order = NULL WHERE id = %s",
                 (menu_id,),
             )
         if cursor.rowcount == 0:
@@ -215,8 +158,8 @@ class MenuRepository:
         return [self._menu(row) for row in rows.fetchall()]
 
     def delete(self, menu_id: int) -> None:
-        with self._db:
-            cursor = self._db.execute("DELETE FROM menus WHERE id = ?", (menu_id,))
+        with self._db.transaction():
+            cursor = self._db.execute("DELETE FROM menus WHERE id = %s", (menu_id,))
         if cursor.rowcount == 0:
             raise MenuNotFoundError(menu_id)
 
@@ -231,31 +174,32 @@ class MenuRepository:
     ) -> None:
         """Put another Recipe in a Meal of a Menu, with each Eater's servings of it and the
         servings for any guests."""
-        with self._db:
+        with self._db.transaction():
             _, cooked = self._row(menu_id, meal_id)
             if cooked:
                 raise ValueError("A cooked meal cannot be changed. Mark it not cooked first")
             self._db.execute(
-                "UPDATE menu_meals SET recipe_id = ?, reason = '', guests = ?, guest_servings = ?"
-                " WHERE id = ?",
+                "UPDATE menu_meals SET recipe_id = %s, reason = '',"
+                " guests = %s, guest_servings = %s"
+                " WHERE id = %s",
                 (recipe_id, guests, guest_servings, meal_id),
             )
-            self._db.execute("DELETE FROM menu_portions WHERE meal_id = ?", (meal_id,))
+            self._db.execute("DELETE FROM menu_portions WHERE meal_id = %s", (meal_id,))
             self._db.executemany(
-                "INSERT INTO menu_portions (meal_id, eater_id, servings) VALUES (?, ?, ?)",
+                "INSERT INTO menu_portions (meal_id, eater_id, servings) VALUES (%s, %s, %s)",
                 [(meal_id, eater_id, servings) for eater_id, servings in portions],
             )
 
     def set_guests(self, menu_id: int, meal_id: int, guests: int, guest_servings: float) -> None:
         """Cook a Meal for `guests` more people, with the servings for them all together."""
-        with self._db:
+        with self._db.transaction():
             recipe_id, cooked = self._row(menu_id, meal_id)
             if cooked:
                 raise ValueError("A cooked meal cannot be changed. Mark it not cooked first")
             if recipe_id is None:
                 raise ValueError("Choose a recipe for the meal before adding guests")
             self._db.execute(
-                "UPDATE menu_meals SET guests = ?, guest_servings = ? WHERE id = ?",
+                "UPDATE menu_meals SET guests = %s, guest_servings = %s WHERE id = %s",
                 (guests, guest_servings, meal_id),
             )
 
@@ -273,20 +217,20 @@ class MenuRepository:
         it used up, kept so that it can be put back (see `taken`). Marking a Meal not cooked
         forgets both.
         """
-        with self._db:
+        with self._db.transaction():
             recipe_id, _ = self._row(menu_id, meal_id)
             if day is not None and recipe_id is None:
                 raise ValueError("A meal with no recipe cannot be cooked")
             self._db.execute(
-                "UPDATE menu_meals SET cooked_on = ?, short = ? WHERE id = ?",
-                (day.isoformat() if day else None, short if day else "", meal_id),
+                "UPDATE menu_meals SET cooked_on = %s, short = %s WHERE id = %s",
+                (day, short if day else "", meal_id),
             )
-            self._db.execute("DELETE FROM menu_meal_taken WHERE meal_id = ?", (meal_id,))
+            self._db.execute("DELETE FROM menu_meal_taken WHERE meal_id = %s", (meal_id,))
             if day is not None:
                 self._db.executemany(
                     "INSERT INTO menu_meal_taken"
                     " (meal_id, ingredient, quantity, unit, location, expires_on)"
-                    " VALUES (?, ?, ?, ?, ?, ?)",
+                    " VALUES (%s, %s, %s, %s, %s, %s)",
                     [
                         (
                             meal_id,
@@ -294,7 +238,7 @@ class MenuRepository:
                             lot.quantity,
                             lot.unit,
                             lot.location.value,
-                            lot.expires_on.isoformat() if lot.expires_on else None,
+                            lot.expires_on,
                         )
                         for lot in took
                     ],
@@ -305,7 +249,7 @@ class MenuRepository:
         self._row(menu_id, meal_id)
         rows = self._db.execute(
             "SELECT ingredient, quantity, unit, location, expires_on FROM menu_meal_taken"
-            " WHERE meal_id = ? ORDER BY rowid",
+            " WHERE meal_id = %s ORDER BY id",
             (meal_id,),
         )
         return [
@@ -314,7 +258,7 @@ class MenuRepository:
                 quantity,
                 unit,
                 Location(location),
-                date.fromisoformat(expires_on) if expires_on else None,
+                expires_on,
             )
             for ingredient, quantity, unit, location, expires_on in rows
         ]
@@ -325,12 +269,12 @@ class MenuRepository:
             "SELECT recipe_id, MAX(cooked_on) FROM menu_meals"
             " WHERE cooked_on IS NOT NULL AND recipe_id IS NOT NULL GROUP BY recipe_id"
         )
-        return {recipe_id: date.fromisoformat(day) for recipe_id, day in rows}
+        return dict(rows)
 
-    def _row(self, menu_id: int, meal_id: int) -> tuple[int | None, str | None]:
+    def _row(self, menu_id: int, meal_id: int) -> tuple[int | None, date | None]:
         """A Meal's Recipe id and cooked date, if it belongs to the Menu."""
         row = self._db.execute(
-            "SELECT recipe_id, cooked_on FROM menu_meals WHERE id = ? AND menu_id = ?",
+            "SELECT recipe_id, cooked_on FROM menu_meals WHERE id = %s AND menu_id = %s",
             (meal_id, menu_id),
         ).fetchone()
         if row is None:
@@ -347,7 +291,7 @@ class MenuRepository:
             for m in self._db.execute(
                 "SELECT id, day, slot, recipe_id, reason, cooked_on, short, guests, guest_servings"
                 " FROM menu_meals"
-                " WHERE menu_id = ?",
+                " WHERE menu_id = %s",
                 (menu_id,),
             ).fetchall()
         ]
@@ -355,10 +299,10 @@ class MenuRepository:
         return SavedMenu(
             menu_id,
             name,
-            date.fromisoformat(start),
+            start,
             days,
             tuple(meals),
-            date.fromisoformat(accepted_on) if accepted_on else None,
+            accepted_on,
             accepted_order,
         )
 
@@ -367,7 +311,7 @@ class MenuRepository:
         portions = tuple(
             SavedPortion(eater_id, servings)
             for eater_id, servings in self._db.execute(
-                "SELECT eater_id, servings FROM menu_portions WHERE meal_id = ? ORDER BY eater_id",
+                "SELECT eater_id, servings FROM menu_portions WHERE meal_id = %s ORDER BY eater_id",
                 (meal_id,),
             )
         )
@@ -375,12 +319,12 @@ class MenuRepository:
             reason = _DELETED_RECIPE
         return SavedMeal(
             meal_id,
-            date.fromisoformat(day),
+            day,
             Slot(slot),
             recipe_id,
             reason,
             portions,
-            date.fromisoformat(cooked_on) if cooked_on else None,
+            cooked_on,
             short,
             guests,
             guest_servings,

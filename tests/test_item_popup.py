@@ -13,13 +13,8 @@ TODAY = date(2026, 10, 26)
 
 
 @pytest.fixture
-def db_path(tmp_path):
-    return tmp_path / "emu.db"
-
-
-@pytest.fixture
-def client(db_path):
-    app = create_app(db_path, today=lambda: TODAY, fetch_product=lambda code: {"status": 0})
+def client(db_url):
+    app = create_app(db_url, today=lambda: TODAY, fetch_product=lambda code: {"status": 0})
     return TestClient(app, follow_redirects=False)
 
 
@@ -36,8 +31,8 @@ def add(client, ingredient="flour", quantity="1500", unit="g", location="pantry"
     )
 
 
-def only_item(db_path):
-    with StockRepository(db_path) as repo:
+def only_item(db_url):
+    with StockRepository(db_url) as repo:
         [item] = repo.list_items()
     return item
 
@@ -51,8 +46,8 @@ def save(client, item_id, **fields):
 
 
 @pytest.fixture
-def repo(db_path):
-    with StockRepository(db_path) as repo:
+def repo(db_url):
+    with StockRepository(db_url) as repo:
         yield repo
 
 
@@ -113,9 +108,9 @@ def test_update_item_for_a_missing_item_raises(repo):
 # --- the cards ----------------------------------------------------------------------------------
 
 
-def test_each_card_is_a_link_that_opens_the_popup(client, db_path):
+def test_each_card_is_a_link_that_opens_the_popup(client, db_url):
     add(client)
-    item = only_item(db_path)
+    item = only_item(db_url)
     page = client.get("/").text
     assert (
         f'<a class="card-link" href="/items/{item.id}" data-panel="/items/{item.id}/panel">' in page
@@ -124,9 +119,9 @@ def test_each_card_is_a_link_that_opens_the_popup(client, db_path):
     assert "Click an item to adjust it" in page
 
 
-def test_the_cards_no_longer_carry_their_own_forms(client, db_path):
+def test_the_cards_no_longer_carry_their_own_forms(client, db_url):
     add(client)
-    item = only_item(db_path)
+    item = only_item(db_url)
     list_html = client.get("/").text.split("<ul>")[1]
     assert f"/items/{item.id}/quantity" not in list_html
     assert f"/items/{item.id}/delete" not in list_html
@@ -136,9 +131,9 @@ def test_the_cards_no_longer_carry_their_own_forms(client, db_path):
 # --- the popup content --------------------------------------------------------------------------
 
 
-def test_the_panel_is_a_fragment_prefilled_with_the_item(client, db_path):
+def test_the_panel_is_a_fragment_prefilled_with_the_item(client, db_url):
     add(client, "Flour", "1500", "g", "pantry", "2026-11-20")
-    item = only_item(db_path)
+    item = only_item(db_url)
     response = client.get(f"/items/{item.id}/panel")
     assert response.status_code == 200
     html = response.text
@@ -151,9 +146,9 @@ def test_the_panel_is_a_fragment_prefilled_with_the_item(client, db_path):
     assert re.search(r'name="expires_on"[^>]*value="2026-11-20"', html, re.S)
 
 
-def test_the_panel_offers_every_location_and_unit(client, db_path):
+def test_the_panel_offers_every_location_and_unit(client, db_url):
     add(client)
-    item = only_item(db_path)
+    item = only_item(db_url)
     html = client.get(f"/items/{item.id}/panel").text
     for location in ("fridge", "freezer", "pantry"):
         assert f'<option value="{location}"' in html
@@ -161,38 +156,38 @@ def test_the_panel_offers_every_location_and_unit(client, db_path):
         assert f'<option value="{unit}"' in html
 
 
-def test_an_item_with_no_expiry_shows_the_box_ticked_and_the_date_off(client, db_path):
+def test_an_item_with_no_expiry_shows_the_box_ticked_and_the_date_off(client, db_url):
     add(client)
-    item = only_item(db_path)
+    item = only_item(db_url)
     html = client.get(f"/items/{item.id}/panel").text
     assert re.search(r'<input[^>]*name="no_expiry"[^>]*checked', html)
     assert re.search(r'<input[^>]*name="expires_on"[^>]*disabled', html)
 
 
-def test_an_item_with_an_expiry_shows_the_box_unticked(client, db_path):
+def test_an_item_with_an_expiry_shows_the_box_unticked(client, db_url):
     add(client, expires_on="2026-11-20")
-    item = only_item(db_path)
+    item = only_item(db_url)
     html = client.get(f"/items/{item.id}/panel").text
     assert not re.search(r'<input[^>]*name="no_expiry"[^>]*checked', html)
     assert not re.search(r'<input[^>]*name="expires_on"[^>]*disabled', html)
 
 
-def test_the_panel_has_a_delete_button_that_asks_first(client, db_path):
+def test_the_panel_has_a_delete_button_that_asks_first(client, db_url):
     add(client, "Flour")
-    item = only_item(db_path)
+    item = only_item(db_url)
     html = client.get(f"/items/{item.id}/panel").text
     assert f'action="/items/{item.id}/delete" data-confirm="Remove flour from stock?"' in html
 
 
-def test_the_panel_has_a_cancel_button_that_closes_the_popup(client, db_path):
+def test_the_panel_has_a_cancel_button_that_closes_the_popup(client, db_url):
     add(client)
-    item = only_item(db_path)
+    item = only_item(db_url)
     assert "data-close-dialog" in client.get(f"/items/{item.id}/panel").text
 
 
-def test_the_full_page_holds_the_same_form_for_use_without_scripting(client, db_path):
+def test_the_full_page_holds_the_same_form_for_use_without_scripting(client, db_url):
     add(client, "Flour", "1500", "g", "pantry", "2026-11-20")
-    item = only_item(db_path)
+    item = only_item(db_url)
     response = client.get(f"/items/{item.id}")
     assert response.status_code == 200
     assert "<html" in response.text
@@ -208,13 +203,13 @@ def test_a_missing_item_is_a_404_for_the_panel_and_the_page(client):
 # --- saving -------------------------------------------------------------------------------------
 
 
-def test_saving_changes_everything_and_returns_to_the_stock_page(client, db_path):
+def test_saving_changes_everything_and_returns_to_the_stock_page(client, db_url):
     add(client, "Flour", "500", "g", "pantry")
-    item = only_item(db_path)
+    item = only_item(db_url)
     response = save(client, item.id)
     assert response.status_code == 303
     assert response.headers["location"] == "/"
-    updated = only_item(db_path)
+    updated = only_item(db_url)
     assert (updated.quantity, updated.location, updated.expires_on) == (
         2000,
         Location.FRIDGE,
@@ -222,18 +217,18 @@ def test_saving_changes_everything_and_returns_to_the_stock_page(client, db_path
     )
 
 
-def test_ticking_no_expiry_clears_the_date(client, db_path):
+def test_ticking_no_expiry_clears_the_date(client, db_url):
     add(client, expires_on="2026-11-01")
-    item = only_item(db_path)
+    item = only_item(db_url)
     assert save(client, item.id, no_expiry="on").status_code == 303
-    assert only_item(db_path).expires_on is None
+    assert only_item(db_url).expires_on is None
 
 
-def test_a_blank_date_means_no_expiry(client, db_path):
+def test_a_blank_date_means_no_expiry(client, db_url):
     add(client, expires_on="2026-11-01")
-    item = only_item(db_path)
+    item = only_item(db_url)
     assert save(client, item.id, expires_on="").status_code == 303
-    assert only_item(db_path).expires_on is None
+    assert only_item(db_url).expires_on is None
 
 
 @pytest.mark.parametrize(
@@ -247,13 +242,13 @@ def test_a_blank_date_means_no_expiry(client, db_path):
         {"expires_on": "next tuesday"},
     ],
 )
-def test_bad_input_is_rejected_with_a_message_and_nothing_changes(client, db_path, bad):
+def test_bad_input_is_rejected_with_a_message_and_nothing_changes(client, db_url, bad):
     add(client, "Flour", "500", "g", "pantry")
-    item = only_item(db_path)
+    item = only_item(db_url)
     response = save(client, item.id, **bad)
     assert response.status_code == 400
     assert 'class="error"' in response.text
-    unchanged = only_item(db_path)
+    unchanged = only_item(db_url)
     assert (unchanged.quantity, unchanged.location, unchanged.expires_on) == (
         500,
         Location.PANTRY,
@@ -261,26 +256,26 @@ def test_bad_input_is_rejected_with_a_message_and_nothing_changes(client, db_pat
     )
 
 
-def test_a_rejected_save_keeps_what_was_typed_on_the_full_page(client, db_path):
+def test_a_rejected_save_keeps_what_was_typed_on_the_full_page(client, db_url):
     add(client, "Flour", "500", "g", "pantry")
-    item = only_item(db_path)
+    item = only_item(db_url)
     response = save(client, item.id, quantity="-3")
     assert "<html" in response.text
     assert re.search(r'name="quantity"[^>]*value="-3"', response.text, re.S)
 
 
-def test_another_unit_family_is_a_warning_with_a_one_tap_fix(client, db_path):
+def test_another_unit_family_is_a_warning_with_a_one_tap_fix(client, db_url):
     add(client, "chicken", "500", "ml", "fridge")
-    item = only_item(db_path)
+    item = only_item(db_url)
     response = save(client, item.id, quantity="2", unit="kg", location="freezer")
     assert response.status_code == 409
     assert 'class="warning"' in response.text
     assert "chicken is stored in ml, but you entered kg" in response.text
     assert "Store chicken in kg instead" in response.text
-    assert only_item(db_path).base_unit.value == "ml"  # nothing changed yet
+    assert only_item(db_url).base_unit.value == "ml"  # nothing changed yet
     fix = save(client, item.id, quantity="2", unit="kg", location="freezer", switch_unit="on")
     assert fix.status_code == 303
-    fixed = only_item(db_path)
+    fixed = only_item(db_url)
     assert (fixed.base_unit.value, fixed.quantity, fixed.location) == ("g", 2000, Location.FREEZER)
 
 
@@ -288,12 +283,12 @@ def test_saving_a_missing_item_is_a_404(client):
     assert save(client, 999).status_code == 404
 
 
-def test_the_old_set_quantity_route_still_works(client, db_path):
+def test_the_old_set_quantity_route_still_works(client, db_url):
     add(client, "Flour", "500", "g", "pantry")
-    item = only_item(db_path)
+    item = only_item(db_url)
     response = client.post(f"/items/{item.id}/quantity", data={"quantity": "2", "unit": "kg"})
     assert response.status_code == 303
-    assert only_item(db_path).quantity == 2000
+    assert only_item(db_url).quantity == 2000
 
 
 # --- the confirm prompt is shared ---------------------------------------------------------------

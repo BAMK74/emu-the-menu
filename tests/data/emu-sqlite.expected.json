@@ -1,0 +1,952 @@
+{
+ "export": {
+  "app": "emu-the-menu",
+  "format": 1,
+  "exported_on": "2026-11-10",
+  "household": {
+   "country": "NZ"
+  },
+  "ingredients": [
+   {
+    "name": "basil",
+    "base_unit": "count",
+    "shelf_life": null,
+    "last_entry": {
+     "quantity": 1.0,
+     "unit": "bunch"
+    },
+    "kcal": null,
+    "kcal_basis": "per piece",
+    "food_groups": [],
+    "allergens": [],
+    "reviewed": false
+   },
+   {
+    "name": "butter",
+    "base_unit": "ml",
+    "shelf_life": null,
+    "last_entry": null,
+    "kcal": null,
+    "kcal_basis": "per 100 ml",
+    "food_groups": [],
+    "allergens": [],
+    "reviewed": false
+   },
+   {
+    "name": "chicken thighs",
+    "base_unit": "g",
+    "shelf_life": null,
+    "last_entry": {
+     "quantity": 800.0,
+     "unit": "g"
+    },
+    "kcal": 177.0,
+    "kcal_basis": "per 100 g",
+    "food_groups": [
+     "poultry"
+    ],
+    "allergens": [],
+    "reviewed": true
+   },
+   {
+    "name": "crème fraîche",
+    "base_unit": "ml",
+    "shelf_life": null,
+    "last_entry": {
+     "quantity": 200.0,
+     "unit": "ml"
+    },
+    "kcal": null,
+    "kcal_basis": "per 100 ml",
+    "food_groups": [],
+    "allergens": [],
+    "reviewed": false
+   },
+   {
+    "name": "eggs",
+    "base_unit": "count",
+    "shelf_life": null,
+    "last_entry": {
+     "quantity": 6.0,
+     "unit": "count"
+    },
+    "kcal": 72.0,
+    "kcal_basis": "per piece",
+    "food_groups": [
+     "eggs"
+    ],
+    "allergens": [
+     "eggs"
+    ],
+    "reviewed": true
+   },
+   {
+    "name": "flour",
+    "base_unit": "g",
+    "shelf_life": null,
+    "last_entry": {
+     "quantity": 1.5,
+     "unit": "kg"
+    },
+    "kcal": 364.0,
+    "kcal_basis": "per 100 g",
+    "food_groups": [],
+    "allergens": [
+     "gluten"
+    ],
+    "reviewed": true
+   },
+   {
+    "name": "milk",
+    "base_unit": "ml",
+    "shelf_life": {
+     "amount": 7,
+     "unit": "days"
+    },
+    "last_entry": {
+     "quantity": 500.0,
+     "unit": "ml"
+    },
+    "kcal": 64.0,
+    "kcal_basis": "per 100 ml",
+    "food_groups": [
+     "dairy"
+    ],
+    "allergens": [
+     "milk"
+    ],
+    "reviewed": true
+   },
+   {
+    "name": "olive oil",
+    "base_unit": "ml",
+    "shelf_life": null,
+    "last_entry": {
+     "quantity": 750.0,
+     "unit": "ml"
+    },
+    "kcal": null,
+    "kcal_basis": "per 100 ml",
+    "food_groups": [],
+    "allergens": [],
+    "reviewed": false
+   },
+   {
+    "name": "rice",
+    "base_unit": "g",
+    "shelf_life": null,
+    "last_entry": {
+     "quantity": 2.0,
+     "unit": "kg"
+    },
+    "kcal": 130.0,
+    "kcal_basis": "per 100 g",
+    "food_groups": [],
+    "allergens": [],
+    "reviewed": false
+   },
+   {
+    "name": "vegetable broth",
+    "base_unit": "ml",
+    "shelf_life": null,
+    "last_entry": null,
+    "kcal": null,
+    "kcal_basis": "per 100 ml",
+    "food_groups": [],
+    "allergens": [],
+    "reviewed": false
+   },
+   {
+    "name": "water",
+    "base_unit": "ml",
+    "shelf_life": null,
+    "last_entry": null,
+    "kcal": null,
+    "kcal_basis": "per 100 ml",
+    "food_groups": [],
+    "allergens": [],
+    "reviewed": false
+   }
+  ],
+  "stock_items": [
+   {
+    "ingredient": "basil",
+    "quantity": 1.0,
+    "base_unit": "count",
+    "location": "fridge",
+    "expires_on": "2026-11-11"
+   },
+   {
+    "ingredient": "crème fraîche",
+    "quantity": 200.0,
+    "base_unit": "ml",
+    "location": "fridge",
+    "expires_on": "2026-11-12"
+   },
+   {
+    "ingredient": "milk",
+    "quantity": 2000.0,
+    "base_unit": "ml",
+    "location": "fridge",
+    "expires_on": "2026-11-14"
+   },
+   {
+    "ingredient": "milk",
+    "quantity": 500.0,
+    "base_unit": "ml",
+    "location": "fridge",
+    "expires_on": "2026-11-20"
+   },
+   {
+    "ingredient": "eggs",
+    "quantity": 6.0,
+    "base_unit": "count",
+    "location": "fridge",
+    "expires_on": "2026-11-25"
+   },
+   {
+    "ingredient": "flour",
+    "quantity": 1500.0,
+    "base_unit": "g",
+    "location": "pantry",
+    "expires_on": "2027-03-01"
+   },
+   {
+    "ingredient": "chicken thighs",
+    "quantity": 800.0,
+    "base_unit": "g",
+    "location": "freezer",
+    "expires_on": null
+   },
+   {
+    "ingredient": "rice",
+    "quantity": 2000.0,
+    "base_unit": "g",
+    "location": "pantry",
+    "expires_on": null
+   },
+   {
+    "ingredient": "olive oil",
+    "quantity": 750.0,
+    "base_unit": "ml",
+    "location": "pantry",
+    "expires_on": null
+   }
+  ],
+  "default_calorie_goals": {
+   "man": 2500,
+   "woman": 2000,
+   "teen": 2200,
+   "child": 1500
+  },
+  "eaters": [
+   {
+    "name": "Alex",
+    "category": "man",
+    "calorie_goal": 2700,
+    "calorie_adjustment": 200,
+    "calorie_goal_is_custom": true,
+    "allergens": [],
+    "allergies": [
+     "kiwi"
+    ],
+    "dislikes": [
+     "coriander"
+    ],
+    "diet": "omnivore"
+   },
+   {
+    "name": "Mia",
+    "category": "woman",
+    "calorie_goal": 1900,
+    "calorie_adjustment": -100,
+    "calorie_goal_is_custom": true,
+    "allergens": [
+     "milk",
+     "sesame"
+    ],
+    "allergies": [],
+    "dislikes": [
+     "mushrooms",
+     "olives"
+    ],
+    "diet": "vegetarian"
+   },
+   {
+    "name": "Sam",
+    "category": "child",
+    "calorie_goal": 1500,
+    "calorie_adjustment": 0,
+    "calorie_goal_is_custom": false,
+    "allergens": [],
+    "allergies": [],
+    "dislikes": [],
+    "diet": "low-meat"
+   }
+  ],
+  "recipes": [
+   {
+    "name": "Chicken and Rice",
+    "servings": 4,
+    "meal_types": [
+     "lunch",
+     "dinner"
+    ],
+    "weather": "any",
+    "source_url": "https://example.com/chicken-rice",
+    "tags": [
+     "weeknight",
+     "check-quantities"
+    ],
+    "lines": [
+     {
+      "ingredient": "chicken thighs",
+      "quantity": 600.0,
+      "unit": "g",
+      "alternative_group": null
+     },
+     {
+      "ingredient": "rice",
+      "quantity": 300.0,
+      "unit": "g",
+      "alternative_group": null
+     },
+     {
+      "ingredient": "water",
+      "quantity": 500.0,
+      "unit": "ml",
+      "alternative_group": 1
+     },
+     {
+      "ingredient": "vegetable broth",
+      "quantity": 500.0,
+      "unit": "ml",
+      "alternative_group": 1
+     },
+     {
+      "ingredient": "olive oil",
+      "quantity": 15.0,
+      "unit": "ml",
+      "alternative_group": null
+     }
+    ]
+   },
+   {
+    "name": "Pancakes",
+    "servings": 2,
+    "meal_types": [
+     "breakfast"
+    ],
+    "weather": "cold",
+    "source_url": null,
+    "tags": [
+     "sweet"
+    ],
+    "lines": [
+     {
+      "ingredient": "flour",
+      "quantity": 125.0,
+      "unit": "g",
+      "alternative_group": null
+     },
+     {
+      "ingredient": "milk",
+      "quantity": 300.0,
+      "unit": "ml",
+      "alternative_group": null
+     },
+     {
+      "ingredient": "eggs",
+      "quantity": 1.0,
+      "unit": "count",
+      "alternative_group": null
+     }
+    ]
+   }
+  ],
+  "occasions": [
+   {
+    "name": "Mia's birthday",
+    "date": "2026-11-13",
+    "headcount": 8,
+    "extra_calories_percent": 20,
+    "tags": [
+     "party",
+     "cake"
+    ],
+    "source": "manual"
+   },
+   {
+    "name": "Quiet Sunday",
+    "date": "2026-11-15",
+    "headcount": null,
+    "extra_calories_percent": 0,
+    "tags": [],
+    "source": "manual"
+   },
+   {
+    "name": "Christmas Day",
+    "date": "2026-12-25",
+    "headcount": null,
+    "extra_calories_percent": 0,
+    "tags": [],
+    "source": "holiday"
+   },
+   {
+    "name": "Boxing Day",
+    "date": "2026-12-26",
+    "headcount": null,
+    "extra_calories_percent": 0,
+    "tags": [],
+    "source": "holiday"
+   }
+  ]
+ },
+ "menus": [
+  {
+   "id": 3,
+   "name": "Draft",
+   "start": "2026-11-24",
+   "days": 1,
+   "meals": [],
+   "accepted_on": null,
+   "accepted_order": null
+  },
+  {
+   "id": 2,
+   "name": "Menu from 17 Nov 2026",
+   "start": "2026-11-17",
+   "days": 2,
+   "meals": [
+    {
+     "id": 6,
+     "day": "2026-11-17",
+     "slot": "lunch",
+     "recipe_id": null,
+     "reason": "The recipe was deleted",
+     "portions": [
+      {
+       "eater_id": 1,
+       "servings": 0.5
+      },
+      {
+       "eater_id": 2,
+       "servings": 0.5
+      },
+      {
+       "eater_id": 3,
+       "servings": 0.5
+      }
+     ],
+     "cooked_on": null,
+     "short": "",
+     "guests": 0,
+     "guest_servings": 0.0
+    }
+   ],
+   "accepted_on": "2026-11-10",
+   "accepted_order": 2
+  },
+  {
+   "id": 1,
+   "name": "This week",
+   "start": "2026-11-10",
+   "days": 3,
+   "meals": [
+    {
+     "id": 1,
+     "day": "2026-11-10",
+     "slot": "breakfast",
+     "recipe_id": 2,
+     "reason": "",
+     "portions": [
+      {
+       "eater_id": 1,
+       "servings": 1.0
+      },
+      {
+       "eater_id": 2,
+       "servings": 1.0
+      },
+      {
+       "eater_id": 3,
+       "servings": 1.0
+      }
+     ],
+     "cooked_on": "2026-11-10",
+     "short": "eggs",
+     "guests": 0,
+     "guest_servings": 0.0
+    },
+    {
+     "id": 2,
+     "day": "2026-11-10",
+     "slot": "dinner",
+     "recipe_id": 1,
+     "reason": "",
+     "portions": [
+      {
+       "eater_id": 1,
+       "servings": 1.5
+      },
+      {
+       "eater_id": 2,
+       "servings": 1.5
+      },
+      {
+       "eater_id": 3,
+       "servings": 1.5
+      }
+     ],
+     "cooked_on": null,
+     "short": "",
+     "guests": 3,
+     "guest_servings": 3.0
+    },
+    {
+     "id": 3,
+     "day": "2026-11-11",
+     "slot": "breakfast",
+     "recipe_id": null,
+     "reason": "Nothing suits everyone",
+     "portions": [
+      {
+       "eater_id": 1,
+       "servings": 0.0
+      },
+      {
+       "eater_id": 2,
+       "servings": 0.0
+      },
+      {
+       "eater_id": 3,
+       "servings": 0.0
+      }
+     ],
+     "cooked_on": null,
+     "short": "",
+     "guests": 0,
+     "guest_servings": 0.0
+    },
+    {
+     "id": 4,
+     "day": "2026-11-11",
+     "slot": "lunch",
+     "recipe_id": null,
+     "reason": "The recipe was deleted",
+     "portions": [
+      {
+       "eater_id": 1,
+       "servings": 1.0
+      },
+      {
+       "eater_id": 2,
+       "servings": 1.0
+      },
+      {
+       "eater_id": 3,
+       "servings": 1.0
+      }
+     ],
+     "cooked_on": null,
+     "short": "",
+     "guests": 0,
+     "guest_servings": 0.0
+    },
+    {
+     "id": 5,
+     "day": "2026-11-12",
+     "slot": "dinner",
+     "recipe_id": 1,
+     "reason": "",
+     "portions": [
+      {
+       "eater_id": 1,
+       "servings": 1.0
+      },
+      {
+       "eater_id": 2,
+       "servings": 1.0
+      },
+      {
+       "eater_id": 3,
+       "servings": 1.0
+      }
+     ],
+     "cooked_on": null,
+     "short": "",
+     "guests": 0,
+     "guest_servings": 0.0
+    }
+   ],
+   "accepted_on": "2026-11-09",
+   "accepted_order": 1
+  }
+ ],
+ "last_served": {
+  "2": "2026-11-10"
+ },
+ "taken": [
+  [],
+  [
+   {
+    "ingredient": "flour",
+    "quantity": 125.0,
+    "unit": "g",
+    "location": "pantry",
+    "expires_on": "2027-03-01"
+   },
+   {
+    "ingredient": "milk",
+    "quantity": 300.0,
+    "unit": "ml",
+    "location": "fridge",
+    "expires_on": "2026-11-14"
+   },
+   {
+    "ingredient": "eggs",
+    "quantity": 1.0,
+    "unit": "count",
+    "location": "fridge",
+    "expires_on": null
+   }
+  ],
+  [],
+  [],
+  [],
+  []
+ ],
+ "stock": [
+  {
+   "ingredient": "basil",
+   "quantity": 1.0,
+   "base_unit": "count",
+   "location": "fridge",
+   "expires_on": "2026-11-11",
+   "id": 9
+  },
+  {
+   "ingredient": "crème fraîche",
+   "quantity": 200.0,
+   "base_unit": "ml",
+   "location": "fridge",
+   "expires_on": "2026-11-12",
+   "id": 6
+  },
+  {
+   "ingredient": "milk",
+   "quantity": 2000.0,
+   "base_unit": "ml",
+   "location": "fridge",
+   "expires_on": "2026-11-14",
+   "id": 2
+  },
+  {
+   "ingredient": "milk",
+   "quantity": 500.0,
+   "base_unit": "ml",
+   "location": "fridge",
+   "expires_on": "2026-11-20",
+   "id": 3
+  },
+  {
+   "ingredient": "eggs",
+   "quantity": 6.0,
+   "base_unit": "count",
+   "location": "fridge",
+   "expires_on": "2026-11-25",
+   "id": 4
+  },
+  {
+   "ingredient": "flour",
+   "quantity": 1500.0,
+   "base_unit": "g",
+   "location": "pantry",
+   "expires_on": "2027-03-01",
+   "id": 1
+  },
+  {
+   "ingredient": "chicken thighs",
+   "quantity": 800.0,
+   "base_unit": "g",
+   "location": "freezer",
+   "expires_on": null,
+   "id": 5
+  },
+  {
+   "ingredient": "rice",
+   "quantity": 2000.0,
+   "base_unit": "g",
+   "location": "pantry",
+   "expires_on": null,
+   "id": 7
+  },
+  {
+   "ingredient": "olive oil",
+   "quantity": 750.0,
+   "base_unit": "ml",
+   "location": "pantry",
+   "expires_on": null,
+   "id": 8
+  }
+ ],
+ "ingredients": [
+  {
+   "name": "basil",
+   "base_unit": "count",
+   "shelf_life": null,
+   "last_entry": {
+    "quantity": 1.0,
+    "unit": "bunch"
+   },
+   "id": 8,
+   "kcal": null,
+   "food_groups": [],
+   "allergens": [],
+   "reviewed": false
+  },
+  {
+   "name": "butter",
+   "base_unit": "ml",
+   "shelf_life": null,
+   "last_entry": null,
+   "id": 11,
+   "kcal": null,
+   "food_groups": [],
+   "allergens": [],
+   "reviewed": false
+  },
+  {
+   "name": "chicken thighs",
+   "base_unit": "g",
+   "shelf_life": null,
+   "last_entry": {
+    "quantity": 800.0,
+    "unit": "g"
+   },
+   "id": 4,
+   "kcal": 177.0,
+   "food_groups": [
+    "poultry"
+   ],
+   "allergens": [],
+   "reviewed": true
+  },
+  {
+   "name": "crème fraîche",
+   "base_unit": "ml",
+   "shelf_life": null,
+   "last_entry": {
+    "quantity": 200.0,
+    "unit": "ml"
+   },
+   "id": 5,
+   "kcal": null,
+   "food_groups": [],
+   "allergens": [],
+   "reviewed": false
+  },
+  {
+   "name": "eggs",
+   "base_unit": "count",
+   "shelf_life": null,
+   "last_entry": {
+    "quantity": 6.0,
+    "unit": "count"
+   },
+   "id": 3,
+   "kcal": 72.0,
+   "food_groups": [
+    "eggs"
+   ],
+   "allergens": [
+    "eggs"
+   ],
+   "reviewed": true
+  },
+  {
+   "name": "flour",
+   "base_unit": "g",
+   "shelf_life": null,
+   "last_entry": {
+    "quantity": 1.5,
+    "unit": "kg"
+   },
+   "id": 1,
+   "kcal": 364.0,
+   "food_groups": [],
+   "allergens": [
+    "gluten"
+   ],
+   "reviewed": true
+  },
+  {
+   "name": "milk",
+   "base_unit": "ml",
+   "shelf_life": {
+    "amount": 7,
+    "unit": "days"
+   },
+   "last_entry": {
+    "quantity": 500.0,
+    "unit": "ml"
+   },
+   "id": 2,
+   "kcal": 64.0,
+   "food_groups": [
+    "dairy"
+   ],
+   "allergens": [
+    "milk"
+   ],
+   "reviewed": true
+  },
+  {
+   "name": "olive oil",
+   "base_unit": "ml",
+   "shelf_life": null,
+   "last_entry": {
+    "quantity": 750.0,
+    "unit": "ml"
+   },
+   "id": 7,
+   "kcal": null,
+   "food_groups": [],
+   "allergens": [],
+   "reviewed": false
+  },
+  {
+   "name": "rice",
+   "base_unit": "g",
+   "shelf_life": null,
+   "last_entry": {
+    "quantity": 2.0,
+    "unit": "kg"
+   },
+   "id": 6,
+   "kcal": 130.0,
+   "food_groups": [],
+   "allergens": [],
+   "reviewed": false
+  },
+  {
+   "name": "vegetable broth",
+   "base_unit": "ml",
+   "shelf_life": null,
+   "last_entry": null,
+   "id": 10,
+   "kcal": null,
+   "food_groups": [],
+   "allergens": [],
+   "reviewed": false
+  },
+  {
+   "name": "water",
+   "base_unit": "ml",
+   "shelf_life": null,
+   "last_entry": null,
+   "id": 9,
+   "kcal": null,
+   "food_groups": [],
+   "allergens": [],
+   "reviewed": false
+  }
+ ],
+ "look": {
+  "season": "autumn",
+  "festive": false
+ },
+ "disclaimer": [
+  "2026-10-27",
+  "2026-10-28"
+ ],
+ "products": [
+  {
+   "barcode": "3274080005003",
+   "name": "Penne",
+   "quantity": 500.0,
+   "unit": "g",
+   "kcal_per_100": 357.0
+  },
+  {
+   "barcode": "5000000000001",
+   "name": null,
+   "quantity": null,
+   "unit": null,
+   "kcal_per_100": null
+  }
+ ],
+ "place": {
+  "name": "Wellington",
+  "region": "Wellington",
+  "country_code": "NZ",
+  "latitude": -41.2866,
+  "longitude": 174.7756
+ },
+ "unit": "F",
+ "limits": {
+  "warm_from": 21.5,
+  "cold_up_to": 9.0
+ },
+ "weather_days": [
+  {
+   "day": "2026-11-10",
+   "high": 18.5,
+   "low": 9.25,
+   "kind": null
+  },
+  {
+   "day": "2026-11-11",
+   "high": 22.0,
+   "low": 12.0,
+   "kind": "warm"
+  },
+  {
+   "day": "2026-11-12",
+   "high": 8.5,
+   "low": 3.0,
+   "kind": "cold"
+  }
+ ],
+ "occasions": [
+  {
+   "name": "Mia's birthday",
+   "day": "2026-11-13",
+   "headcount": 8,
+   "extra_percent": 20,
+   "tags": [
+    "party",
+    "cake"
+   ],
+   "source": "manual",
+   "id": 1
+  },
+  {
+   "name": "Quiet Sunday",
+   "day": "2026-11-15",
+   "headcount": null,
+   "extra_percent": 0,
+   "tags": [],
+   "source": "manual",
+   "id": 2
+  },
+  {
+   "name": "Christmas Day",
+   "day": "2026-12-25",
+   "headcount": null,
+   "extra_percent": 0,
+   "tags": [],
+   "source": "holiday",
+   "id": 3
+  },
+  {
+   "name": "Boxing Day",
+   "day": "2026-12-26",
+   "headcount": null,
+   "extra_percent": 0,
+   "tags": [],
+   "source": "holiday",
+   "id": 4
+  }
+ ]
+}

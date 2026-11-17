@@ -1,13 +1,12 @@
-"""The Household's town and the weather last fetched for it, in the same SQLite file.
+"""The Household's town and the weather last fetched for it, in the same database.
 
 The forecast is kept so Menus can be planned offline and so the weather service is asked at most
 once every few hours. If a refresh fails, the last forecast is used for the days it still covers.
 """
 
-import sqlite3
 from datetime import UTC, date, datetime, timedelta
-from pathlib import Path
 
+from emu_the_menu.db import Database, attach
 from emu_the_menu.recipes import Weather
 from emu_the_menu.weather import (
     DEFAULT_UNIT,
@@ -24,23 +23,10 @@ from emu_the_menu.weather import (
 
 REFRESH_AFTER = timedelta(hours=6)
 
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS settings (
-    key   TEXT PRIMARY KEY,
-    value TEXT NOT NULL
-);
-CREATE TABLE IF NOT EXISTS weather_days (
-    day  TEXT PRIMARY KEY,
-    high REAL NOT NULL,
-    low  REAL NOT NULL
-);
-"""
-
 
 class WeatherRepository:
-    def __init__(self, path: str | Path):
-        self._db = sqlite3.connect(path)
-        self._db.executescript(_SCHEMA)
+    def __init__(self, database: str | Database | None = None):
+        self._db, self._owned = attach(database)
 
     def __enter__(self) -> "WeatherRepository":
         return self
@@ -49,10 +35,11 @@ class WeatherRepository:
         self.close()
 
     def close(self) -> None:
-        self._db.close()
+        if self._owned:
+            self._db.close()
 
     def _setting(self, key: str) -> str | None:
-        row = self._db.execute("SELECT value FROM settings WHERE key = ?", (key,)).fetchone()
+        row = self._db.execute("SELECT value FROM settings WHERE key = %s", (key,)).fetchone()
         return row[0] if row else None
 
     def place(self) -> Place | None:
@@ -75,13 +62,13 @@ class WeatherRepository:
     def set_place(self, place: Place | None) -> None:
         """Save the town (forgetting the old forecast), or clear it with None."""
         keys = ("place_name", "place_region", "place_country", "place_lat", "place_lon")
-        with self._db:
+        with self._db.transaction():
             self._db.execute("DELETE FROM weather_days")
             self._db.execute("DELETE FROM settings WHERE key = 'weather_fetched'")
-            self._db.executemany("DELETE FROM settings WHERE key = ?", [(k,) for k in keys])
+            self._db.executemany("DELETE FROM settings WHERE key = %s", [(k,) for k in keys])
             if place is not None:
                 self._db.executemany(
-                    "INSERT INTO settings (key, value) VALUES (?, ?)",
+                    "INSERT INTO settings (key, value) VALUES (%s, %s)",
                     [
                         ("place_name", place.name),
                         ("place_region", place.region),
@@ -112,18 +99,18 @@ class WeatherRepository:
     def set_unit(self, unit: str) -> None:
         if unit not in UNITS:
             raise ValueError("Choose Celsius or Fahrenheit")
-        with self._db:
+        with self._db.transaction():
             self._db.execute(
-                "INSERT INTO settings (key, value) VALUES ('temperature_unit', ?)"
+                "INSERT INTO settings (key, value) VALUES ('temperature_unit', %s)"
                 " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 (unit,),
             )
 
     def set_limits(self, limits: Limits) -> None:
-        with self._db:
+        with self._db.transaction():
             for key, value in (("warm_from", limits.warm_from), ("cold_up_to", limits.cold_up_to)):
                 self._db.execute(
-                    "INSERT INTO settings (key, value) VALUES (?, ?)"
+                    "INSERT INTO settings (key, value) VALUES (%s, %s)"
                     " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                     (key, repr(value)),
                 )
@@ -132,13 +119,10 @@ class WeatherRepository:
         """The stored forecast from `today` on, each day marked warm or cold by the limits."""
         limits = self.limits()
         rows = self._db.execute(
-            "SELECT day, high, low FROM weather_days WHERE day >= ? ORDER BY day",
-            (today.isoformat(),),
+            "SELECT day, high, low FROM weather_days WHERE day >= %s ORDER BY day",
+            (today,),
         )
-        return [
-            DayWeather(date.fromisoformat(d), high, low, classify(high, limits))
-            for d, high, low in rows
-        ]
+        return [DayWeather(d, high, low, classify(high, limits)) for d, high, low in rows]
 
     def refresh(
         self, get: GetJson = http_get_json, now: datetime | None = None, force: bool = False
@@ -162,14 +146,14 @@ class WeatherRepository:
             days = fetch_forecast(place, get)
         except WeatherUnavailableError:
             return False
-        with self._db:
+        with self._db.transaction():
             self._db.execute("DELETE FROM weather_days")
             self._db.executemany(
-                "INSERT INTO weather_days (day, high, low) VALUES (?, ?, ?)",
-                [(d.day.isoformat(), d.high, d.low) for d in days],
+                "INSERT INTO weather_days (day, high, low) VALUES (%s, %s, %s)",
+                [(d.day, d.high, d.low) for d in days],
             )
             self._db.execute(
-                "INSERT INTO settings (key, value) VALUES ('weather_fetched', ?)"
+                "INSERT INTO settings (key, value) VALUES ('weather_fetched', %s)"
                 " ON CONFLICT(key) DO UPDATE SET value = excluded.value",
                 (now.isoformat(),),
             )
@@ -177,10 +161,10 @@ class WeatherRepository:
 
 
 def weather_for(
-    db_path: str | Path, today: date, get: GetJson = http_get_json
+    database: str | Database | None, today: date, get: GetJson = http_get_json
 ) -> dict[date, DayWeather]:
     """The forecast by day, refreshed first if it is old. Empty with no town or no data."""
-    with WeatherRepository(db_path) as repo:
+    with WeatherRepository(database) as repo:
         if repo.place() is None:
             return {}
         repo.refresh(get)

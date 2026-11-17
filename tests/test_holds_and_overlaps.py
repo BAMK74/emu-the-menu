@@ -20,46 +20,41 @@ TODAY = date(2026, 11, 2)
 
 
 @pytest.fixture
-def db_path(tmp_path):
-    return tmp_path / "emu.db"
-
-
-@pytest.fixture
-def client(db_path):
-    app = create_app(db_path, today=lambda: TODAY, fetch_product=lambda code: {"status": 0})
+def client(db_url):
+    app = create_app(db_url, today=lambda: TODAY, fetch_product=lambda code: {"status": 0})
     return TestClient(app, follow_redirects=False)
 
 
 @pytest.fixture
-def world(db_path):
+def world(db_url):
     """One eater, a recipe of 200 g carrots for 2 servings, and 1 kg of carrots in stock."""
-    with EaterRepository(db_path) as eaters:
+    with EaterRepository(db_url) as eaters:
         sam = eaters.add("Sam", Category.MAN)
-    with RecipeRepository(db_path) as recipes:
+    with RecipeRepository(db_url) as recipes:
         recipe = recipes.get(
             recipes.add(
                 "Carrot soup", 2, (MealType.DINNER,), Weather.ANY, (), [("carrots", 200, "g")]
             )
         )
-    with StockRepository(db_path) as stock:
+    with StockRepository(db_url) as stock:
         stock.add("carrots", 1000, "g", Location.PANTRY)
         carrots = stock.ingredients()[0]
         stock.set_ingredient_details(carrots.id, 40, (), ())
     return sam, recipe
 
 
-def save(db_path, world, name, start=TODAY, days=1, servings=2.0):
+def save(db_url, world, name, start=TODAY, days=1, servings=2.0):
     sam, recipe = world
     meals = tuple(
         Meal(start + timedelta(days=d), Slot.DINNER, recipe, (Portion(sam, servings, None),))
         for d in range(days)
     )
-    with MenuRepository(db_path) as menus:
+    with MenuRepository(db_url) as menus:
         return menus.save(name, start, days, Menu(meals, ()))
 
 
-def accept(db_path, menu_id):
-    with MenuRepository(db_path) as menus:
+def accept(db_url, menu_id):
+    with MenuRepository(db_url) as menus:
         menus.accept(menu_id, TODAY)
 
 
@@ -78,39 +73,39 @@ def test_nothing_is_said_when_nothing_is_held(client, world):
     assert "Stock is being held" not in client.get(QUERY).text
 
 
-def test_the_menu_page_says_what_accepted_menus_hold(client, db_path, world):
-    accept(db_path, save(db_path, world, "Week one", days=2))  # 2 meals x 200 g
+def test_the_menu_page_says_what_accepted_menus_hold(client, db_url, world):
+    accept(db_url, save(db_url, world, "Week one", days=2))  # 2 meals x 200 g
     text = text_of(client.get(QUERY).text)
     assert "Stock is being held" in text and "An accepted menu is holding stock" in text
     assert "Week one" in text and "carrots 400 g" in text
 
 
-def test_a_menu_that_is_only_saved_holds_nothing(client, db_path, world):
-    save(db_path, world, "Draft")
+def test_a_menu_that_is_only_saved_holds_nothing(client, db_url, world):
+    save(db_url, world, "Draft")
     assert "Stock is being held" not in client.get(QUERY).text
 
 
-def test_un_accepting_lets_go_of_the_note(client, db_path, world):
-    menu_id = save(db_path, world, "Week one")
-    accept(db_path, menu_id)
+def test_un_accepting_lets_go_of_the_note(client, db_url, world):
+    menu_id = save(db_url, world, "Week one")
+    accept(db_url, menu_id)
     client.post(f"/menus/{menu_id}/unaccept")
     assert "Stock is being held" not in client.get(QUERY).text
 
 
-def test_several_menus_are_listed_in_turn_with_their_own_amounts(client, db_path, world):
-    accept(db_path, save(db_path, world, "First", days=1))
-    accept(db_path, save(db_path, world, "Second", start=TODAY + timedelta(days=5), days=2))
+def test_several_menus_are_listed_in_turn_with_their_own_amounts(client, db_url, world):
+    accept(db_url, save(db_url, world, "First", days=1))
+    accept(db_url, save(db_url, world, "Second", start=TODAY + timedelta(days=5), days=2))
     text = text_of(client.get(QUERY).text)
     assert "Accepted menus are holding stock" in text
     assert "First (Mon 2 Nov, 1 day): carrots 200 g" in text
     assert "Second (Sat 7 Nov, 2 days): carrots 400 g" in text
 
 
-def test_a_saved_menu_page_names_the_stock_held_by_menus_before_it(client, db_path, world):
-    first = save(db_path, world, "First")
-    second = save(db_path, world, "Second")
-    accept(db_path, first)
-    accept(db_path, second)
+def test_a_saved_menu_page_names_the_stock_held_by_menus_before_it(client, db_url, world):
+    first = save(db_url, world, "First")
+    second = save(db_url, world, "Second")
+    accept(db_url, first)
+    accept(db_url, second)
     assert "Stock is being held" not in client.get(f"/menus/{first}").text
     text = text_of(client.get(f"/menus/{second}").text)
     assert (
@@ -118,18 +113,18 @@ def test_a_saved_menu_page_names_the_stock_held_by_menus_before_it(client, db_pa
     )
 
 
-def test_a_cooked_meal_no_longer_holds_stock(db_path, world):
-    menu_id = save(db_path, world, "Week one")
-    accept(db_path, menu_id)
-    with MenuRepository(db_path) as menus:
+def test_a_cooked_meal_no_longer_holds_stock(db_url, world):
+    menu_id = save(db_url, world, "Week one")
+    accept(db_url, menu_id)
+    with MenuRepository(db_url) as menus:
         meal = menus.get(menu_id).meals[0]
         menus.set_cooked(menu_id, meal.id, TODAY)
-    assert holdings(db_path, TODAY) == []
+    assert holdings(db_url, TODAY) == []
 
 
-def test_holdings_name_each_ingredient_once_per_menu(db_path, world):
-    accept(db_path, save(db_path, world, "Week one", days=3))
-    [(menu, items)] = holdings(db_path, TODAY)
+def test_holdings_name_each_ingredient_once_per_menu(db_url, world):
+    accept(db_url, save(db_url, world, "Week one", days=3))
+    [(menu, items)] = holdings(db_url, TODAY)
     assert menu.name == "Week one" and [(i.name, q) for i, q in items] == [("carrots", 600)]
 
 
@@ -158,27 +153,27 @@ def test_overlapping_ignores_menus_that_are_over():
     assert overlapping(live, [live, menu(4, date(2026, 11, 3), 2)], TODAY) != []
 
 
-def test_the_saved_page_warns_when_two_accepted_menus_overlap(client, db_path, world):
-    first = save(db_path, world, "Week one", days=3)
-    second = save(db_path, world, "Midweek", start=TODAY + timedelta(days=1), days=2)
-    accept(db_path, first)
+def test_the_saved_page_warns_when_two_accepted_menus_overlap(client, db_url, world):
+    first = save(db_url, world, "Week one", days=3)
+    second = save(db_url, world, "Midweek", start=TODAY + timedelta(days=1), days=2)
+    accept(db_url, first)
     assert "Overlapping menus" not in client.get(f"/menus/{first}").text
-    accept(db_path, second)
+    accept(db_url, second)
     for this, other in ((first, "Midweek"), (second, "Week one")):
         text = text_of(client.get(f"/menus/{this}").text)
         assert "Overlapping menus" in text and other in text and "Un-accept one" in text
 
 
-def test_a_menu_that_is_not_accepted_gets_no_overlap_warning(client, db_path, world):
-    first = save(db_path, world, "Week one", days=3)
-    second = save(db_path, world, "Draft", days=3)
-    accept(db_path, first)
+def test_a_menu_that_is_not_accepted_gets_no_overlap_warning(client, db_url, world):
+    first = save(db_url, world, "Week one", days=3)
+    second = save(db_url, world, "Draft", days=3)
+    accept(db_url, first)
     assert "Overlapping menus" not in client.get(f"/menus/{second}").text
 
 
-def test_the_list_flags_overlaps_and_accepting_through_the_page_shows_them(client, db_path, world):
-    first = save(db_path, world, "Week one", days=3)
-    second = save(db_path, world, "Midweek", start=TODAY + timedelta(days=1), days=2)
+def test_the_list_flags_overlaps_and_accepting_through_the_page_shows_them(client, db_url, world):
+    first = save(db_url, world, "Week one", days=3)
+    second = save(db_url, world, "Midweek", start=TODAY + timedelta(days=1), days=2)
     client.post(f"/menus/{first}/accept")
     response = client.post(f"/menus/{second}/accept")
     assert response.status_code == 303
