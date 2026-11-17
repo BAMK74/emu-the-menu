@@ -23,7 +23,7 @@
   </p>
 
   {% if plain %}
-  <form class="add review-plain" method="post" action="/ingredients/review">
+  <form class="add review-plain" method="post" action="/ingredients/review">{{ csrf_field() }}
     <input type="hidden" name="show" value="{{ show }}">
     <input type="hidden" name="recipe" value="{{ recipe.id if recipe else "" }}">
     <h2>Plain-looking ({{ plain|length }})</h2>
@@ -36,7 +36,7 @@
   {% endif %}
 
   {% for g in groups %}
-  <form class="add review-group" method="post" action="/ingredients/review">
+  <form class="add review-group" method="post" action="/ingredients/review">{{ csrf_field() }}
     <input type="hidden" name="show" value="{{ show }}">
     <input type="hidden" name="recipe" value="{{ recipe.id if recipe else "" }}">
     {% for v in g.food_groups %}<input type="hidden" name="grp_fg" value="{{ v }}">{% endfor %}
@@ -51,7 +51,7 @@
   {% endfor %}
 
   {% if rows %}
-  <form class="add review-rows" method="post" action="/ingredients/review">
+  <form class="add review-rows" method="post" action="/ingredients/review">{{ csrf_field() }}
     <input type="hidden" name="show" value="{{ show }}">
     <input type="hidden" name="page" value="{{ page }}">
     <input type="hidden" name="recipe" value="{{ recipe.id if recipe else "" }}">

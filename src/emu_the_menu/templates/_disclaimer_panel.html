@@ -40,7 +40,7 @@
     {% if acceptance %}
       <p class="notice" role="status">This disclaimer has changed since you last accepted it (version {{ acceptance[0] }}, on {{ acceptance[1].isoformat() }}). Please read it again.</p>
     {% endif %}
-    <form class="add" method="post" action="/disclaimer/accept"{% if popup %} data-disclaimer-form{% endif %}>
+    <form class="add" method="post" action="/disclaimer/accept"{% if popup %} data-disclaimer-form{% endif %}>{{ csrf_field() }}
       {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
       {% if popup %}<input type="hidden" name="popup" value="1">{% endif %}
       <label class="check">

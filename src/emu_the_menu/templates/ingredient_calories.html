@@ -15,7 +15,7 @@
   </div>
   <p class="summary"><span class="chip chip-soon">{{ total }} without calories</span><a class="chip" href="/ingredients">Back to the ingredients</a></p>
 
-  <form class="add calorie-bulk" method="post" action="/ingredients/calories">
+  <form class="add calorie-bulk" method="post" action="/ingredients/calories">{{ csrf_field() }}
     <input type="hidden" name="recipe" value="{{ recipe.id if recipe else "" }}">
     <input type="hidden" name="page" value="{{ page }}">
     <ul class="calorie-list">

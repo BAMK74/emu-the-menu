@@ -6,22 +6,22 @@
       <div class="meal">
         {{ icon(slot_icon(meal.slot)) }}
         <p class="meal-type">{{ meal.slot.label }}{% if change_base and not meal.cooked_on %} <a class="meal-change" href="{{ change_base }}/{{ meal.id }}">Change</a>{% endif %}</p>
-        {% if change_base and not meal.cooked_on %}<form class="reshuffle" method="post" action="{{ change_base }}/{{ meal.id }}/reshuffle"><button class="quiet" type="submit">Pick another</button></form>{% endif %}
+        {% if change_base and not meal.cooked_on %}<form class="reshuffle" method="post" action="{{ change_base }}/{{ meal.id }}/reshuffle">{{ csrf_field() }}<button class="quiet" type="submit">Pick another</button></form>{% endif %}
         {% if meal.recipe %}
         <p class="meal-recipe"><a href="/recipes/{{ meal.recipe.id }}">{{ meal.recipe.name }}</a></p>
         <div class="portions">
           {% for p in meal.portions %}<span class="portion"><strong>{{ p.eater.name }}</strong> {{ "%g"|format(p.servings) }} serving{{ "" if p.servings == 1 else "s" }} {% if p.kcal is not none %}{{ "%d"|format(p.kcal|round) }} kcal{% else %}calories unknown{% endif %}</span>{% endfor %}
         </div>
         {% if meal.guests %}<p class="hint">Includes {{ meal.guests }} guest{{ "" if meal.guests == 1 else "s" }} ({{ "%g"|format(meal.guest_servings) }} serving{{ "" if meal.guest_servings == 1 else "s" }}). Guests' allergies and diets are not known: ask them before you cook.</p>{% endif %}
-        {% if change_base and not meal.cooked_on %}<form class="guests" method="post" action="{{ change_base }}/{{ meal.id }}/guests"><label>Guests <input type="number" name="guests" value="{{ meal.guests }}" min="0" max="200" inputmode="numeric" required></label> <button class="quiet" type="submit">Save</button>{% if meal.guests %} <button class="quiet" type="submit" name="remove" value="1" formnovalidate>Remove guest{{ "" if meal.guests == 1 else "s" }}</button>{% endif %}</form>{% endif %}
+        {% if change_base and not meal.cooked_on %}<form class="guests" method="post" action="{{ change_base }}/{{ meal.id }}/guests">{{ csrf_field() }}<label>Guests <input type="number" name="guests" value="{{ meal.guests }}" min="0" max="200" inputmode="numeric" required></label> <button class="quiet" type="submit">Save</button>{% if meal.guests %} <button class="quiet" type="submit" name="remove" value="1" formnovalidate>Remove guest{{ "" if meal.guests == 1 else "s" }}</button>{% endif %}</form>{% endif %}
         <p class="hint">Cook {{ "%g"|format(meal.total_servings) }} servings ({{ "%g"|format(meal.scale|round(2)) }}× the recipe).</p>
         {% if change_base %}
         {% if meal.cooked_on %}
-        <form class="cooked" method="post" action="{{ change_base }}/{{ meal.id }}/not-cooked" data-confirm="Mark this meal as not cooked? This puts the ingredients back in Stock."><span class="chip">Cooked {{ label(meal.cooked_on) }}</span> <button class="quiet" type="submit">Not cooked</button></form>
+        <form class="cooked" method="post" action="{{ change_base }}/{{ meal.id }}/not-cooked" data-confirm="Mark this meal as not cooked? This puts the ingredients back in Stock.">{{ csrf_field() }}<span class="chip">Cooked {{ label(meal.cooked_on) }}</span> <button class="quiet" type="submit">Not cooked</button></form>
         {% if meal.short %}<p class="hint">Short in stock: {{ meal.short }}. Stock was used up as far as it went.</p>{% endif %}
         <p class="hint">Cooking took its ingredients out of Stock. Marking it not cooked puts the ingredients back in Stock where they came from.</p>
         {% else %}
-        <form class="cooked" method="post" action="{{ change_base }}/{{ meal.id }}/cooked"><button class="quiet" type="submit">Mark cooked</button></form>
+        <form class="cooked" method="post" action="{{ change_base }}/{{ meal.id }}/cooked">{{ csrf_field() }}<button class="quiet" type="submit">Mark cooked</button></form>
         {% endif %}
         {% endif %}
         {% if unchecked %}<p class="hint">Not checked: {{ unchecked|join(", ") }}. Allergens and food groups are unknown until <a href="/ingredients/review?recipe={{ meal.recipe.id }}">you check the {{ unchecked|length }} ingredient{{ "" if unchecked|length == 1 else "s" }}</a>.</p>{% endif %}

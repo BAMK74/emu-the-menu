@@ -6,7 +6,7 @@
   {% if error %}<p class="error" role="alert">error: {{ error }}</p>{% endif %}
 
   {% if not recipe %}
-  <form class="add import" method="post" action="/recipes/import">
+  <form class="add import" method="post" action="/recipes/import">{{ csrf_field() }}
     <label>Import from a web address
       <input name="url" type="url" inputmode="url" autocomplete="off" placeholder="https://..." value="{{ import_url }}">
       <small>Paste the address of a recipe page. Emu the Menu reads the name, servings and ingredients, and fills in the form below for you to check. It does not copy the method.</small>
@@ -42,7 +42,7 @@
   </div>
   {% endif %}
 
-  <form class="add" method="post" action="{{ "/recipes/%d"|format(recipe.id) if recipe else "/recipes" }}">
+  <form class="add" method="post" action="{{ "/recipes/%d"|format(recipe.id) if recipe else "/recipes" }}">{{ csrf_field() }}
     <input type="hidden" name="source_url" value="{{ form.source_url }}">
     <label>Name
       <input name="name" value="{{ form.name }}" maxlength="80" autocomplete="off" required>
@@ -95,7 +95,7 @@
   </form>
 
   {% if recipe %}
-  <form class="add danger-zone" method="post" action="/recipes/{{ recipe.id }}/delete" data-confirm="Delete this recipe? Its ingredients stay.">
+  <form class="add danger-zone" method="post" action="/recipes/{{ recipe.id }}/delete" data-confirm="Delete this recipe? Its ingredients stay.">{{ csrf_field() }}
     <button class="quiet" type="submit">Delete recipe</button>
   </form>
   {% endif %}

@@ -8,8 +8,9 @@ Stock as they are now.
 import random
 from datetime import date
 
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from starlette.datastructures import FormData
 
 from emu_the_menu.cooking import Pantry, shopping_amounts, uses_for
 from emu_the_menu.eaters import EaterRepository
@@ -25,6 +26,7 @@ from emu_the_menu.planner import (
     plan,
     portions_for,
 )
+from emu_the_menu.posted import posted_form
 from emu_the_menu.recipe_repository import RecipeRepository
 from emu_the_menu.recipes import analyse
 from emu_the_menu.repository import StockRepository
@@ -161,10 +163,8 @@ def create_router(database: str, today=date.today, get_json=http_get_json) -> AP
         )
 
     @router.post("/menus/{menu_id}/meals/{meal_id}")
-    async def swap(request: Request, menu_id: int, meal_id: int):
-        form = await request.form()
+    def swap(request: Request, menu_id: int, meal_id: int, form: FormData = Depends(posted_form)):
         wanted = str(form.get("recipe", ""))
-        # Opened here, not injected: a connection must stay in the thread that made it.
         with MenuRepository(database) as repo:
             saved, meal = find_meal(repo, menu_id, meal_id)
             with EaterRepository(database) as eaters, RecipeRepository(database) as recipes:
@@ -263,13 +263,14 @@ def create_router(database: str, today=date.today, get_json=http_get_json) -> AP
         return RedirectResponse(f"/menus/{menu_id}", status_code=303)
 
     @router.post("/menus/{menu_id}/meals/{meal_id}/guests")
-    async def set_guests(request: Request, menu_id: int, meal_id: int):
+    def set_guests(
+        request: Request, menu_id: int, meal_id: int, form: FormData = Depends(posted_form)
+    ):
         """Cook a Meal for more (or fewer) guests, each an average adult as with Occasions.
 
         Only the Meal's guests change: the shopping list, what an accepted Menu holds and what
         cooking takes from Stock all follow from its servings.
         """
-        form = await request.form()
         # The "Remove guests" button sends the Meal back to the household only.
         typed = "0" if form.get("remove") else str(form.get("guests", "")).strip()
         with MenuRepository(database) as repo:

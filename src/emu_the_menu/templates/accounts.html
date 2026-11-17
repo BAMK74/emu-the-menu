@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% block title %}Emu the Menu - Accounts{% endblock %}
+{% block heading %}Accounts{% endblock %}
+{% block saved_banner %}{% endblock %}
+{% block content %}
+  <p>Who can sign in. An <strong>Adult</strong> can change everything. A <strong>Teen</strong> can see everything, mark meals cooked, and change their own dislikes and diet. Children have no account: an Adult looks after them. Everyone signs in with their name on the Eaters page.</p>
+  {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+  {% if saved %}<p class="saved" role="status">{{ saved }}</p>{% endif %}
+  {% for eater, acct in people %}
+  <div class="account-row">
+    <span class="name">{{ eater.name }}</span>
+    {% if acct %}
+      <form method="post" action="/accounts/{{ acct.id }}/role">{{ csrf_field() }}
+        <label class="visually-hidden" for="role-{{ acct.id }}">Role of {{ eater.name }}</label>
+        <select id="role-{{ acct.id }}" name="role">{% for r in roles %}<option value="{{ r.value }}"{{ " selected" if r == acct.role }}>{{ r.label }}</option>{% endfor %}</select>
+        <button type="submit" class="quiet">Change role</button>
+      </form>
+      <form method="post" action="/accounts/{{ acct.id }}/password">{{ csrf_field() }}
+        <input type="text" name="name" value="{{ eater.name }}" autocomplete="username" hidden>
+        <label class="visually-hidden" for="pw-{{ acct.id }}">New password for {{ eater.name }}</label>
+        <input id="pw-{{ acct.id }}" name="password" type="password" minlength="{{ min }}" maxlength="200" autocomplete="new-password" placeholder="New password" required>
+        <button type="submit" class="quiet">Set password</button>
+      </form>
+      <form method="post" action="/accounts/{{ acct.id }}/delete" data-confirm="Remove {{ eater.name }}'s account? {{ eater.name }} stays on the Eaters page.">{{ csrf_field() }}
+        <button type="submit" class="quiet">Remove account</button>
+      </form>
+    {% elif eater.category == child %}
+      <span class="hint">A child: no account</span>
+    {% else %}
+      <form method="post" action="/accounts">{{ csrf_field() }}
+        <input type="hidden" name="eater_id" value="{{ eater.id }}">
+        <input type="text" name="name" value="{{ eater.name }}" autocomplete="username" hidden>
+        <label class="visually-hidden" for="new-role-{{ eater.id }}">Role for {{ eater.name }}</label>
+        <select id="new-role-{{ eater.id }}" name="role">{% for r in roles %}<option value="{{ r.value }}"{{ " selected" if r.value == "teen" }}>{{ r.label }}</option>{% endfor %}</select>
+        <label class="visually-hidden" for="new-pw-{{ eater.id }}">Password for {{ eater.name }}</label>
+        <input id="new-pw-{{ eater.id }}" name="password" type="password" minlength="{{ min }}" maxlength="200" autocomplete="new-password" placeholder="Password" required>
+        <button type="submit">Give an account</button>
+      </form>
+    {% endif %}
+  </div>
+  {% endfor %}
+  <p class="hint">Passwords need at least {{ min }} characters. Tell the person their password; they can change it under their name at the top of any page. Setting a new password signs that account out everywhere.</p>
+{% endblock %}

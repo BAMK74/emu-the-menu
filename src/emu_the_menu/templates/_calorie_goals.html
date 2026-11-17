@@ -20,7 +20,7 @@
       {% endfor %}
     </tbody>
   </table>
-  <form class="add" method="post" action="/settings/calorie-goals">
+  <form class="add" method="post" action="/settings/calorie-goals">{{ csrf_field() }}
     {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
     <h4>Change the defaults</h4>
     <div class="pair">

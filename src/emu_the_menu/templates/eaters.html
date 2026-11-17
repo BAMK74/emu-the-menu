@@ -6,8 +6,9 @@
   <div class="split">
   <aside class="side">
   {% if error %}<p class="error" role="alert">error: {{ error }}</p>{% endif %}
+  {% if account and not account.is_adult %}<p class="hint">Only an Adult can add or change eaters. You can change your own dislikes and diet below.</p>{% else %}
 
-  <form class="add" method="post" action="/eaters">
+  <form class="add" method="post" action="/eaters">{{ csrf_field() }}
     <label>Name
       <input name="name" value="{{ form.name }}" maxlength="40" autocomplete="off" required>
     </label>
@@ -50,6 +51,7 @@
   </form>
 
 
+  {% endif %}
   </aside>
 
   <section class="results" aria-label="Eaters">
@@ -70,9 +72,10 @@
       {% if allergy_names %}<div class="meta">Allergies: {{ allergy_names|join(", ") }}</div>{% endif %}
       {% if eater.dislikes %}<div class="meta">Dislikes: {{ eater.dislikes|join(", ") }}</div>{% endif %}
       {% if eater.diet.value != "omnivore" %}<div class="meta">Diet: {{ eater.diet.label }}</div>{% endif %}
+      {% if account and account.is_adult %}
       <details>
         <summary>Edit</summary>
-        <form class="add edit" method="post" action="/eaters/{{ eater.id }}">
+        <form class="add edit" method="post" action="/eaters/{{ eater.id }}">{{ csrf_field() }}
           <label>Name
             <input name="name" value="{{ eater.name }}" maxlength="40" autocomplete="off" required>
           </label>
@@ -110,10 +113,28 @@
           </label>
           <button type="submit">Save</button>
         </form>
-        <form method="post" action="/eaters/{{ eater.id }}/delete" data-confirm="Remove {{ eater.name }}?">
+        <form method="post" action="/eaters/{{ eater.id }}/delete" data-confirm="Remove {{ eater.name }}?">{{ csrf_field() }}
           <button class="quiet" type="submit">Remove</button>
         </form>
       </details>
+      {% elif account and account.eater_id == eater.id %}
+      <details>
+        <summary>Your dislikes and diet</summary>
+        <form class="add edit" method="post" action="/eaters/{{ eater.id }}/preferences">{{ csrf_field() }}
+          <label>Diet
+            <select name="diet">
+              {% for d in diets %}<option value="{{ d.value }}"{{ " selected" if d == eater.diet }}>{{ d.label }}</option>{% endfor %}
+            </select>
+          </label>
+          <label>Dislikes
+            <input name="dislikes" autocomplete="off" value="{{ eater.dislikes|join(", ") }}">
+            <small>Separate with commas or semicolons</small>
+          </label>
+          <p class="hint">Allergies and calories are set by an Adult.</p>
+          <button type="submit">Save</button>
+        </form>
+      </details>
+      {% endif %}
     </li>
     {% endfor %}
   </ul>

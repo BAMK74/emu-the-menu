@@ -1,6 +1,6 @@
 <h2 class="panel-title">{{ ingredient.name|capitalize }}</h2>
 {% if error %}<p class="error" role="alert">error: {{ error }}</p>{% endif %}
-<form class="add" method="post" action="/ingredients/{{ ingredient.id }}">
+<form class="add" method="post" action="/ingredients/{{ ingredient.id }}">{{ csrf_field() }}
   <div class="edit-row">
     <div class="edit-fields">
       <label>Name

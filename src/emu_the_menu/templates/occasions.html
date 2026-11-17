@@ -29,13 +29,13 @@
   {% if error %}<p class="error" role="alert">error: {{ error }}</p>{% endif %}
   {% if notice %}<p class="notice" role="status">{{ notice }}</p>{% endif %}
 
-  <form class="add" method="post" action="/occasions">
+  <form class="add" method="post" action="/occasions">{{ csrf_field() }}
     {{ fields(form, none) }}
     <p class="hint">People at the table counts everyone, the household included. Leave it blank for just the household. Extra calories raises every eater's goal that day. Tags favour recipes that carry the same tag.</p>
     <button type="submit">Add occasion</button>
   </form>
 
-  <form class="add" method="post" action="/occasions/holidays">
+  <form class="add" method="post" action="/occasions/holidays">{{ csrf_field() }}
     <p><strong>Public holidays</strong></p>
     {% if country %}
     <p class="hint">Fetched from Nager.Date for {{ country }}. Only the country and the year are sent. Holidays that apply to the whole country are added; regional ones are skipped.</p>
@@ -61,11 +61,11 @@
       {% if o.tags %}<div class="meta">Tags: {{ o.tags|join(", ") }}</div>{% endif %}
       <details>
         <summary>Edit</summary>
-        <form class="add edit" method="post" action="/occasions/{{ o.id }}">
+        <form class="add edit" method="post" action="/occasions/{{ o.id }}">{{ csrf_field() }}
           {{ fields({"name": o.name, "day": o.day.isoformat(), "headcount": o.headcount or "", "extra": o.extra_percent or "", "tags": o.tags|join(", ")}, o.id) }}
           <button type="submit">Save</button>
         </form>
-        <form method="post" action="/occasions/{{ o.id }}/delete" data-confirm="Remove this occasion?">
+        <form method="post" action="/occasions/{{ o.id }}/delete" data-confirm="Remove this occasion?">{{ csrf_field() }}
           <button class="quiet" type="submit">Remove</button>
         </form>
       </details>

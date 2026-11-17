@@ -55,7 +55,7 @@
   {% if days_shown %}
   {% include "_menu_days.html" %}
   {% if save_fields %}
-  <form class="add save-menu" method="post" action="/menu/save">
+  <form class="add save-menu" method="post" action="/menu/save">{{ csrf_field() }}
     {% for key, value in save_fields %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
     <label>Name for this menu <small>(optional)</small>
       <input name="name" maxlength="80" autocomplete="off" placeholder="e.g. Week of {{ form.start }}">

@@ -9,7 +9,7 @@
     For {% for d in diners %}{{ d.name }}{{ ", " if not loop.last }}{% endfor %}.</p>
   {% if error %}<p class="error" role="alert">error: {{ error }}</p>{% endif %}
   {% if options %}
-  <form method="post" action="/menus/{{ saved.id }}/meals/{{ meal.id }}">
+  <form method="post" action="/menus/{{ saved.id }}/meals/{{ meal.id }}">{{ csrf_field() }}
     <section class="results" aria-label="Recipes for this meal">
       {% for recipe, facts, portions in options %}
       <article class="card">

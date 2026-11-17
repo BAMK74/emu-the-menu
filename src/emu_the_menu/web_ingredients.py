@@ -8,11 +8,13 @@ from collections.abc import Iterator
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from starlette.datastructures import FormData
 
 from emu_the_menu.allergens import Allergen, parse_allergens
 from emu_the_menu.food_groups import FoodGroup, parse_food_groups
 from emu_the_menu.ingredients import kcal_basis, parse_kcal, suggest_tags
 from emu_the_menu.openfoodfacts import Fetch, LookupUnavailableError, find_product, http_fetch
+from emu_the_menu.posted import posted_form
 from emu_the_menu.repository import Ingredient, StockRepository
 from emu_the_menu.templating import TEMPLATES
 from emu_the_menu.units import BaseUnit, IncompatibleUnitError
@@ -92,15 +94,13 @@ def create_router(database: str, fetch_product: Fetch = http_fetch) -> APIRouter
         )
 
     @router.post("/ingredients/tidy")
-    async def tidy(request: Request):
+    def tidy(request: Request, form: FormData = Depends(posted_form)):
         """Merge ingredients that are one food written two ways and give each a plain name.
 
         With `selected` only the changes ticked in `apply` are made, each under the name typed for
         it in `target_<key>`. Without it every proposed change is made. A change that cannot be
         made is skipped and the others still happen.
         """
-        form = await request.form()
-        # Opened here, not injected: a connection must stay in the thread that made it.
         with StockRepository(database) as repo:
             if not form.get("selected"):
                 repo.tidy()

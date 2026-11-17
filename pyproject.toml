@@ -7,6 +7,7 @@ requires-python = ">=3.13,<3.14"
 license = "LicenseRef-PolyForm-Noncommercial-1.0.0"
 license-files = ["LICENSE.md"]
 dependencies = [
+    "argon2-cffi>=23.1",
     "fastapi>=0.115",
     "jinja2>=3.1",
     "psycopg-pool>=3.2",

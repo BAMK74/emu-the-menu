@@ -34,14 +34,17 @@ def tab_row(page):
     return re.findall(r'href="([^"]+)"', found.group(1)) if found else None
 
 
-def test_the_header_has_four_links(client):
-    links = main_links(client.get("/").text)
+def test_the_header_has_four_sections_and_who_is_signed_in(client):
+    page = client.get("/").text
+    links = main_links(page)
     assert links == [
         ("/", "Stock"),
         ("/menu", "Menu"),
         ("/recipes", "Recipes"),
         ("/settings", "Settings"),
+        ("/account", "Test Adult"),
     ]
+    assert 'action="/sign-out"' in page
 
 
 @pytest.mark.parametrize(
@@ -53,8 +56,8 @@ def test_the_header_has_four_links(client):
         ("/occasions", "/menu", ["/menu", "/occasions"], "/occasions"),
         ("/recipes", "/recipes", ["/recipes", "/ingredients"], "/recipes"),
         ("/ingredients", "/recipes", ["/recipes", "/ingredients"], "/ingredients"),
-        ("/settings", "/settings", ["/settings", "/eaters"], "/settings"),
-        ("/eaters", "/settings", ["/settings", "/eaters"], "/eaters"),
+        ("/settings", "/settings", ["/settings", "/eaters", "/accounts"], "/settings"),
+        ("/eaters", "/settings", ["/settings", "/eaters", "/accounts"], "/eaters"),
     ],
 )
 def test_each_page_marks_its_section_and_shows_its_tab_row(client, path, main, tabs, tab):

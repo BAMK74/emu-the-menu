@@ -1,4 +1,4 @@
-<form class="add" method="post" action="/settings">
+<form class="add" method="post" action="/settings">{{ csrf_field() }}
   {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
   <label>Where does your household live?
     <select name="country">

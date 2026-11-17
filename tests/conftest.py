@@ -55,7 +55,9 @@ def _test_database() -> Iterator[str]:
     db.close_pools()
 
 
-_TRUNCATE = "TRUNCATE {} RESTART IDENTITY CASCADE".format(", ".join(db.DATA_TABLES))
+_TRUNCATE = "TRUNCATE {} RESTART IDENTITY CASCADE".format(
+    ", ".join((*db.DATA_TABLES, *db.ACCOUNT_TABLES))
+)
 
 
 @pytest.fixture
@@ -79,3 +81,22 @@ def run_sql(db_url: str):
             return cursor.fetchall() if cursor.description else []
 
     return run
+
+
+@pytest.fixture(autouse=True)
+def _signed_in_as_an_adult(monkeypatch):
+    """Tests of pages act as an Adult without signing in: `auth.test_account` treats a request
+    with no session as this account and skips the CSRF check. It belongs to no Eater, so menus
+    plan for exactly the Eaters a test adds. Tests of signing in use `real_auth` instead."""
+    from emu_the_menu import auth
+    from emu_the_menu.accounts import Account, Role
+
+    monkeypatch.setattr(auth, "test_account", Account(0, 0, "Test Adult", Role.ADULT))
+
+
+@pytest.fixture
+def real_auth(monkeypatch):
+    """Sign-in as the app does it: no stand-in account, CSRF tokens checked."""
+    from emu_the_menu import auth
+
+    monkeypatch.setattr(auth, "test_account", None)

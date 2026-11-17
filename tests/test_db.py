@@ -28,7 +28,7 @@ def test_a_sqlite_file_is_not_mistaken_for_a_database(given):
 
 def test_every_migration_is_applied_once_and_recorded(db_url, run_sql):
     shipped = [(version, name) for version, name, _ in db.migrations()]
-    assert shipped[0] == (1, "001_initial.sql")
+    assert shipped[:2] == [(1, "001_initial.sql"), (2, "002_accounts.sql")]
     assert run_sql("SELECT version, name FROM schema_migrations ORDER BY version") == shipped
     with psycopg.connect(db_url, autocommit=True) as conn:
         assert db.migrate(conn) == []  # nothing left to apply
@@ -41,7 +41,7 @@ def test_migrations_build_every_data_table(run_sql):
             "SELECT tablename FROM pg_tables WHERE schemaname = current_schema()"
         )
     }
-    assert tables == {*db.DATA_TABLES, "schema_migrations"}
+    assert tables == {*db.DATA_TABLES, *db.ACCOUNT_TABLES, "schema_migrations"}
 
 
 def test_the_app_carries_on_after_postgres_drops_its_connections(db_url):
@@ -170,3 +170,72 @@ def test_pages_refreshing_the_forecast_together_do_not_collide(db_url):
 
     with cf.ThreadPoolExecutor(8) as pool:
         assert list(pool.map(refresh, range(16))) == [True] * 16
+
+
+def test_more_requests_than_connections_on_one_server_all_get_answered(db_url, monkeypatch):
+    """One real server, one event loop, a pool of two and twelve pages at once. Waiting for a
+    connection on the event loop would stall it while the requests holding the connections
+    need it to finish, so every one would time out; each must queue in a worker thread instead."""
+    import concurrent.futures as cf
+    import socket
+    import threading
+    import time
+    from datetime import date
+
+    import httpx
+    import uvicorn
+
+    from emu_the_menu.import_sqlite import import_sqlite
+    from emu_the_menu.web import create_app
+
+    import_sqlite("tests/data/emu-sqlite.db", db_url)
+    small = db_url + "?application_name=emu-one-loop"
+    monkeypatch.setattr(db, "POOL_MAX", 2)
+    monkeypatch.setattr(db, "POOL_TIMEOUT", 8.0)
+    app = create_app(small, today=lambda: date(2026, 11, 10), get_json=lambda url: {})
+    with socket.socket() as probe:
+        probe.bind(("127.0.0.1", 0))
+        port = probe.getsockname()[1]
+    server = uvicorn.Server(uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error"))
+    thread = threading.Thread(target=server.run, daemon=True)
+    thread.start()
+    while not server.started:
+        time.sleep(0.05)
+    query = "/menu?days=7&meal_types=breakfast&meal_types=lunch&meal_types=dinner&seed={}"
+    try:
+        with cf.ThreadPoolExecutor(12) as pool:
+            codes = list(
+                pool.map(
+                    lambda n: (
+                        httpx.get(
+                            f"http://127.0.0.1:{port}" + query.format(n), timeout=30
+                        ).status_code
+                    ),
+                    range(12),
+                )
+            )
+    finally:
+        server.should_exit = True
+        thread.join(10)
+    assert codes == [200] * 12
+
+
+def test_no_route_waits_on_the_event_loop():
+    """Every route is a plain function, run in a worker thread: an async route that touched the
+    database would block the event loop (see emu_the_menu.posted)."""
+    import inspect
+
+    from fastapi.routing import APIRoute
+
+    from emu_the_menu.web import create_app
+
+    def walk(routes):
+        for route in routes:
+            if isinstance(route, APIRoute):
+                yield route
+            elif hasattr(route, "original_router"):
+                yield from walk(route.original_router.routes)
+
+    app = create_app("postgresql://unused/emu")
+    asynchronous = [r.path for r in walk(app.routes) if inspect.iscoroutinefunction(r.endpoint)]
+    assert asynchronous == []

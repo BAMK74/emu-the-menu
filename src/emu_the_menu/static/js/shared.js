@@ -62,6 +62,8 @@ document.addEventListener("click", async (event) => {
   try {
     const response = await fetch(button.dataset.url, {
       method: "POST",
+      // Not a whole form, so the page's CSRF token goes in a header (see auth.guard).
+      headers: { "X-CSRF-Token": document.querySelector('meta[name="csrf-token"]').content },
       body: new URLSearchParams({ barcode: form.querySelector("[data-barcode]").value }),
     });
     const data = await response.json();

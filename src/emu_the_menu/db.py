@@ -256,3 +256,7 @@ DATA_TABLES = (
     "menu_meal_taken",
     "menu_portions",
 )
+
+# Who may sign in (migration 002). Not in the SQLite days, so the importer does not copy them,
+# but it refuses a database that has any, as it refuses one with data.
+ACCOUNT_TABLES = ("accounts", "sessions", "sign_in_failures")

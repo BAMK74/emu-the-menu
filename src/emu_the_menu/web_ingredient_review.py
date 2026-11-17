@@ -20,10 +20,12 @@ from collections.abc import Iterator
 
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from starlette.datastructures import FormData
 
 from emu_the_menu.allergens import Allergen, parse_allergens
 from emu_the_menu.food_groups import FoodGroup, parse_food_groups
 from emu_the_menu.ingredients import PLAIN, judge, lists_alternatives, parse_kcal, suggest_tags
+from emu_the_menu.posted import posted_form
 from emu_the_menu.recipe_repository import RecipeRepository
 from emu_the_menu.repository import Ingredient, StockRepository
 from emu_the_menu.templating import TEMPLATES
@@ -191,9 +193,7 @@ def create_router(database: str) -> APIRouter:
         )
 
     @router.post("/ingredients/review")
-    async def save(request: Request):
-        form = await request.form()
-        # Opened here, not injected: a connection must stay in the thread that made it.
+    def save(request: Request, form: FormData = Depends(posted_form)):
         with StockRepository(database) as repo:
             return store(request, repo, form)
 

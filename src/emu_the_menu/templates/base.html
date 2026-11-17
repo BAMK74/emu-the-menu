@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="csrf-token" content="{{ csrf_token }}">
   <title>{% block title %}Emu the Menu{% endblock %}</title>
   <link rel="icon" href="/static/emu.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/static/look.css">
@@ -21,8 +22,8 @@
       <span>Emu the Menu</span>
     </a>
     <nav aria-label="Main">
-      {% set path = request.url.path %}{% set in_menu = path == "/menu" or path.startswith("/menus") or path.startswith("/occasions") %}{% set in_recipes = path.startswith("/recipes") or path.startswith("/ingredients") %}{% set in_settings = path == "/settings" or path == "/eaters" %}
-      {% block nav %}<a href="/"{% if path == "/" %} aria-current="page"{% endif %}>Stock</a><a href="/menu"{% if in_menu %} aria-current="page"{% endif %}>Menu</a><a href="/recipes"{% if in_recipes %} aria-current="page"{% endif %}>Recipes</a><a id="settings-link" href="/settings"{% if in_settings %} aria-current="page"{% endif %}>Settings</a>{% endblock %}
+      {% set path = request.url.path %}{% set in_menu = path == "/menu" or path.startswith("/menus") or path.startswith("/occasions") %}{% set in_recipes = path.startswith("/recipes") or path.startswith("/ingredients") %}{% set in_settings = path == "/settings" or path == "/eaters" or path == "/accounts" %}
+      {% block nav %}{% if account %}<a href="/"{% if path == "/" %} aria-current="page"{% endif %}>Stock</a><a href="/menu"{% if in_menu %} aria-current="page"{% endif %}>Menu</a><a href="/recipes"{% if in_recipes %} aria-current="page"{% endif %}>Recipes</a><a id="settings-link" href="/settings"{% if in_settings %} aria-current="page"{% endif %}>Settings</a><a class="who" href="/account"{% if path.startswith("/account") %} aria-current="page"{% endif %}>{{ account.name }}</a><form class="sign-out" method="post" action="/sign-out">{{ csrf_field() }}<button type="submit" class="link">Sign out</button></form>{% endif %}{% endblock %}
     </nav>
   </div>
 </header>
@@ -42,7 +43,7 @@
 <nav class="subnav" aria-label="{% if in_menu %}Menu{% elif in_recipes %}Recipes{% else %}Settings{% endif %} sections">
   {% if in_menu %}<a href="/menu"{% if not path.startswith("/occasions") %} aria-current="page"{% endif %}>Menu</a><a href="/occasions"{% if path.startswith("/occasions") %} aria-current="page"{% endif %}>Occasions</a>
   {% elif in_recipes %}<a href="/recipes"{% if path.startswith("/recipes") %} aria-current="page"{% endif %}>Recipes</a><a href="/ingredients"{% if path.startswith("/ingredients") %} aria-current="page"{% endif %}>Ingredients</a>
-  {% else %}<a href="/settings"{% if path == "/settings" %} aria-current="page"{% endif %}>Settings</a><a href="/eaters"{% if path == "/eaters" %} aria-current="page"{% endif %}>Eaters</a>
+  {% else %}<a href="/settings"{% if path == "/settings" %} aria-current="page"{% endif %}>Settings</a><a href="/eaters"{% if path == "/eaters" %} aria-current="page"{% endif %}>Eaters</a>{% if account and account.is_adult %}<a href="/accounts"{% if path == "/accounts" %} aria-current="page"{% endif %}>Accounts</a>{% endif %}
   {% endif %}
 </nav>
 {% endif %}

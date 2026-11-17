@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+{% block title %}Emu the Menu - Sign in{% endblock %}
+{% block heading %}Sign in{% endblock %}
+{% block saved_banner %}{% endblock %}
+{% block settings_overlay %}{% endblock %}
+{% block disclaimer_banner %}{% endblock %}
+{% block content %}
+  {% if error %}<p class="error" role="alert">{{ error }}</p>{% endif %}
+  <form class="add sign-in" method="post" action="/sign-in">
+    <input type="hidden" name="csrf_token" value="{{ sign_in_token }}">
+    <input type="hidden" name="next" value="{{ next_path }}">
+    <label>Your name
+      <input name="name" value="{{ name }}" maxlength="40" autocomplete="username" autocapitalize="words" required autofocus>
+    </label>
+    <label>Password
+      <input name="password" type="password" maxlength="200" autocomplete="current-password" required>
+    </label>
+    <div class="actions"><button type="submit">Sign in</button></div>
+  </form>
+  <p class="hint">Sign in with the name you have on the Eaters page. Forgot your password? An Adult can set a new one under Settings, Accounts.</p>
+  <p class="hint"><a href="/disclaimer">Read the disclaimer</a></p>
+{% endblock %}

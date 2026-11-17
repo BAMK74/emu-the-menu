@@ -5,7 +5,8 @@ from pathlib import Path
 
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
-from markupsafe import Markup
+from jinja2 import pass_context
+from markupsafe import Markup, escape
 
 from emu_the_menu.disclaimer import DISCLAIMER_VERSION
 from emu_the_menu.illustrations import food_icon, recipe_icon, slot_icon
@@ -53,10 +54,30 @@ def _look_context(request: Request) -> dict:
     return {"look": look, "season": look.season.value, "festive": look.festive or ""}
 
 
+def _account_context(request: Request) -> dict:
+    """Who is signed in (None on the sign-in page), and the token their forms must carry."""
+    session = getattr(request.state, "session", None)
+    return {
+        "account": session.account if session else None,
+        "csrf_token": session.csrf_token if session else "",
+    }
+
+
 TEMPLATES = Jinja2Templates(
     directory=Path(__file__).parent / "templates",
-    context_processors=[_legal_context, _unit_context, _look_context],
+    context_processors=[_legal_context, _unit_context, _look_context, _account_context],
 )
+
+
+@pass_context
+def _csrf_field(context) -> Markup:
+    """The hidden field every form that posts carries (see `auth.guard`)."""
+    return Markup('<input type="hidden" name="csrf_token" value="{}">').format(
+        escape(context.get("csrf_token", ""))
+    )
+
+
+TEMPLATES.env.globals["csrf_field"] = _csrf_field
 
 
 def _icon(name: str) -> Markup:

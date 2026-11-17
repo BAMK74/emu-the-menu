@@ -8,7 +8,7 @@
   </div>
 
   {% if tidy_plan or split_plan %}
-  <form class="warning-note twins" method="post" action="/ingredients/tidy">
+  <form class="warning-note twins" method="post" action="/ingredients/tidy">{{ csrf_field() }}
     <input type="hidden" name="selected" value="1">
     <p><strong>{{ tidy_plan|length + split_plan|length }} ingredient name{{ "" if tidy_plan|length + split_plan|length == 1 else "s" }} can be tidied.</strong>
       {% if split_plan %}{{ split_plan|length }} name{{ "" if split_plan|length == 1 else "s" }} offer{{ "s" if split_plan|length == 1 }} a choice and {{ "is" if split_plan|length == 1 else "are" }} really more than one ingredient: tidying makes each its own ingredient, used as alternatives in the recipes, and each one has to be checked by you. {% endif %}
