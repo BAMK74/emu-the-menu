@@ -44,6 +44,23 @@ uv run python -m emu_the_menu.import_sqlite /path/to/emu.db
 
 It copies everything (stock, ingredients, eaters, recipes, menus, occasions and settings), prints how many rows each table had before and after, and refuses to touch a database that already holds data. The SQLite file is only read.
 
+## Run it in a container
+
+The image runs as user 10001 on port 8080, needs no special permissions and writes nothing, so it runs read-only. Point it at a Postgres:
+
+```
+docker build -t emu .
+docker run --user 10001 --read-only --tmpfs /tmp --cap-drop ALL -p 8080:8080 \
+  -e EMU_DATABASE_URL=postgresql://emu:emu@host.docker.internal:5432/emu emu
+```
+
+`GET /healthz` answers `ok` when the app is up, without touching the database. Every push to `main` publishes the image for arm64 and amd64 as `ghcr.io/bamk74/emu-the-menu:main-<unix time>-<short sha>`. `scripts/smoke-container.sh IMAGE` checks an image the way the Server runs it. To import an old `emu.db` into a running container, send it through standard input, since the container cannot be written to:
+
+```
+docker exec -i <container> python -c "import sys; open('/tmp/emu.db','wb').write(sys.stdin.buffer.read())" < emu.db
+docker exec <container> python -m emu_the_menu.import_sqlite /tmp/emu.db
+```
+
 ## Run it on a home server
 
 Emu is moving to the Traquenard Server, where it will run alongside the household's other projects. This repo no longer carries a home-server setup.
@@ -76,7 +93,7 @@ uv run ruff check .
 uv run ruff format .
 ```
 
-GitHub Actions runs the same against a `postgres:18` service on every push to `main` and every pull request.
+GitHub Actions (`.github/workflows/ci.yml`) runs the same against a `postgres:18` service on every push to `main` and every pull request, then builds the image on arm64 and amd64 and smoke-checks it; on `main` it also publishes it. `scripts/measure_load.py` puts a household's load on a running container and reports its peak memory and CPU.
 
 The schema is built from the numbered files in `src/emu_the_menu/migrations/`, applied in order on start. To change it, add the next file (such as `002_meal_notes.sql`) and never edit one that has shipped.
 

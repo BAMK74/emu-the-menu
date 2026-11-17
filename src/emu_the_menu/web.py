@@ -6,11 +6,11 @@ from datetime import date
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse, Response
+from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
 from emu_the_menu.countries import COUNTRIES
-from emu_the_menu.db import database_url
+from emu_the_menu.db import database_url, request_scope
 from emu_the_menu.eaters import (
     DEFAULT_CALORIE_GOALS,
     Category,
@@ -91,6 +91,26 @@ def _forget_previous_lookup(form: dict) -> None:
     form["auto_ingredient"] = form["auto_quantity"] = ""
 
 
+# Sent on every response. Pages load only emu's own scripts, styles and images; the two inline
+# style attributes set CSS variables (the banner's word order and the photo tiles' places), which is
+# all `style-src-attr` allows. A photo of a barcode is shown from a blob: URL while it is read.
+# The Server's proxy adds the other security headers (the Traquenard Server's infrastructure.md).
+CONTENT_SECURITY_POLICY = "; ".join(
+    [
+        "default-src 'self'",
+        "script-src 'self'",
+        "style-src 'self'",
+        "style-src-attr 'unsafe-inline'",
+        "img-src 'self' blob:",
+        "connect-src 'self'",
+        "form-action 'self'",
+        "frame-ancestors 'none'",
+        "base-uri 'none'",
+        "object-src 'none'",
+    ]
+)
+
+
 def create_app(
     database: str | None = None,
     today: Callable[[], date] = date.today,
@@ -115,6 +135,22 @@ def create_app(
     app.include_router(create_saved_menus_router(path, today, get_json))
     app.include_router(create_disclaimer_router(path, today))
     app.mount("/static", StaticFiles(directory=Path(__file__).parent / "static"), name="static")
+
+    @app.middleware("http")
+    async def one_connection_and_the_policy(request: Request, call_next):
+        # One database connection per request at most, shared by every repository it opens.
+        with request_scope():
+            response = await call_next(request)
+        response.headers.setdefault("Content-Security-Policy", CONTENT_SECURITY_POLICY)
+        return response
+
+    @app.get("/healthz", response_class=PlainTextResponse)
+    def healthz() -> str:
+        """For the Server's readiness and liveness probes: the process is up and answering.
+
+        It does not touch the database, so a Postgres restart does not get emu restarted too.
+        """
+        return "ok"
 
     def get_repo() -> Iterator[StockRepository]:
         # One pooled connection per request, given back when the response is done.

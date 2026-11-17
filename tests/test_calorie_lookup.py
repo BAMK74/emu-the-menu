@@ -7,6 +7,14 @@ from fastapi.testclient import TestClient
 from emu_the_menu.repository import StockRepository
 from emu_the_menu.web import create_app
 
+
+def with_scripts(client, path):
+    """The page at `path` followed by every script it loads, as one text to search."""
+    page = client.get(path).text
+    sources = re.findall(r'<script src="([^"]+)"', page)
+    return "\n".join([page, *(client.get(src).text for src in sources)])
+
+
 BARCODE = "3017620422003"
 
 
@@ -174,14 +182,13 @@ def test_the_popup_of_a_counted_ingredient_explains_why_there_is_no_barcode_box(
 
 def test_one_shared_script_handles_the_look_up_button_and_the_enter_key(client):
     for path in ("/", "/ingredients", "/eaters"):
-        page = client.get(path).text
+        page = with_scripts(client, path)
         assert page.count('closest("[data-lookup-calories]")') == 1, path
         assert page.count("[data-barcode]") >= 1, path
 
 
 def test_the_script_fills_in_only_the_calories_box(client):
-    page = client.get("/ingredients").text
-    script = page.split('closest("[data-lookup-calories]")')[1].split("</script>")[0]
+    script = client.get("/static/js/shared.js").text.split('closest("[data-lookup-calories]")')[1]
     assert 'name="kcal"' in script
     assert "Looking up" in script
     assert ".submit(" not in script and "requestSubmit" not in script

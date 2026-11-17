@@ -22,31 +22,7 @@
     </details>
     <button type="submit">Tidy the ticked names</button>
   </form>
-  <script>
-    // Beside each proposed change: Reset puts its suggested name back and ticks it, Cancel leaves
-    // it out (unticks it), and Save makes just that change.
-    (function () {
-      const mark = (row) => row.classList.toggle("skipped", !row.querySelector("[name=apply]").checked);
-      document.querySelectorAll(".tidy-item").forEach((row) => {
-        row.querySelector("[name=apply]").addEventListener("change", () => mark(row));
-      });
-      document.addEventListener("click", (event) => {
-        const reset = event.target.closest("[data-tidy-reset]");
-        const cancel = event.target.closest("[data-tidy-cancel]");
-        const row = (reset || cancel) && (reset || cancel).closest(".tidy-item");
-        if (!row) return;
-        const box = row.querySelector("[name=apply]");
-        const name = row.querySelector(".tidy-name");
-        if (reset) {
-          name.value = name.defaultValue;
-          box.checked = true;
-        } else {
-          box.checked = false;
-        }
-        mark(row);
-      });
-    })();
-  </script>
+  <script src="/static/js/ingredient-tidy.js"></script>
   {% endif %}
 
   <section class="results" aria-label="Ingredients">
@@ -82,32 +58,5 @@
   <dialog id="ingredient-dialog" aria-label="Edit ingredient">
     <div id="ingredient-panel"></div>
   </dialog>
-  <script>
-    // Click an ingredient to edit it in a popup. The form is fetched when it opens, so it always
-    // shows the ingredient as it is now. Without scripting the link opens the same form as a page.
-    (function () {
-      const dialog = document.getElementById("ingredient-dialog");
-      const panel = document.getElementById("ingredient-panel");
-      document.addEventListener("click", async (event) => {
-        const card = event.target.closest(".results li");
-        const link = card && card.querySelector("a.card-link");
-        if (!link || typeof dialog.showModal !== "function") return;
-        if (event.metaKey || event.ctrlKey || event.shiftKey || event.button !== 0) return;
-        event.preventDefault();
-        try {
-          const response = await fetch(link.dataset.panel);
-          if (!response.ok) throw new Error("HTTP " + response.status);
-          panel.innerHTML = await response.text();
-          dialog.showModal();
-        } catch (error) {
-          window.location.href = link.href;
-        }
-      });
-      dialog.addEventListener("click", (event) => {
-        const close = event.target.closest("[data-close-dialog]");
-        if (close) event.preventDefault();  // Cancel is a link, for use without scripting
-        if (event.target === dialog || close) dialog.close();
-      });
-    })();
-  </script>
+  <script src="/static/js/ingredient-popup.js"></script>
 {% endblock %}

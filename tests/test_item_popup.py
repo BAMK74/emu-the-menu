@@ -9,6 +9,14 @@ from emu_the_menu.stock import Location
 from emu_the_menu.units import IncompatibleUnitError
 from emu_the_menu.web import create_app
 
+
+def with_scripts(client, path):
+    """The page at `path` followed by every script it loads, as one text to search."""
+    page = client.get(path).text
+    sources = re.findall(r'<script src="([^"]+)"', page)
+    return "\n".join([page, *(client.get(src).text for src in sources)])
+
+
 TODAY = date(2026, 10, 26)
 
 
@@ -296,7 +304,7 @@ def test_the_old_set_quantity_route_still_works(client, db_url):
 
 def test_one_shared_handler_asks_before_anything_marked_data_confirm_is_sent(client):
     for path in ("/", "/eaters"):
-        page = client.get(path).text
+        page = with_scripts(client, path)
         assert page.count('closest("form[data-confirm]")') == 1, path
         assert 'querySelectorAll("form[data-confirm]")' not in page, path
 

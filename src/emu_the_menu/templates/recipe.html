@@ -95,23 +95,10 @@
   </form>
 
   {% if recipe %}
-  <form class="add danger-zone" method="post" action="/recipes/{{ recipe.id }}/delete">
-    <button class="quiet" type="submit" onclick="return confirm('Delete this recipe? Its ingredients stay.')">Delete recipe</button>
+  <form class="add danger-zone" method="post" action="/recipes/{{ recipe.id }}/delete" data-confirm="Delete this recipe? Its ingredients stay.">
+    <button class="quiet" type="submit">Delete recipe</button>
   </form>
   {% endif %}
 
-  <script>
-    // More rows on demand. Without scripting there are already a few blank ones.
-    (function () {
-      const button = document.getElementById("add-line");
-      const rows = document.getElementById("recipe-lines");
-      button.hidden = false;
-      button.addEventListener("click", () => {
-        const row = rows.lastElementChild.cloneNode(true);
-        row.querySelectorAll("input").forEach((input) => (input.value = ""));
-        rows.appendChild(row);
-        row.querySelector("input").focus();
-      });
-    })();
-  </script>
+  <script src="/static/js/recipe-lines.js"></script>
 {% endblock %}
