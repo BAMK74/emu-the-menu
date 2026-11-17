@@ -27,10 +27,16 @@ git clone https://github.com/BAMK74/emu-the-menu.git
 cd emu-the-menu
 docker compose up -d
 uv sync --no-dev
-EMU_DATABASE_URL=postgresql://emu:emu@localhost:5432/emu uv run uvicorn emu_the_menu.web:create_app --factory --port 8000
+export EMU_DATABASE_URL=postgresql://emu:emu@localhost:5432/emu
+uv run python -m emu_the_menu.accounts create-adult "Your name"
+uv run uvicorn emu_the_menu.web:create_app --factory --port 8000
 ```
 
-Open <http://127.0.0.1:8000> in your browser. Start with **Settings** (your country and, if you like, your town for the weather), then add your **Eaters**, then some **Recipes**.
+`create-adult` asks for a password (at least 10 characters) and makes you the first **Adult**: the first account, and the only one made this way. Open <http://127.0.0.1:8000> in your browser and sign in with your name and that password. Start with **Settings** (your country and, if you like, your town for the weather), then add your **Eaters**, then some **Recipes**.
+
+### Accounts
+
+Everyone who uses emu signs in, with their name on the Eaters page and a password. An **Adult** can change everything and gives the others their accounts under **Settings, Accounts**. A **Teen** can see everything, mark meals cooked, and change their own dislikes and diet. Children have no account: an Adult looks after them. If nobody can sign in any more, set a new password from the command line: `uv run python -m emu_the_menu.accounts reset-password "Your name"`.
 
 Emu keeps everything in the database that `EMU_DATABASE_URL` points to, and creates its tables there on the first start. **Export as JSON** in Settings gives you a readable copy of what you entered.
 
@@ -42,7 +48,7 @@ Older versions kept everything in a SQLite file, `emu.db`. To move it into Postg
 uv run python -m emu_the_menu.import_sqlite /path/to/emu.db
 ```
 
-It copies everything (stock, ingredients, eaters, recipes, menus, occasions and settings), prints how many rows each table had before and after, and refuses to touch a database that already holds data. The SQLite file is only read.
+It copies everything (stock, ingredients, eaters, recipes, menus, occasions and settings), prints how many rows each table had before and after, and refuses to touch a database that already holds data, accounts included. So import first, then run `create-adult` with the name of someone already in the imported data. The SQLite file is only read.
 
 ## Run it in a container
 
@@ -60,6 +66,8 @@ docker run --user 10001 --read-only --tmpfs /tmp --cap-drop ALL -p 8080:8080 \
 docker exec -i <container> python -c "import sys; open('/tmp/emu.db','wb').write(sys.stdin.buffer.read())" < emu.db
 docker exec <container> python -m emu_the_menu.import_sqlite /tmp/emu.db
 ```
+
+Then make the first Adult, in the container too: `docker exec -it <container> python -m emu_the_menu.accounts create-adult "Your name"`.
 
 ## Run it on a home server
 

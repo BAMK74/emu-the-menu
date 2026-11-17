@@ -18,6 +18,14 @@ _Avoid_: Diner, user, member
 Man, Woman, Teen or Child. Gives an Eater a default calorie goal that can be overridden.
 _Avoid_: Type, role, group
 
+**Account**:
+How an Eater signs in: their name and a password. Only Adults and Teens have one; a Child is an Eater an Adult looks after.
+_Avoid_: User, login, profile
+
+**Role**:
+Adult or Teen, on an Account. An Adult changes everything; a Teen sees everything, marks Meals cooked and changes their own dislikes and diet. Separate from the Category, which only sets calories.
+_Avoid_: Permission level, admin
+
 **Calorie goal**:
 The daily energy target of an Eater, in kcal. It defaults from the Eater's Category and can be overridden.
 _Avoid_: Diet, budget, target

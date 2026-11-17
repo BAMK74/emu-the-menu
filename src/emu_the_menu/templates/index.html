@@ -9,7 +9,7 @@
   {% if warning %}
   <div class="warning" role="alert">
     <p>{{ warning.message }}</p>
-    <form method="post" action="{{ warning.action }}">
+    <form method="post" action="{{ warning.action }}">{{ csrf_field() }}
       {% for key, value in warning.fields.items() %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endfor %}
       <button type="submit">{{ warning.button }}</button>
     </form>
@@ -17,7 +17,7 @@
   </div>
   {% endif %}
 
-  <form class="add" method="post" action="/items">
+  <form class="add" method="post" action="/items">{{ csrf_field() }}
     {# First, so Enter adds stock; the visible Look up button below would otherwise be the default. #}
     <button type="submit" class="default-submit" tabindex="-1" aria-hidden="true">Add to stock</button>
     <input type="hidden" name="auto_ingredient" value="{{ form.auto_ingredient }}">

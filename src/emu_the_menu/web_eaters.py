@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from emu_the_menu.allergens import Allergen, parse_allergens
+from emu_the_menu.auth import Forbidden, account_of
 from emu_the_menu.eaters import (
     CALORIE_ADJUSTMENTS,
     Category,
@@ -147,6 +148,26 @@ def create_router(database: str) -> APIRouter:
             return page(request, repo, error=str(exc))
         except EaterNotFoundError:
             raise HTTPException(404, "No such eater") from None
+        return RedirectResponse("/eaters", status_code=303)
+
+    @router.post("/eaters/{eater_id}/preferences")
+    def update_preferences(
+        request: Request,
+        eater_id: int,
+        dislikes: str = Form(""),
+        diet: str = Form("omnivore"),
+        repo: EaterRepository = Depends(get_repo),
+    ):
+        """Dislikes and diet only: what a Teen may change, for themselves alone."""
+        me = account_of(request)
+        if not me.is_adult and me.eater_id != eater_id:
+            raise Forbidden("You can change only your own dislikes and diet.")
+        try:
+            repo.set_preferences(eater_id, parse_terms(dislikes), parse_diet(diet))
+        except EaterNotFoundError:
+            raise HTTPException(404, "No such eater") from None
+        except ValueError as exc:
+            return page(request, repo, error=str(exc))
         return RedirectResponse("/eaters", status_code=303)
 
     @router.post("/eaters/{eater_id}/delete")

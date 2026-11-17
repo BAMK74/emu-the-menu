@@ -10,13 +10,13 @@
   <p class="hint">{{ label(saved.start) }}, {{ saved.days }} day{{ "" if saved.days == 1 else "s" }}.
     <a href="/menus">All saved menus</a></p>
   {% if saved.accepted_on %}
-  <form class="accept" method="post" action="/menus/{{ saved.id }}/unaccept">
+  <form class="accept" method="post" action="/menus/{{ saved.id }}/unaccept">{{ csrf_field() }}
     <p><span class="chip">Accepted {{ label(saved.accepted_on) }}</span>
       The meals still to cook are holding the stock they need, so other menus do not plan with it.
       <button class="quiet" type="submit">Un-accept</button></p>
   </form>
   {% else %}
-  <form class="accept" method="post" action="/menus/{{ saved.id }}/accept">
+  <form class="accept" method="post" action="/menus/{{ saved.id }}/accept">{{ csrf_field() }}
     <p>Accept this menu to set aside the stock its meals need, so other menus do not plan with it.
       <button type="submit">Accept this menu</button></p>
   </form>
@@ -28,7 +28,7 @@
   {% endif %}
   {% include "_holds.html" %}
   {% include "_menu_days.html" %}
-  <form method="post" action="/menus/{{ saved.id }}/delete" data-confirm="Delete this saved menu?">
+  <form method="post" action="/menus/{{ saved.id }}/delete" data-confirm="Delete this saved menu?">{{ csrf_field() }}
     <button class="quiet" type="submit">Delete this menu</button>
   </form>
 {% endblock %}

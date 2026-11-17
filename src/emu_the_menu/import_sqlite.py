@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from datetime import date
 from pathlib import Path
 
-from emu_the_menu.db import DATA_TABLES, Database, borrowed
+from emu_the_menu.db import ACCOUNT_TABLES, DATA_TABLES, Database, borrowed
 from emu_the_menu.eaters import DEFAULT_CALORIE_GOALS, Category, nearest_adjustment
 
 
@@ -73,7 +73,7 @@ def _source_tables(reader: sqlite3.Connection) -> dict[str, list[str]]:
 def _refuse_if_not_empty(db: Database) -> None:
     holding = [
         table
-        for table in DATA_TABLES
+        for table in (*DATA_TABLES, *ACCOUNT_TABLES)
         if db.execute(f"SELECT EXISTS (SELECT 1 FROM {table})").fetchone()[0]
     ]
     if holding:

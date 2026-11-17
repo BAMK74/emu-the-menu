@@ -310,6 +310,27 @@ class EaterRepository:
             raise ValueError(f"Someone called {name} is already in the household") from None
         return self.get(eater_id)
 
+    def set_preferences(self, eater_id: int, dislikes: Iterable[str], diet: Diet) -> Eater:
+        """Change only an Eater's dislikes and diet, as a Teen may for themselves. Allergies
+        stay; a dislike that is already an allergy is not kept twice."""
+        diet = Diet(diet)
+        eater = self.get(eater_id)
+        if eater is None:
+            raise EaterNotFoundError(eater_id)
+        with self._db.transaction():
+            self._db.execute("UPDATE eaters SET diet = %s WHERE id = %s", (diet.value, eater_id))
+            self._db.execute(
+                "DELETE FROM eater_terms WHERE eater_id = %s AND kind = 'dislike'", (eater_id,)
+            )
+            kept = [t for t in _clean_terms(dislikes) if t not in eater.allergies]
+            for position, term in enumerate(kept):
+                self._db.execute(
+                    "INSERT INTO eater_terms (eater_id, kind, term, position)"
+                    " VALUES (%s, 'dislike', %s, %s)",
+                    (eater_id, term, position),
+                )
+        return self.get(eater_id)
+
     def delete(self, eater_id: int) -> None:
         with self._db.transaction():
             cursor = self._db.execute("DELETE FROM eaters WHERE id = %s", (eater_id,))

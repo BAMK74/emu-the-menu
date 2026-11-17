@@ -9,6 +9,7 @@ from fastapi import Depends, FastAPI, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, PlainTextResponse, RedirectResponse, Response
 from fastapi.staticfiles import StaticFiles
 
+from emu_the_menu import auth
 from emu_the_menu.countries import COUNTRIES
 from emu_the_menu.db import database_url, request_scope
 from emu_the_menu.eaters import (
@@ -122,9 +123,19 @@ def create_app(
     """The app, on the Postgres database at `database` (a connection URI), or at
     `EMU_DATABASE_URL` if not given."""
     path = database_url(database)
-    app = FastAPI(title="Emu the Menu")
+    # Every route passes the sign-in guard (auth.guard). The generated API docs are off: they would
+    # describe every route to anyone, signed in or not.
+    app = FastAPI(
+        title="Emu the Menu",
+        dependencies=[Depends(auth.guard)],
+        docs_url=None,
+        redoc_url=None,
+        openapi_url=None,
+    )
+    auth.install(app)
     app.state.database = path  # read by the shared templates, for the disclaimer banner
     app.state.today = today  # and for the season the pages are dressed in
+    app.include_router(auth.create_router(path))
     app.include_router(create_eaters_router(path))
     app.include_router(create_review_router(path))  # before /ingredients/{id}
     app.include_router(create_calories_router(path))  # before /ingredients/{id}

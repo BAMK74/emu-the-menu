@@ -12,11 +12,13 @@ nothing about allergens.
 import math
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from starlette.datastructures import FormData
 
 from emu_the_menu.calorie_hints import suggest_kcal
 from emu_the_menu.ingredients import kcal_basis, parse_kcal
+from emu_the_menu.posted import posted_form
 from emu_the_menu.recipe_repository import RecipeRepository
 from emu_the_menu.repository import StockRepository
 from emu_the_menu.templating import TEMPLATES
@@ -93,11 +95,9 @@ def create_router(database: str) -> APIRouter:
         return render(request, _whole(recipe), _whole(page, 1), _whole(done))
 
     @router.post("/ingredients/calories")
-    async def save(request: Request):
-        form = await request.form()
+    def save(request: Request, form: FormData = Depends(posted_form)):
         recipe_id = _whole(str(form.get("recipe", "")))
         number = _whole(str(form.get("page", "")), 1)
-        # Opened here, not injected: a connection must stay in the thread that made it.
         with StockRepository(database) as stock:
             known = {i.id: i for i in stock.ingredients()}
             figures: dict[int, float] = {}

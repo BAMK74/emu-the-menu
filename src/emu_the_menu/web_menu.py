@@ -10,14 +10,16 @@ from datetime import date
 from itertools import groupby
 from urllib.parse import urlencode
 
-from fastapi import APIRouter, Query, Request
+from fastapi import APIRouter, Depends, Query, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+from starlette.datastructures import FormData
 
 from emu_the_menu.cooking import shopping_amounts
 from emu_the_menu.eaters import Eater, EaterRepository
 from emu_the_menu.menu_repository import MenuRepository
 from emu_the_menu.occasion_repository import occasions_for
 from emu_the_menu.planner import Menu, PlanSettings, Slot, plan
+from emu_the_menu.posted import posted_form
 from emu_the_menu.recipe_repository import RecipeRepository
 from emu_the_menu.recipes import analyse
 from emu_the_menu.reserve import free_stock, holdings
@@ -227,10 +229,8 @@ def create_router(database: str, today=date.today, get_json=http_get_json) -> AP
         )
 
     @router.post("/menu/save")
-    async def save(request: Request):
+    def save(request: Request, form: FormData = Depends(posted_form)):
         """Plan again from the same settings and keep the result as a saved Menu."""
-        form = await request.form()
-        # Opened here, not injected: a connection must stay in the thread that made it.
         with EaterRepository(database) as eater_repo:
             everyone = eater_repo.list()
         try:
