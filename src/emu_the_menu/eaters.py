@@ -11,13 +11,14 @@ is decided when Recipes exist.
 """
 
 import re
-import sqlite3
 from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from pathlib import Path
+
+import psycopg
 
 from emu_the_menu.allergens import Allergen, parse_allergens
+from emu_the_menu.db import Database, attach
 from emu_the_menu.food_groups import FoodGroup
 
 
@@ -186,71 +187,16 @@ def parse_diet(text: str) -> Diet:
         raise ValueError("Choose a diet from the list") from None
 
 
-def _nearest_adjustment(difference: int) -> int:
+def nearest_adjustment(difference: int) -> int:
     """The listed adjustment closest to `difference`, preferring the smaller one on a tie."""
     return min(CALORIE_ADJUSTMENTS, key=lambda step: (abs(difference - step), abs(step)))
 
 
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS eaters (
-    id                 INTEGER PRIMARY KEY,
-    name               TEXT NOT NULL UNIQUE COLLATE NOCASE,
-    category           TEXT NOT NULL,
-    calorie_adjustment INTEGER NOT NULL DEFAULT 0,
-    diet               TEXT NOT NULL DEFAULT 'omnivore'
-);
-CREATE TABLE IF NOT EXISTS eater_terms (
-    eater_id INTEGER NOT NULL REFERENCES eaters(id) ON DELETE CASCADE,
-    kind     TEXT NOT NULL CHECK (kind IN ('allergy', 'dislike')),
-    term     TEXT NOT NULL,
-    position INTEGER NOT NULL,
-    PRIMARY KEY (eater_id, kind, term)
-);
-CREATE TABLE IF NOT EXISTS eater_allergens (
-    eater_id INTEGER NOT NULL REFERENCES eaters(id) ON DELETE CASCADE,
-    allergen TEXT NOT NULL,
-    PRIMARY KEY (eater_id, allergen)
-);
-CREATE TABLE IF NOT EXISTS category_goals (
-    category TEXT PRIMARY KEY,
-    kcal     INTEGER NOT NULL
-);
-"""
-
-
 class EaterRepository:
-    """Eaters in the same SQLite file as the Stock, on a connection of its own."""
+    """Eaters, in the same database as the Stock."""
 
-    def __init__(self, path: str | Path):
-        self._db = sqlite3.connect(path)
-        self._db.execute("PRAGMA foreign_keys = ON")
-        self._db.executescript(_SCHEMA)
-        self._upgrade()
-
-    def _upgrade(self) -> None:
-        """Bring the eaters table of an older version up to date."""
-        columns = {row[1] for row in self._db.execute("PRAGMA table_info(eaters)")}
-        with self._db:
-            if "calorie_adjustment" not in columns:
-                # Older versions kept an absolute goal. Keep it as an adjustment to the default.
-                self._db.execute(
-                    "ALTER TABLE eaters ADD COLUMN calorie_adjustment INTEGER NOT NULL DEFAULT 0"
-                )
-                if "calorie_goal" in columns:
-                    rows = self._db.execute(
-                        "SELECT id, category, calorie_goal FROM eaters"
-                        " WHERE calorie_goal IS NOT NULL"
-                    ).fetchall()
-                    for eater_id, category, goal in rows:
-                        default = DEFAULT_CALORIE_GOALS[Category(category)]
-                        self._db.execute(
-                            "UPDATE eaters SET calorie_adjustment = ? WHERE id = ?",
-                            (_nearest_adjustment(goal - default), eater_id),
-                        )
-            if "diet" not in columns:
-                self._db.execute(
-                    "ALTER TABLE eaters ADD COLUMN diet TEXT NOT NULL DEFAULT 'omnivore'"
-                )
+    def __init__(self, database: str | Database | None = None):
+        self._db, self._owned = attach(database)
 
     def __enter__(self) -> "EaterRepository":
         return self
@@ -259,7 +205,8 @@ class EaterRepository:
         self.close()
 
     def close(self) -> None:
-        self._db.close()
+        if self._owned:
+            self._db.close()
 
     def default_goals(self) -> dict[Category, int]:
         """The default calorie goal of each Category: the built-in one unless it was changed."""
@@ -274,15 +221,15 @@ class EaterRepository:
         Every value is checked first, so a bad one changes nothing.
         """
         checked = {Category(category): _check_goal(kcal) for category, kcal in goals.items()}
-        with self._db:
+        with self._db.transaction():
             for category, kcal in checked.items():
                 if kcal is None:
                     self._db.execute(
-                        "DELETE FROM category_goals WHERE category = ?", (category.value,)
+                        "DELETE FROM category_goals WHERE category = %s", (category.value,)
                     )
                 else:
                     self._db.execute(
-                        "INSERT INTO category_goals (category, kcal) VALUES (?, ?)"
+                        "INSERT INTO category_goals (category, kcal) VALUES (%s, %s)"
                         " ON CONFLICT(category) DO UPDATE SET kcal = excluded.kcal",
                         (category.value, kcal),
                     )
@@ -297,7 +244,7 @@ class EaterRepository:
 
     def get(self, eater_id: int) -> Eater | None:
         row = self._db.execute(
-            "SELECT id, name, category, calorie_adjustment, diet FROM eaters WHERE id = ?",
+            "SELECT id, name, category, calorie_adjustment, diet FROM eaters WHERE id = %s",
             (eater_id,),
         ).fetchone()
         return self._eater(*row, self.default_goals()) if row else None
@@ -318,17 +265,17 @@ class EaterRepository:
         allergens = parse_allergens(Allergen(a).value for a in allergens)
         self._check_goal_for(category, calorie_adjustment)
         try:
-            with self._db:
-                cursor = self._db.execute(
+            with self._db.transaction():
+                (eater_id,) = self._db.execute(
                     "INSERT INTO eaters (name, category, calorie_adjustment, diet)"
-                    " VALUES (?, ?, ?, ?)",
+                    " VALUES (%s, %s, %s, %s) RETURNING id",
                     (name, category.value, calorie_adjustment, diet.value),
-                )
-                self._save_terms(cursor.lastrowid, allergies, dislikes)
-                self._save_allergens(cursor.lastrowid, allergens)
-        except sqlite3.IntegrityError:
+                ).fetchone()
+                self._save_terms(eater_id, allergies, dislikes)
+                self._save_allergens(eater_id, allergens)
+        except psycopg.errors.UniqueViolation:
             raise ValueError(f"Someone called {name} is already in the household") from None
-        return self.get(cursor.lastrowid)
+        return self.get(eater_id)
 
     def update(
         self,
@@ -349,23 +296,23 @@ class EaterRepository:
         if self.get(eater_id) is None:
             raise EaterNotFoundError(eater_id)
         try:
-            with self._db:
+            with self._db.transaction():
                 self._db.execute(
-                    "UPDATE eaters SET name = ?, category = ?, calorie_adjustment = ?, diet = ?"
-                    " WHERE id = ?",
+                    "UPDATE eaters SET name = %s, category = %s, calorie_adjustment = %s, diet = %s"
+                    " WHERE id = %s",
                     (name, category.value, calorie_adjustment, diet.value, eater_id),
                 )
-                self._db.execute("DELETE FROM eater_terms WHERE eater_id = ?", (eater_id,))
-                self._db.execute("DELETE FROM eater_allergens WHERE eater_id = ?", (eater_id,))
+                self._db.execute("DELETE FROM eater_terms WHERE eater_id = %s", (eater_id,))
+                self._db.execute("DELETE FROM eater_allergens WHERE eater_id = %s", (eater_id,))
                 self._save_terms(eater_id, allergies, dislikes)
                 self._save_allergens(eater_id, allergens)
-        except sqlite3.IntegrityError:
+        except psycopg.errors.UniqueViolation:
             raise ValueError(f"Someone called {name} is already in the household") from None
         return self.get(eater_id)
 
     def delete(self, eater_id: int) -> None:
-        with self._db:
-            cursor = self._db.execute("DELETE FROM eaters WHERE id = ?", (eater_id,))
+        with self._db.transaction():
+            cursor = self._db.execute("DELETE FROM eaters WHERE id = %s", (eater_id,))
             if cursor.rowcount == 0:
                 raise EaterNotFoundError(eater_id)
 
@@ -377,7 +324,7 @@ class EaterRepository:
     def _save_allergens(self, eater_id: int, allergens: Iterable[Allergen]) -> None:
         for allergen in allergens:
             self._db.execute(
-                "INSERT INTO eater_allergens (eater_id, allergen) VALUES (?, ?)",
+                "INSERT INTO eater_allergens (eater_id, allergen) VALUES (%s, %s)",
                 (eater_id, Allergen(allergen).value),
             )
 
@@ -388,7 +335,8 @@ class EaterRepository:
         for kind, terms in (("allergy", allergy_terms), ("dislike", dislike_terms)):
             for position, term in enumerate(terms):
                 self._db.execute(
-                    "INSERT INTO eater_terms (eater_id, kind, term, position) VALUES (?, ?, ?, ?)",
+                    "INSERT INTO eater_terms (eater_id, kind, term, position)"
+                    " VALUES (%s, %s, %s, %s)",
                     (eater_id, kind, term, position),
                 )
 
@@ -402,11 +350,11 @@ class EaterRepository:
         defaults: Mapping[Category, int],
     ) -> Eater:
         terms = self._db.execute(
-            "SELECT kind, term FROM eater_terms WHERE eater_id = ? ORDER BY kind, position",
+            "SELECT kind, term FROM eater_terms WHERE eater_id = %s ORDER BY kind, position",
             (eater_id,),
         ).fetchall()
         allergens = self._db.execute(
-            "SELECT allergen FROM eater_allergens WHERE eater_id = ?", (eater_id,)
+            "SELECT allergen FROM eater_allergens WHERE eater_id = %s", (eater_id,)
         ).fetchall()
         return Eater(
             eater_id,

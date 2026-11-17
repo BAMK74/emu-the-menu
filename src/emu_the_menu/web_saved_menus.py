@@ -7,7 +7,6 @@ Stock as they are now.
 
 import random
 from datetime import date
-from pathlib import Path
 
 from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -37,16 +36,16 @@ from emu_the_menu.weather_store import kinds, weather_for
 from emu_the_menu.web_menu import day_label, days_of, held_text, shopping_text
 
 
-def live_meals(saved: SavedMenu, db_path: str | Path, today: date) -> tuple[list[Meal], list]:
+def live_meals(saved: SavedMenu, database: str, today: date) -> tuple[list[Meal], list]:
     """The planner's Meals for a saved Menu and the Ingredients still to buy for them.
 
     An accepted Menu may use the Stock left after the Menus accepted before it; one that is not
     accepted may use what no accepted Menu is holding.
     """
-    with EaterRepository(db_path) as eaters, RecipeRepository(db_path) as recipes:
+    with EaterRepository(database) as eaters, RecipeRepository(database) as recipes:
         people = {e.id: e for e in eaters.list()}
         found = {r.id: recipes.get(r.id) for r in recipes.recipes()}
-    held = free_stock(db_path, today, before=saved.accepted_order)
+    held = free_stock(database, today, before=saved.accepted_order)
     meals = []
     for m in saved.meals:
         recipe = found.get(m.recipe_id) if m.recipe_id is not None else None
@@ -69,12 +68,12 @@ def live_meals(saved: SavedMenu, db_path: str | Path, today: date) -> tuple[list
     return meals, shopping_text(shopping_amounts(meals, held))
 
 
-def create_router(db_path: str | Path, today=date.today, get_json=http_get_json) -> APIRouter:
+def create_router(database: str, today=date.today, get_json=http_get_json) -> APIRouter:
     router = APIRouter()
 
     @router.get("/menus", response_class=HTMLResponse)
     def menus(request: Request):
-        with MenuRepository(db_path) as repo:
+        with MenuRepository(database) as repo:
             listed = repo.menus()
             accepted = repo.accepted_menus()
         clashes = {m.id: [o.name for o in overlapping(m, accepted, today())] for m in accepted}
@@ -87,12 +86,12 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
         return show(request, menu_id)
 
     def show(request: Request, menu_id: int, error: str | None = None, status: int = 200):
-        with MenuRepository(db_path) as repo:
+        with MenuRepository(database) as repo:
             saved = repo.get(menu_id)
             accepted = repo.accepted_menus()
         if saved is None:
             raise HTTPException(404, "No such menu")
-        meals, shopping = live_meals(saved, db_path, today())
+        meals, shopping = live_meals(saved, database, today())
         clashes = overlapping(saved, accepted, today()) if saved.accepted_on else []
         return TEMPLATES.TemplateResponse(
             request,
@@ -100,11 +99,11 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
             {
                 "saved": saved,
                 "days_shown": days_of(meals),
-                "forecast": weather_for(db_path, today(), get_json),
-                "occasions": occasions_for(db_path, saved.start, saved.days),
+                "forecast": weather_for(database, today(), get_json),
+                "occasions": occasions_for(database, saved.start, saved.days),
                 "shopping": shopping,
                 "clashes": clashes,
-                "holds": held_text(db_path, today(), saved.accepted_order),
+                "holds": held_text(database, today(), saved.accepted_order),
                 "holds_for": "this menu",
                 "change_base": f"/menus/{saved.id}/meals",
                 "label": day_label,
@@ -133,14 +132,14 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
         return _change(request, menu_id, meal_id, None)
 
     def _change(request: Request, menu_id: int, meal_id: int, error: str | None, status=200):
-        with MenuRepository(db_path) as repo:
+        with MenuRepository(database) as repo:
             saved, meal = find_meal(repo, menu_id, meal_id)
-        with EaterRepository(db_path) as eaters, RecipeRepository(db_path) as recipes:
+        with EaterRepository(database) as eaters, RecipeRepository(database) as recipes:
             people = {e.id: e for e in eaters.list()}
             everything = recipes.recipes()
         diners = table_of(saved, meal, people)
         slots = sorted({m.slot for m in saved.meals if m.day == meal.day})
-        occasion = occasions_for(db_path, meal.day, 1).get(meal.day)
+        occasion = occasions_for(database, meal.day, 1).get(meal.day)
         options = []
         for recipe in choices_for(everything, diners, meal.slot) if diners else []:
             facts = analyse(recipe.for_analysis, recipe.servings)
@@ -166,9 +165,9 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
         form = await request.form()
         wanted = str(form.get("recipe", ""))
         # Opened here, not injected: a connection must stay in the thread that made it.
-        with MenuRepository(db_path) as repo:
+        with MenuRepository(database) as repo:
             saved, meal = find_meal(repo, menu_id, meal_id)
-            with EaterRepository(db_path) as eaters, RecipeRepository(db_path) as recipes:
+            with EaterRepository(database) as eaters, RecipeRepository(database) as recipes:
                 people = {e.id: e for e in eaters.list()}
                 everything = recipes.recipes()
             diners = table_of(saved, meal, people)
@@ -190,7 +189,7 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
                     400,
                 )
             slots = sorted({m.slot for m in saved.meals if m.day == meal.day})
-            occasion = occasions_for(db_path, meal.day, 1).get(meal.day)
+            occasion = occasions_for(database, meal.day, 1).get(meal.day)
             portions = portions_for(chosen, diners, meal.slot, slots, occasion)
             guests, guest_servings = guests_for(chosen, diners, meal.slot, slots, occasion)
             try:
@@ -214,11 +213,11 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
         suits everyone at the table, respects the Cooldown (from cooked meals) and prefers what
         is in Stock. A new seed each time means pressing it again gives another.
         """
-        with MenuRepository(db_path) as repo:
+        with MenuRepository(database) as repo:
             saved, meal = find_meal(repo, menu_id, meal_id)
             if meal.cooked_on is not None:
                 raise HTTPException(400, "A cooked meal cannot be changed")
-            with EaterRepository(db_path) as eaters, RecipeRepository(db_path) as recipes:
+            with EaterRepository(database) as eaters, RecipeRepository(database) as recipes:
                 people = {e.id: e for e in eaters.list()}
                 everything = recipes.recipes()
             diners = table_of(saved, meal, people)
@@ -226,7 +225,7 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
             day_slots = sorted({m.slot for m in saved.meals if m.day == meal.day})
             picked = None
             if diners:
-                held = free_stock(db_path, today(), ignore_meal=meal.id)
+                held = free_stock(database, today(), ignore_meal=meal.id)
                 result = plan(
                     meal.day,
                     1,
@@ -236,8 +235,8 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
                     held,
                     seed=random.SystemRandom().randrange(10**9),
                     last_served=repo.last_served(),
-                    weather=kinds(weather_for(db_path, today(), get_json)),
-                    occasions=occasions_for(db_path, meal.day, 1),
+                    weather=kinds(weather_for(database, today(), get_json)),
+                    occasions=occasions_for(database, meal.day, 1),
                 )
                 picked = next((m for m in result.meals if m.slot is meal.slot), None)
             if picked is None or picked.recipe is None:
@@ -255,7 +254,7 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
 
     def cook(menu_id: int, meal_id: int, day: date | None):
         try:
-            with MenuRepository(db_path) as repo:
+            with MenuRepository(database) as repo:
                 repo.set_cooked(menu_id, meal_id, day)
         except MenuNotFoundError:
             raise HTTPException(404, "No such meal") from None
@@ -273,17 +272,17 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
         form = await request.form()
         # The "Remove guests" button sends the Meal back to the household only.
         typed = "0" if form.get("remove") else str(form.get("guests", "")).strip()
-        with MenuRepository(db_path) as repo:
+        with MenuRepository(database) as repo:
             saved, meal = find_meal(repo, menu_id, meal_id)
             if not typed.isdigit() or int(typed) > MAX_HEADCOUNT:
                 message = f"Guests must be a whole number from 0 to {MAX_HEADCOUNT}"
                 return show(request, menu_id, message, 400)
             if meal.recipe_id is None:
                 return show(request, menu_id, "Choose a recipe for the meal first", 400)
-            with RecipeRepository(db_path) as recipes:
+            with RecipeRepository(database) as recipes:
                 recipe = recipes.get(meal.recipe_id)
             slots = sorted({m.slot for m in saved.meals if m.day == meal.day})
-            occasion = occasions_for(db_path, meal.day, 1).get(meal.day)
+            occasion = occasions_for(database, meal.day, 1).get(meal.day)
             servings = guest_servings_for(recipe, int(typed), meal.slot, slots, occasion)
             try:
                 repo.set_guests(menu_id, meal_id, int(typed), servings)
@@ -298,7 +297,7 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
         This is what starts the Cooldown. Stock is used as far as it goes and what it could not
         cover is kept with the meal; cooking is never refused for lack of Stock.
         """
-        with MenuRepository(db_path) as repo:
+        with MenuRepository(database) as repo:
             saved = repo.get(menu_id)
             meal = next((m for m in saved.meals if m.id == meal_id), None) if saved else None
             if meal is None:
@@ -307,12 +306,12 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
                 return RedirectResponse(f"/menus/{menu_id}", status_code=303)  # stock only once
             if meal.recipe_id is None:
                 raise HTTPException(400, "A meal with no recipe cannot be cooked")
-            with RecipeRepository(db_path) as recipes:
+            with RecipeRepository(database) as recipes:
                 recipe = recipes.get(meal.recipe_id)
             scale = (sum(p.servings for p in meal.portions) + meal.guest_servings) / recipe.servings
             short = []
             took = []
-            with StockRepository(db_path) as stock:
+            with StockRepository(database) as stock:
                 pantry = Pantry(stock_lots(stock))
                 today_ = today()
                 held = {i.id: pantry.available(i.id, today_) for g in recipe.slots for i in g}
@@ -333,10 +332,10 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
     def not_cooked(menu_id: int, meal_id: int):
         """Undo cooking: the Stock the meal took goes back where it came from."""
         try:
-            with MenuRepository(db_path) as repo:
+            with MenuRepository(database) as repo:
                 lots = repo.taken(menu_id, meal_id)
                 if lots:
-                    with StockRepository(db_path) as stock:
+                    with StockRepository(database) as stock:
                         for lot in lots:
                             stock.put_back(lot)
                 repo.set_cooked(menu_id, meal_id, None)
@@ -346,7 +345,7 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
 
     def set_accepted(menu_id: int, accept: bool):
         try:
-            with MenuRepository(db_path) as repo:
+            with MenuRepository(database) as repo:
                 if accept:
                     repo.accept(menu_id, today())
                 else:
@@ -367,7 +366,7 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
     @router.post("/menus/{menu_id}/delete")
     def delete(menu_id: int):
         try:
-            with MenuRepository(db_path) as repo:
+            with MenuRepository(database) as repo:
                 repo.delete(menu_id)
         except MenuNotFoundError:
             raise HTTPException(404, "No such menu") from None

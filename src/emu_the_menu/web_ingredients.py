@@ -5,7 +5,6 @@ shows the Ingredient as it is now. Without scripting the card links to the same 
 """
 
 from collections.abc import Iterator
-from pathlib import Path
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
@@ -19,11 +18,11 @@ from emu_the_menu.templating import TEMPLATES
 from emu_the_menu.units import BaseUnit, IncompatibleUnitError
 
 
-def create_router(db_path: str | Path, fetch_product: Fetch = http_fetch) -> APIRouter:
+def create_router(database: str, fetch_product: Fetch = http_fetch) -> APIRouter:
     router = APIRouter()
 
     def get_repo() -> Iterator[StockRepository]:
-        with StockRepository(db_path) as repo:
+        with StockRepository(database) as repo:
             yield repo
 
     def find(repo: StockRepository, ingredient_id: int) -> Ingredient:
@@ -102,7 +101,7 @@ def create_router(db_path: str | Path, fetch_product: Fetch = http_fetch) -> API
         """
         form = await request.form()
         # Opened here, not injected: a connection must stay in the thread that made it.
-        with StockRepository(db_path) as repo:
+        with StockRepository(database) as repo:
             if not form.get("selected"):
                 repo.tidy()
             else:

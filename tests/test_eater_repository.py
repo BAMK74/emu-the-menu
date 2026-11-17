@@ -1,5 +1,3 @@
-import sqlite3
-
 import pytest
 
 from emu_the_menu.allergens import Allergen
@@ -16,8 +14,8 @@ from emu_the_menu.stock import Location
 
 
 @pytest.fixture
-def repo(tmp_path):
-    with EaterRepository(tmp_path / "emu.db") as repo:
+def repo(db_url):
+    with EaterRepository(db_url) as repo:
         yield repo
 
 
@@ -134,18 +132,16 @@ def test_a_missing_eater_raises_on_update_and_delete(repo):
         repo.delete(999)
 
 
-def test_eaters_survive_reopening_the_database(tmp_path):
-    path = tmp_path / "emu.db"
-    with EaterRepository(path) as repo:
+def test_eaters_survive_reopening_the_database(db_url):
+    with EaterRepository(db_url) as repo:
         repo.add("Sam", Category.MAN, 300, ["eggs"])
-    with EaterRepository(path) as repo:
+    with EaterRepository(db_url) as repo:
         assert repo.list()[0].allergies == ("eggs",)
         assert repo.list()[0].calorie_goal == 2800
 
 
-def test_eaters_and_stock_share_one_database_without_interfering(tmp_path):
-    path = tmp_path / "emu.db"
-    with StockRepository(path) as stock, EaterRepository(path) as eaters:
+def test_eaters_and_stock_share_one_database_without_interfering(db_url):
+    with StockRepository(db_url) as stock, EaterRepository(db_url) as eaters:
         stock.add("flour", 500, "g", Location.PANTRY)
         eaters.add("Sam", Category.MAN)
         assert len(stock.list_items()) == 1
@@ -190,57 +186,14 @@ def test_a_default_goal_outside_the_range_is_rejected_and_nothing_changes(repo, 
     assert repo.default_goals() == DEFAULT_CALORIE_GOALS
 
 
-def test_default_goals_survive_reopening_the_database(tmp_path):
-    path = tmp_path / "emu.db"
-    with EaterRepository(path) as repo:
+def test_default_goals_survive_reopening_the_database(db_url):
+    with EaterRepository(db_url) as repo:
         repo.set_default_goals({Category.TEEN: 2300})
-    with EaterRepository(path) as repo:
+    with EaterRepository(db_url) as repo:
         assert repo.default_goals()[Category.TEEN] == 2300
 
 
 # --- upgrading older databases --------------------------------------------------------------
-
-
-def test_an_old_absolute_goal_becomes_an_adjustment_to_the_default(tmp_path):
-    path = tmp_path / "old.db"
-    db = sqlite3.connect(path)
-    db.executescript(
-        """CREATE TABLE eaters (id INTEGER PRIMARY KEY,
-               name TEXT NOT NULL UNIQUE COLLATE NOCASE, category TEXT NOT NULL,
-               calorie_goal INTEGER);
-           INSERT INTO eaters (name, category, calorie_goal) VALUES
-               ('Mia', 'child', 1500), ('Sam', 'man', NULL), ('Ann', 'woman', 2000),
-               ('Odd', 'child', 1630), ('Big', 'man', 5000), ('Tiny', 'woman', 600);"""
-    )
-    db.commit()
-    db.close()
-    with EaterRepository(path) as repo:
-        goals = {e.name: (e.calorie_adjustment, e.calorie_goal) for e in repo.list()}
-    # Values between the drop-down's steps snap to the nearest step, and far ones to the limit.
-    assert goals == {
-        "Mia": (-100, 1500),
-        "Sam": (0, 2500),
-        "Ann": (0, 2000),
-        "Odd": (0, 1600),
-        "Big": (1000, 3500),
-        "Tiny": (-1000, 1000),
-    }
-
-
-def test_upgrading_twice_does_not_change_anything(tmp_path):
-    path = tmp_path / "old.db"
-    db = sqlite3.connect(path)
-    db.executescript(
-        """CREATE TABLE eaters (id INTEGER PRIMARY KEY,
-               name TEXT NOT NULL UNIQUE COLLATE NOCASE, category TEXT NOT NULL,
-               calorie_goal INTEGER);
-           INSERT INTO eaters (name, category, calorie_goal) VALUES ('Mia', 'child', 1500);"""
-    )
-    db.commit()
-    db.close()
-    for _ in range(2):
-        with EaterRepository(path) as repo:
-            assert repo.list()[0].calorie_adjustment == -100
 
 
 # --- diets ----------------------------------------------------------------------------------
@@ -264,31 +217,11 @@ def test_updating_can_change_the_diet(repo):
     assert repo.update(eater.id, "Mia", Category.WOMAN).diet is Diet.OMNIVORE
 
 
-def test_diets_survive_reopening_the_database(tmp_path):
-    path = tmp_path / "emu.db"
-    with EaterRepository(path) as repo:
+def test_diets_survive_reopening_the_database(db_url):
+    with EaterRepository(db_url) as repo:
         repo.add("Mia", Category.WOMAN, diet=Diet.LOW_MEAT)
-    with EaterRepository(path) as repo:
+    with EaterRepository(db_url) as repo:
         assert repo.list()[0].diet is Diet.LOW_MEAT
-
-
-def test_a_database_from_before_diets_gets_everyone_eating_everything(tmp_path):
-    path = tmp_path / "old.db"
-    db = sqlite3.connect(path)
-    db.executescript(
-        """CREATE TABLE eaters (id INTEGER PRIMARY KEY,
-               name TEXT NOT NULL UNIQUE COLLATE NOCASE, category TEXT NOT NULL,
-               calorie_adjustment INTEGER NOT NULL DEFAULT 0);
-           INSERT INTO eaters (name, category, calorie_adjustment) VALUES ('Mia', 'woman', 200);"""
-    )
-    db.commit()
-    db.close()
-    with EaterRepository(path) as repo:
-        [mia] = repo.list()
-        assert (mia.diet, mia.calorie_adjustment) == (Diet.OMNIVORE, 200)
-        repo.update(mia.id, "Mia", Category.WOMAN, 200, diet=Diet.VEGAN)
-    with EaterRepository(path) as repo:
-        assert repo.list()[0].diet is Diet.VEGAN
 
 
 # --- allergens ------------------------------------------------------------------------------
@@ -316,35 +249,14 @@ def test_updating_replaces_the_allergens(repo):
     assert repo.update(eater.id, "Mia", Category.WOMAN).allergens == ()
 
 
-def test_deleting_an_eater_removes_their_allergens(repo, tmp_path):
+def test_deleting_an_eater_removes_their_allergens(repo, run_sql):
     eater = repo.add("Mia", Category.WOMAN, allergens=[Allergen.MILK])
     repo.delete(eater.id)
-    db = sqlite3.connect(tmp_path / "emu.db")
-    assert db.execute("SELECT COUNT(*) FROM eater_allergens").fetchone()[0] == 0
+    assert run_sql("SELECT COUNT(*) FROM eater_allergens") == [(0,)]
 
 
-def test_allergens_survive_reopening_the_database(tmp_path):
-    path = tmp_path / "emu.db"
-    with EaterRepository(path) as repo:
+def test_allergens_survive_reopening_the_database(db_url):
+    with EaterRepository(db_url) as repo:
         repo.add("Mia", Category.WOMAN, allergens=[Allergen.GLUTEN, Allergen.SOY])
-    with EaterRepository(path) as repo:
+    with EaterRepository(db_url) as repo:
         assert repo.list()[0].allergens == (Allergen.GLUTEN, Allergen.SOY)
-
-
-def test_a_database_from_before_allergens_still_opens(tmp_path):
-    path = tmp_path / "old.db"
-    db = sqlite3.connect(path)
-    db.executescript(
-        """CREATE TABLE eaters (id INTEGER PRIMARY KEY,
-               name TEXT NOT NULL UNIQUE COLLATE NOCASE, category TEXT NOT NULL,
-               calorie_adjustment INTEGER NOT NULL DEFAULT 0,
-               diet TEXT NOT NULL DEFAULT 'omnivore');
-           INSERT INTO eaters (name, category) VALUES ('Mia', 'woman');"""
-    )
-    db.commit()
-    db.close()
-    with EaterRepository(path) as repo:
-        [mia] = repo.list()
-        assert mia.allergens == ()
-        repo.update(mia.id, "Mia", Category.WOMAN, allergens=[Allergen.FISH])
-        assert repo.list()[0].allergens == (Allergen.FISH,)

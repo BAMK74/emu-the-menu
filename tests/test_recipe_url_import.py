@@ -25,14 +25,9 @@ def html(recipe=RECIPE):
     return f'<html><script type="application/ld+json">{json.dumps(recipe)}</script></html>'
 
 
-@pytest.fixture
-def db_path(tmp_path):
-    return tmp_path / "emu.db"
-
-
-def make_client(db_path, fetch):
+def make_client(db_url, fetch):
     app = create_app(
-        db_path,
+        db_url,
         today=lambda: date(2026, 10, 26),
         fetch_product=lambda code: {"status": 0},
         fetch_recipe_page=fetch,
@@ -41,8 +36,8 @@ def make_client(db_path, fetch):
 
 
 @pytest.fixture
-def client(db_path):
-    return make_client(db_path, lambda url: html())
+def client(db_url):
+    return make_client(db_url, lambda url: html())
 
 
 def text_of(markup):
@@ -63,7 +58,7 @@ def test_the_new_recipe_page_offers_an_import_box(client):
     assert 'action="/recipes/import"' in page and 'name="url"' in page
 
 
-def test_importing_fills_in_the_form_without_saving_anything(client, db_path):
+def test_importing_fills_in_the_form_without_saving_anything(client, db_url):
     response = import_url(client)
     assert response.status_code == 200
     page = response.text
@@ -73,9 +68,9 @@ def test_importing_fills_in_the_form_without_saving_anything(client, db_path):
     assert values(page, "ingredient")[:3] == ["tomatoes", "vegetable stock", "salt"]
     assert values(page, "quantity")[:3] == ["500", "1.5", ""]
     assert re.search(r'<option value="cup" selected', page)
-    with RecipeRepository(db_path) as repo:
+    with RecipeRepository(db_url) as repo:
         assert repo.recipes() == []
-    with StockRepository(db_path) as stock:
+    with StockRepository(db_url) as stock:
         assert stock.ingredients() == []
 
 
@@ -91,7 +86,7 @@ def test_lines_that_could_not_be_read_are_listed_for_the_person(client):
     assert "Add a quantity" in page
 
 
-def test_saving_the_imported_form_keeps_the_source_address(client, db_path):
+def test_saving_the_imported_form_keeps_the_source_address(client, db_url):
     page = import_url(client).text
     assert 'name="source_url" value="https://example.com/soup"' in page
     client.post(
@@ -108,14 +103,14 @@ def test_saving_the_imported_form_keeps_the_source_address(client, db_path):
             "source_url": "https://example.com/soup",
         },
     )
-    with RecipeRepository(db_path) as repo:
+    with RecipeRepository(db_url) as repo:
         assert repo.recipes()[0].source_url == "https://example.com/soup"
     listing = client.get("/recipes").text
     assert 'href="https://example.com/soup"' in listing
     assert 'rel="noopener noreferrer"' in listing
 
 
-def test_the_edit_page_keeps_and_links_the_source(client, db_path):
+def test_the_edit_page_keeps_and_links_the_source(client, db_url):
     client.post(
         "/recipes",
         data={
@@ -128,14 +123,14 @@ def test_the_edit_page_keeps_and_links_the_source(client, db_path):
             "source_url": "https://example.com/soup",
         },
     )
-    with RecipeRepository(db_path) as repo:
+    with RecipeRepository(db_url) as repo:
         recipe_id = repo.recipes()[0].id
     page = client.get(f"/recipes/{recipe_id}").text
     assert 'name="source_url" value="https://example.com/soup"' in page
     assert 'href="https://example.com/soup"' in page
 
 
-def test_a_bad_source_is_rejected_when_saving(client, db_path):
+def test_a_bad_source_is_rejected_when_saving(client, db_url):
     response = client.post(
         "/recipes",
         data={
@@ -152,8 +147,8 @@ def test_a_bad_source_is_rejected_when_saving(client, db_path):
     assert "web address" in text_of(response.text)
 
 
-def test_known_ingredients_are_reused_by_name_ignoring_plurals(db_path):
-    client = make_client(db_path, lambda url: html())
+def test_known_ingredients_are_reused_by_name_ignoring_plurals(db_url):
+    client = make_client(db_url, lambda url: html())
     client.post(
         "/recipes",
         data={
@@ -180,12 +175,12 @@ def test_known_ingredients_are_reused_by_name_ignoring_plurals(db_path):
     ],
 )
 def test_an_unusable_address_is_explained_and_the_form_stays_usable(
-    db_path, fetch_error, status, message
+    db_url, fetch_error, status, message
 ):
     def fetch(url):
         raise fetch_error
 
-    client = make_client(db_path, fetch)
+    client = make_client(db_url, fetch)
     response = import_url(client)
     assert response.status_code == status
     page = response.text
@@ -194,24 +189,24 @@ def test_an_unusable_address_is_explained_and_the_form_stays_usable(
     assert 'name="ingredient"' in page  # the blank form is still there
 
 
-def test_a_page_without_a_recipe_is_explained(db_path):
-    client = make_client(db_path, lambda url: "<html><body>Just a blog</body></html>")
+def test_a_page_without_a_recipe_is_explained(db_url):
+    client = make_client(db_url, lambda url: "<html><body>Just a blog</body></html>")
     response = import_url(client)
     assert response.status_code == 400
     assert "No recipe" in text_of(response.text)
 
 
-def test_a_blank_address_is_rejected_without_fetching(db_path):
+def test_a_blank_address_is_rejected_without_fetching(db_url):
     calls = []
-    client = make_client(db_path, lambda url: calls.append(url) or html())
+    client = make_client(db_url, lambda url: calls.append(url) or html())
     response = import_url(client, "  ")
     assert response.status_code == 400
     assert calls == []
 
 
-def test_a_private_address_is_never_fetched_by_the_real_fetcher(db_path):
+def test_a_private_address_is_never_fetched_by_the_real_fetcher(db_url):
     # No fake here: the real fetcher must refuse before touching the network.
-    app = create_app(db_path, today=lambda: date(2026, 10, 26))
+    app = create_app(db_url, today=lambda: date(2026, 10, 26))
     response = TestClient(app, follow_redirects=False).post(
         "/recipes/import", data={"url": "http://127.0.0.1/export.json"}
     )
@@ -219,19 +214,19 @@ def test_a_private_address_is_never_fetched_by_the_real_fetcher(db_path):
     assert "public website" in text_of(response.text)
 
 
-def test_the_imported_text_is_escaped_in_the_page(db_path):
+def test_the_imported_text_is_escaped_in_the_page(db_url):
     nasty = {**RECIPE, "name": '"><script>alert(1)</script>', "keywords": "<b>x</b>"}
-    client = make_client(db_path, lambda url: html(nasty))
+    client = make_client(db_url, lambda url: html(nasty))
     page = import_url(client).text
     assert "<script>alert(1)</script>" not in page
 
 
-def test_lines_that_are_not_ingredients_are_left_out_and_listed(db_path):
+def test_lines_that_are_not_ingredients_are_left_out_and_listed(db_url):
     recipe = {
         **RECIPE,
         "recipeIngredient": ["500 g tomatoes", "1 batch base recipe", "Optional seasonings"],
     }
-    client = make_client(db_path, lambda url: html(recipe))
+    client = make_client(db_url, lambda url: html(recipe))
     page = import_url(client).text
     assert values(page, "ingredient")[:1] == ["tomatoes"]
     assert "base recipe" not in values(page, "ingredient")

@@ -1,11 +1,12 @@
-"""Recipes in the same SQLite file as the Stock, on a connection of its own."""
+"""Recipes, in the same database as the Stock and on the same connection."""
 
-import sqlite3
 from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from pathlib import Path
 from urllib.parse import urlsplit
 
+import psycopg
+
+from emu_the_menu.db import Database
 from emu_the_menu.names import canonical_name, split_alternatives
 from emu_the_menu.recipes import (
     MealType,
@@ -18,35 +19,6 @@ from emu_the_menu.recipes import (
 )
 from emu_the_menu.repository import Ingredient, StockRepository
 from emu_the_menu.units import BaseUnit, IncompatibleUnitError, base_unit_for, to_base
-
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS recipes (
-    id       INTEGER PRIMARY KEY,
-    name     TEXT NOT NULL UNIQUE COLLATE NOCASE,
-    servings INTEGER NOT NULL CHECK (servings >= 1),
-    weather  TEXT NOT NULL DEFAULT 'any',
-    source_url TEXT
-);
-CREATE TABLE IF NOT EXISTS recipe_meal_types (
-    recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
-    meal_type TEXT NOT NULL,
-    PRIMARY KEY (recipe_id, meal_type)
-);
-CREATE TABLE IF NOT EXISTS recipe_tags (
-    recipe_id INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
-    tag       TEXT NOT NULL,
-    position  INTEGER NOT NULL,
-    PRIMARY KEY (recipe_id, tag)
-);
-CREATE TABLE IF NOT EXISTS recipe_lines (
-    recipe_id     INTEGER NOT NULL REFERENCES recipes(id) ON DELETE CASCADE,
-    ingredient_id INTEGER NOT NULL REFERENCES ingredients(id),
-    quantity      REAL NOT NULL CHECK (quantity > 0),
-    position      INTEGER NOT NULL,
-    alt_group     INTEGER,
-    PRIMARY KEY (recipe_id, ingredient_id)
-);
-"""
 
 
 class RecipeNotFoundError(LookupError):
@@ -117,20 +89,14 @@ _Entry = tuple[str, BaseUnit, float, int | None]  # name, base unit, amount, gro
 
 
 class RecipeRepository:
-    def __init__(self, path: str | Path):
-        # The Stock repository creates the ingredient tables and reads Ingredients for us.
-        self._stock = StockRepository(path)
-        self._db = sqlite3.connect(path)
-        self._db.execute("PRAGMA foreign_keys = ON")
-        self._db.executescript(_SCHEMA)
-        columns = {row[1] for row in self._db.execute("PRAGMA table_info(recipes)")}
-        if "source_url" not in columns:
-            with self._db:
-                self._db.execute("ALTER TABLE recipes ADD COLUMN source_url TEXT")
-        line_columns = {row[1] for row in self._db.execute("PRAGMA table_info(recipe_lines)")}
-        if "alt_group" not in line_columns:
-            with self._db:
-                self._db.execute("ALTER TABLE recipe_lines ADD COLUMN alt_group INTEGER")
+    def __init__(self, database: str | Database | None = None):
+        # The Stock repository reads Ingredients for us, on the same connection.
+        self._stock = StockRepository(database)
+        self._db = self._stock.database
+
+    @property
+    def database(self) -> Database:
+        return self._db
 
     def __enter__(self) -> "RecipeRepository":
         return self
@@ -139,7 +105,6 @@ class RecipeRepository:
         self.close()
 
     def close(self) -> None:
-        self._db.close()
         self._stock.close()
 
     # --- writing ------------------------------------------------------------------------------
@@ -176,8 +141,8 @@ class RecipeRepository:
 
     def delete(self, recipe_id: int) -> None:
         """Delete a Recipe. Its Ingredients stay."""
-        with self._db:
-            if not self._db.execute("DELETE FROM recipes WHERE id = ?", (recipe_id,)).rowcount:
+        with self._db.transaction():
+            if not self._db.execute("DELETE FROM recipes WHERE id = %s", (recipe_id,)).rowcount:
                 raise RecipeNotFoundError(recipe_id)
 
     def _save(self, recipe_id, name, servings, meal_types, weather, tags, lines, source_url) -> int:
@@ -188,36 +153,36 @@ class RecipeRepository:
         amounts = _merged(self._entries(lines))
         source = clean_source(source_url)
         try:
-            with self._db:
+            with self._db.transaction():
                 if recipe_id is None:
-                    recipe_id = self._db.execute(
+                    (recipe_id,) = self._db.execute(
                         "INSERT INTO recipes (name, servings, weather, source_url)"
-                        " VALUES (?, ?, ?, ?)",
+                        " VALUES (%s, %s, %s, %s) RETURNING id",
                         (name, servings, weather.value, source),
-                    ).lastrowid
+                    ).fetchone()
                 else:
                     changed = self._db.execute(
-                        "UPDATE recipes SET name = ?, servings = ?, weather = ?, source_url = ?"
-                        " WHERE id = ?",
+                        "UPDATE recipes SET name = %s, servings = %s, weather = %s, source_url = %s"
+                        " WHERE id = %s",
                         (name, servings, weather.value, source, recipe_id),
                     ).rowcount
                     if not changed:
                         raise RecipeNotFoundError(recipe_id)
                     for table in ("recipe_meal_types", "recipe_tags", "recipe_lines"):
-                        self._db.execute(f"DELETE FROM {table} WHERE recipe_id = ?", (recipe_id,))
+                        self._db.execute(f"DELETE FROM {table} WHERE recipe_id = %s", (recipe_id,))
                 self._db.executemany(
-                    "INSERT INTO recipe_meal_types (recipe_id, meal_type) VALUES (?, ?)",
+                    "INSERT INTO recipe_meal_types (recipe_id, meal_type) VALUES (%s, %s)",
                     [(recipe_id, m.value) for m in meals],
                 )
                 self._db.executemany(
-                    "INSERT INTO recipe_tags (recipe_id, tag, position) VALUES (?, ?, ?)",
+                    "INSERT INTO recipe_tags (recipe_id, tag, position) VALUES (%s, %s, %s)",
                     [(recipe_id, tag, n) for n, tag in enumerate(tags)],
                 )
                 for position, (ingredient, (base, amount, group)) in enumerate(amounts.items()):
                     self._db.execute(
                         "INSERT INTO recipe_lines"
                         " (recipe_id, ingredient_id, quantity, position, alt_group)"
-                        " VALUES (?, ?, ?, ?, ?)",
+                        " VALUES (%s, %s, %s, %s, %s)",
                         (
                             recipe_id,
                             self._ingredient_id(ingredient, base),
@@ -226,8 +191,8 @@ class RecipeRepository:
                             group,
                         ),
                     )
-        except sqlite3.IntegrityError as exc:
-            if "recipes.name" in str(exc):
+        except psycopg.errors.UniqueViolation as exc:
+            if exc.diag.constraint_name == "recipes_name_key":
                 raise ValueError(f"You already have a recipe called {name}") from None
             raise
         return recipe_id
@@ -263,12 +228,14 @@ class RecipeRepository:
         Raises IncompatibleUnitError if it is stored in another kind of unit.
         """
         row = self._db.execute(
-            "SELECT id, base_unit FROM ingredients WHERE name = ?", (name,)
+            "SELECT id, base_unit FROM ingredients WHERE lower(name) = lower(%s)", (name,)
         ).fetchone()
         if row is None:
-            return self._db.execute(
-                "INSERT INTO ingredients (name, base_unit) VALUES (?, ?)", (name, base.value)
-            ).lastrowid
+            (new_id,) = self._db.execute(
+                "INSERT INTO ingredients (name, base_unit) VALUES (%s, %s) RETURNING id",
+                (name, base.value),
+            ).fetchone()
+            return new_id
         if BaseUnit(row[1]) is not base:
             raise IncompatibleUnitError(f"That unit does not match how {name} is stored")
         return row[0]
@@ -289,7 +256,7 @@ class RecipeRepository:
             (rid, RecipeLine(ingredients[iid], quantity, group))
             for rid, iid, quantity, group in self._db.execute(
                 "SELECT recipe_id, ingredient_id, quantity, alt_group FROM recipe_lines"
-                " ORDER BY position"
+                " ORDER BY recipe_id, position"
             )
         )
         return [
@@ -304,7 +271,7 @@ class RecipeRepository:
                 source_url,
             )
             for rid, name, servings, weather, source_url in self._db.execute(
-                "SELECT id, name, servings, weather, source_url FROM recipes ORDER BY name"
+                "SELECT id, name, servings, weather, source_url FROM recipes ORDER BY lower(name)"
             )
         ]
 

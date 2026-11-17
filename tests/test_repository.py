@@ -1,4 +1,3 @@
-import sqlite3
 from dataclasses import replace
 from datetime import date
 
@@ -14,8 +13,8 @@ LATER = date(2026, 11, 15)
 
 
 @pytest.fixture
-def repo(tmp_path):
-    with StockRepository(tmp_path / "emu.db") as repo:
+def repo(db_url):
+    with StockRepository(db_url) as repo:
         yield repo
 
 
@@ -81,11 +80,10 @@ def test_set_quantity_adjusts_one_item(repo):
     assert repo.list_items()[0].quantity == pytest.approx(2000)
 
 
-def test_data_survives_reopening_the_database(tmp_path):
-    path = tmp_path / "emu.db"
-    with StockRepository(path) as repo:
+def test_data_survives_reopening_the_database(db_url):
+    with StockRepository(db_url) as repo:
         repo.add("flour", 100, "g", Location.PANTRY, SOON)
-    with StockRepository(path) as repo:
+    with StockRepository(db_url) as repo:
         assert repo.list_items()[0].expires_on == SOON
 
 
@@ -138,25 +136,6 @@ def test_a_failed_add_remembers_nothing(repo):
     assert repo.ingredients()[0].shelf_life is None
 
 
-def test_an_old_database_without_shelf_life_columns_is_upgraded(tmp_path):
-    path = tmp_path / "old.db"
-    db = sqlite3.connect(path)
-    db.executescript(
-        """CREATE TABLE ingredients (id INTEGER PRIMARY KEY,
-               name TEXT NOT NULL UNIQUE COLLATE NOCASE, base_unit TEXT NOT NULL);
-           CREATE TABLE stock_items (id INTEGER PRIMARY KEY,
-               ingredient_id INTEGER NOT NULL REFERENCES ingredients(id),
-               quantity REAL NOT NULL, location TEXT NOT NULL, expires_on TEXT);
-           INSERT INTO ingredients (name, base_unit) VALUES ('flour', 'g');"""
-    )
-    db.commit()
-    db.close()
-    with StockRepository(path) as repo:
-        assert repo.ingredients()[0].shelf_life is None
-        repo.add("flour", 1, "kg", Location.PANTRY, shelf_life=ShelfLife(2, ShelfLifeUnit.MONTH))
-        assert repo.ingredients()[0].shelf_life == ShelfLife(2, ShelfLifeUnit.MONTH)
-
-
 def test_changing_the_base_unit_keeps_the_numbers_and_fixes_the_unit(repo):
     repo.add("chicken", 500, "ml", Location.FRIDGE)
     repo.change_base_unit("Chicken", "kg")
@@ -198,37 +177,16 @@ def test_changing_the_base_unit_forgets_the_remembered_quantity(repo):
     assert repo.ingredients()[0].last_entry is None
 
 
-def test_an_old_database_without_last_entry_columns_is_upgraded(tmp_path):
-    path = tmp_path / "old.db"
-    db = sqlite3.connect(path)
-    db.executescript(
-        """CREATE TABLE ingredients (id INTEGER PRIMARY KEY,
-               name TEXT NOT NULL UNIQUE COLLATE NOCASE, base_unit TEXT NOT NULL,
-               shelf_life_amount INTEGER, shelf_life_unit TEXT);
-           CREATE TABLE stock_items (id INTEGER PRIMARY KEY,
-               ingredient_id INTEGER NOT NULL REFERENCES ingredients(id),
-               quantity REAL NOT NULL, location TEXT NOT NULL, expires_on TEXT);
-           INSERT INTO ingredients (name, base_unit) VALUES ('flour', 'g');"""
-    )
-    db.commit()
-    db.close()
-    with StockRepository(path) as repo:
-        assert repo.ingredients()[0].last_entry is None
-        repo.add("flour", 1, "kg", Location.PANTRY)
-        assert repo.ingredients()[0].last_entry == LastEntry(1, "kg")
-
-
 def test_household_country_starts_unset_and_can_be_saved(repo):
     assert repo.household_country() is None
     repo.set_household_country("au")
     assert repo.household_country() == "AU"
 
 
-def test_household_country_survives_reopening(tmp_path):
-    path = tmp_path / "emu.db"
-    with StockRepository(path) as repo:
+def test_household_country_survives_reopening(db_url):
+    with StockRepository(db_url) as repo:
         repo.set_household_country("NZ")
-    with StockRepository(path) as repo:
+    with StockRepository(db_url) as repo:
         assert repo.household_country() == "NZ"
 
 

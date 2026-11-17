@@ -127,13 +127,8 @@ def test_fetch_holidays_needs_a_country_and_reports_failures():
 # ---- storage ----
 
 
-@pytest.fixture
-def db_path(tmp_path):
-    return tmp_path / "emu.db"
-
-
-def test_occasions_are_stored_read_and_removed(db_path):
-    with OccasionRepository(db_path) as repo:
+def test_occasions_are_stored_read_and_removed(db_url):
+    with OccasionRepository(db_url) as repo:
         oid = repo.add("Party", date(2026, 12, 1), 8, 20, ["big", "festive"])
         assert repo.get(oid) == Occasion(
             "Party", date(2026, 12, 1), 8, 20, ("big", "festive"), Source.MANUAL, oid
@@ -148,25 +143,25 @@ def test_occasions_are_stored_read_and_removed(db_path):
             repo.update(oid, "x", TODAY, None, 0, [])
 
 
-def test_from_day_lists_upcoming_in_date_order(db_path):
-    with OccasionRepository(db_path) as repo:
+def test_from_day_lists_upcoming_in_date_order(db_url):
+    with OccasionRepository(db_url) as repo:
         repo.add("Later", date(2026, 12, 5))
         repo.add("Past", date(2026, 10, 1))
         repo.add("Today", TODAY)
         assert [o.name for o in repo.from_day(TODAY)] == ["Today", "Later"]
 
 
-def test_importing_holidays_twice_adds_them_once(db_path):
+def test_importing_holidays_twice_adds_them_once(db_url):
     holidays = [Holiday(date(2026, 12, 25), "Christmas Day"), Holiday(date(2026, 1, 1), "New Year")]
-    with OccasionRepository(db_path) as repo:
+    with OccasionRepository(db_url) as repo:
         assert repo.add_holidays(holidays) == 2
         assert repo.add_holidays(holidays) == 0
         assert {o.source for o in repo.all()} == {Source.HOLIDAY}
 
 
-def test_an_edited_holiday_becomes_manual_and_is_not_duplicated_by_a_new_import(db_path):
+def test_an_edited_holiday_becomes_manual_and_is_not_duplicated_by_a_new_import(db_url):
     holiday = Holiday(date(2026, 12, 25), "Christmas Day")
-    with OccasionRepository(db_path) as repo:
+    with OccasionRepository(db_url) as repo:
         repo.add_holidays([holiday])
         (found,) = repo.all()
         repo.update(found.id, "Christmas dinner", found.day, 10, 30, ["festive"])
@@ -174,15 +169,15 @@ def test_an_edited_holiday_becomes_manual_and_is_not_duplicated_by_a_new_import(
         assert repo.add_holidays([holiday]) == 1  # the original name is a new holiday again
 
 
-def test_a_manual_occasion_may_share_a_name_and_day_with_a_holiday(db_path):
-    with OccasionRepository(db_path) as repo:
+def test_a_manual_occasion_may_share_a_name_and_day_with_a_holiday(db_url):
+    with OccasionRepository(db_url) as repo:
         repo.add("Christmas Day", date(2026, 12, 25), 6)
         assert repo.add_holidays([Holiday(date(2026, 12, 25), "Christmas Day")]) == 1
         assert len(repo.all()) == 2
 
 
-def test_for_days_merges_each_days_occasions_and_stays_in_range(db_path):
-    with OccasionRepository(db_path) as repo:
+def test_for_days_merges_each_days_occasions_and_stays_in_range(db_url):
+    with OccasionRepository(db_url) as repo:
         repo.add("A", date(2026, 11, 4), 6, 10, ["x"])
         repo.add("B", date(2026, 11, 4), 4, 25, ["y"])
         repo.add("Out", date(2026, 11, 10))
@@ -192,8 +187,8 @@ def test_for_days_merges_each_days_occasions_and_stays_in_range(db_path):
         assert (merged.headcount, merged.extra_percent, merged.tags) == (6, 25, ("x", "y"))
 
 
-def test_export_lists_occasions(db_path):
-    with OccasionRepository(db_path) as repo:
+def test_export_lists_occasions(db_url):
+    with OccasionRepository(db_url) as repo:
         repo.add("Party", date(2026, 12, 1), 8, 20, ["big"])
         assert repo.export_data() == [
             {
@@ -210,9 +205,9 @@ def test_export_lists_occasions(db_path):
 # ---- the page ----
 
 
-def make_client(db_path, get_holidays=None):
+def make_client(db_url, get_holidays=None):
     app = create_app(
-        db_path,
+        db_url,
         today=lambda: TODAY,
         fetch_product=lambda c: {"status": 0},
         get_holidays=get_holidays or (lambda url: []),
@@ -220,13 +215,13 @@ def make_client(db_path, get_holidays=None):
     return TestClient(app, follow_redirects=False)
 
 
-def test_the_page_starts_empty_and_is_in_the_navigation(db_path):
-    page = make_client(db_path).get("/occasions").text
+def test_the_page_starts_empty_and_is_in_the_navigation(db_url):
+    page = make_client(db_url).get("/occasions").text
     assert "No upcoming occasions" in page and 'href="/occasions" aria-current="page"' in page
 
 
-def test_adding_an_occasion_lists_it(db_path):
-    client = make_client(db_path)
+def test_adding_an_occasion_lists_it(db_url):
+    client = make_client(db_url)
     r = client.post(
         "/occasions",
         data={"name": "Party", "day": "2026-12-01", "headcount": "8", "extra": "20", "tags": "Big"},
@@ -237,17 +232,17 @@ def test_adding_an_occasion_lists_it(db_path):
     assert "Tags: big" in page
 
 
-def test_a_bad_entry_says_why_and_keeps_what_was_typed(db_path):
-    client = make_client(db_path)
+def test_a_bad_entry_says_why_and_keeps_what_was_typed(db_url):
+    client = make_client(db_url)
     r = client.post("/occasions", data={"name": "Party", "day": "", "headcount": "8"})
     assert r.status_code == 400 and "Enter a valid date" in r.text and 'value="Party"' in r.text
-    with OccasionRepository(db_path) as repo:
+    with OccasionRepository(db_url) as repo:
         assert repo.all() == []
 
 
-def test_editing_and_removing(db_path):
-    client = make_client(db_path)
-    with OccasionRepository(db_path) as repo:
+def test_editing_and_removing(db_url):
+    client = make_client(db_url)
+    with OccasionRepository(db_url) as repo:
         oid = repo.add("Party", date(2026, 12, 1))
     r = client.post(
         f"/occasions/{oid}",
@@ -260,21 +255,21 @@ def test_editing_and_removing(db_path):
     assert client.post(f"/occasions/{oid}/delete").status_code == 404
 
 
-def test_importing_holidays_needs_a_country(db_path):
-    page = make_client(db_path).get("/occasions").text
+def test_importing_holidays_needs_a_country(db_url):
+    page = make_client(db_url).get("/occasions").text
     assert "Set your country in Settings first" in page
-    r = make_client(db_path).post("/occasions/holidays", data={"year": "2026"})
+    r = make_client(db_url).post("/occasions/holidays", data={"year": "2026"})
     assert r.status_code == 400 and "Set the country in Settings" in r.text
 
 
-def test_importing_holidays_adds_them_and_says_how_many(db_path):
+def test_importing_holidays_adds_them_and_says_how_many(db_url):
     calls = []
 
     def get(url):
         calls.append(url)
         return [entry("2026-12-25", "Christmas Day"), entry("2026-11-01", "All Saints (past)")]
 
-    client = make_client(db_path, get)
+    client = make_client(db_url, get)
     client.post("/settings", data={"country": "NL"})
     r = client.post("/occasions/holidays", data={"year": "2026"})
     assert r.status_code == 303 and r.headers["location"] == "/occasions?imported=2"
@@ -287,11 +282,11 @@ def test_importing_holidays_adds_them_and_says_how_many(db_path):
     assert "already here" in client.get("/occasions?imported=0").text
 
 
-def test_importing_only_allows_this_year_or_next_and_reports_an_unreachable_service(db_path):
+def test_importing_only_allows_this_year_or_next_and_reports_an_unreachable_service(db_url):
     def down(url):
         raise OSError("down")
 
-    client = make_client(db_path, down)
+    client = make_client(db_url, down)
     client.post("/settings", data={"country": "NL"})
     assert client.post("/occasions/holidays", data={"year": "1999"}).status_code == 400
     assert client.post("/occasions/holidays", data={"year": "abc"}).status_code == 400
@@ -299,8 +294,8 @@ def test_importing_only_allows_this_year_or_next_and_reports_an_unreachable_serv
     assert r.status_code == 400 and "could not be fetched" in r.text
 
 
-def test_the_json_export_includes_occasions(db_path):
-    client = make_client(db_path)
+def test_the_json_export_includes_occasions(db_url):
+    client = make_client(db_url)
     client.post("/occasions", data={"name": "Party", "day": "2026-12-01"})
     names = [o["name"] for o in client.get("/export.json").json()["occasions"]]
     assert names == ["Party"]

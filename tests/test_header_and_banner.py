@@ -15,8 +15,8 @@ def off(code):
 
 
 @pytest.fixture
-def client(tmp_path):
-    app = create_app(tmp_path / "emu.db", today=lambda: date(2026, 10, 10), fetch_product=off)
+def client(db_url):
+    app = create_app(db_url, today=lambda: date(2026, 10, 10), fetch_product=off)
     return TestClient(app, follow_redirects=False)
 
 

@@ -19,10 +19,10 @@ from emu_the_menu.weather_store import WeatherRepository
 
 def _legal_context(request: Request) -> dict:
     """Whether the current disclaimer was accepted, so every page can ask until it is."""
-    db_path = getattr(request.app.state, "db_path", None)
+    database = getattr(request.app.state, "database", None)
     accepted = False
-    if db_path is not None:
-        with StockRepository(db_path) as repo:
+    if database is not None:
+        with StockRepository(database) as repo:
             acceptance = repo.disclaimer_acceptance()
         accepted = bool(acceptance) and acceptance[0] == DISCLAIMER_VERSION
     return {"disclaimer_accepted": accepted, "disclaimer_version": DISCLAIMER_VERSION}
@@ -30,23 +30,23 @@ def _legal_context(request: Request) -> dict:
 
 def _unit_context(request: Request) -> dict:
     """The temperature unit (C or F) the Household chose, for pages that show the weather."""
-    db_path = getattr(request.app.state, "db_path", None)
-    if db_path is None:
+    database = getattr(request.app.state, "database", None)
+    if database is None:
         return {"temp_unit": "C"}
-    with WeatherRepository(db_path) as weather:
+    with WeatherRepository(database) as weather:
         return {"temp_unit": weather.unit()}
 
 
 def _look_context(request: Request) -> dict:
     """The season (and festive overlay) every page is dressed in, from today's date, the Settings
     choice and the Household's hemisphere (the weather town's latitude, else the country)."""
-    db_path = getattr(request.app.state, "db_path", None)
+    database = getattr(request.app.state, "database", None)
     today = getattr(request.app.state, "today", date.today)
     choice, southern = LookChoice(), False
-    if db_path is not None:
-        with StockRepository(db_path) as repo:
+    if database is not None:
+        with StockRepository(database) as repo:
             choice, country = repo.look_choice(), repo.household_country()
-        with WeatherRepository(db_path) as weather:
+        with WeatherRepository(database) as weather:
             place = weather.place()
         southern = is_southern(country, place.latitude if place else None)
     look = look_for(today(), choice, southern)

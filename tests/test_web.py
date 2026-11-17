@@ -1,4 +1,3 @@
-import gzip
 import json
 import re
 from datetime import date
@@ -8,11 +7,6 @@ from fastapi.testclient import TestClient
 
 from emu_the_menu.repository import StockRepository
 from emu_the_menu.web import create_app
-
-
-@pytest.fixture
-def db_path(tmp_path):
-    return tmp_path / "emu.db"
 
 
 class FakeOpenFoodFacts:
@@ -34,8 +28,8 @@ def off():
 
 
 @pytest.fixture
-def client(db_path, off):
-    app = create_app(db_path, today=lambda: date(2026, 10, 26), fetch_product=off)
+def client(db_url, off):
+    app = create_app(db_url, today=lambda: date(2026, 10, 26), fetch_product=off)
     return TestClient(app, follow_redirects=False)
 
 
@@ -72,8 +66,8 @@ def suggestions(client):
     return json.loads(match.group(1))
 
 
-def stored(db_path):
-    with StockRepository(db_path) as repo:
+def stored(db_url):
+    with StockRepository(db_url) as repo:
         return repo.list_items()
 
 
@@ -83,11 +77,11 @@ def test_empty_list_page_renders_the_add_form(client):
     assert 'name="ingredient"' in response.text
 
 
-def test_adding_an_item_redirects_and_shows_it(client, db_path):
+def test_adding_an_item_redirects_and_shows_it(client, db_url):
     response = add(client, "Flour", "1.5", "kg", "pantry", expires_on="2026-11-01")
     assert response.status_code == 303
     assert response.headers["location"] == "/"
-    [item] = stored(db_path)
+    [item] = stored(db_url)
     assert (item.ingredient, item.quantity) == ("flour", 1500)
     page = client.get("/").text
     assert "flour" in page
@@ -113,14 +107,14 @@ def test_list_is_ordered_by_expiry(client):
         {"ingredient": "   "},
     ],
 )
-def test_bad_input_is_rejected_with_a_message_and_nothing_stored(client, db_path, bad):
+def test_bad_input_is_rejected_with_a_message_and_nothing_stored(client, db_url, bad):
     response = add(client, **bad)
     assert response.status_code == 400
     assert "error" in response.text
-    assert stored(db_path) == []
+    assert stored(db_url) == []
 
 
-def test_unit_family_clash_is_a_warning_with_a_fix_not_an_error(client, db_path):
+def test_unit_family_clash_is_a_warning_with_a_fix_not_an_error(client, db_url):
     add(client, "chicken", "500", "ml", "fridge")
     response = add(client, "chicken", "300", "g", "fridge")
     assert response.status_code == 409
@@ -128,10 +122,10 @@ def test_unit_family_clash_is_a_warning_with_a_fix_not_an_error(client, db_path)
     assert 'class="error"' not in response.text
     assert "chicken is stored in ml, but you entered g" in response.text
     assert "Store chicken in g instead" in response.text
-    assert len(stored(db_path)) == 1
+    assert len(stored(db_url)) == 1
 
 
-def test_the_warning_fix_switches_the_unit_and_adds_the_entry(client, db_path):
+def test_the_warning_fix_switches_the_unit_and_adds_the_entry(client, db_url):
     add(client, "chicken", "500", "ml", "fridge")
     response = client.post(
         "/items",
@@ -144,38 +138,38 @@ def test_the_warning_fix_switches_the_unit_and_adds_the_entry(client, db_path):
         },
     )
     assert response.status_code == 303
-    [item] = stored(db_path)
+    [item] = stored(db_url)
     assert (item.quantity, item.base_unit.value) == (800, "g")
 
 
-def test_setting_a_quantity_in_another_unit_family_warns_and_can_be_fixed(client, db_path):
+def test_setting_a_quantity_in_another_unit_family_warns_and_can_be_fixed(client, db_url):
     add(client, "chicken", "500", "ml", "fridge")
-    [item] = stored(db_path)
+    [item] = stored(db_url)
     response = client.post(f"/items/{item.id}/quantity", data={"quantity": "2", "unit": "kg"})
     assert response.status_code == 409
     assert "Store chicken in kg instead" in response.text
-    assert stored(db_path)[0].base_unit.value == "ml"
+    assert stored(db_url)[0].base_unit.value == "ml"
     fix = client.post(
         f"/items/{item.id}/quantity", data={"quantity": "2", "unit": "kg", "switch_unit": "on"}
     )
     assert fix.status_code == 303
-    [fixed] = stored(db_path)
+    [fixed] = stored(db_url)
     assert (fixed.quantity, fixed.base_unit.value) == (2000, "g")
 
 
-def test_adjusting_quantity(client, db_path):
+def test_adjusting_quantity(client, db_url):
     add(client)
-    [item] = stored(db_path)
+    [item] = stored(db_url)
     response = client.post(f"/items/{item.id}/quantity", data={"quantity": "2", "unit": "kg"})
     assert response.status_code == 303
-    assert stored(db_path)[0].quantity == pytest.approx(2000)
+    assert stored(db_url)[0].quantity == pytest.approx(2000)
 
 
-def test_deleting_an_item(client, db_path):
+def test_deleting_an_item(client, db_url):
     add(client)
-    [item] = stored(db_path)
+    [item] = stored(db_url)
     assert client.post(f"/items/{item.id}/delete").status_code == 303
-    assert stored(db_path) == []
+    assert stored(db_url) == []
 
 
 def test_changing_a_missing_item_is_404(client):
@@ -185,19 +179,19 @@ def test_changing_a_missing_item_is_404(client):
     )
 
 
-def test_expiry_can_be_set_relative_to_today(client, db_path):
+def test_expiry_can_be_set_relative_to_today(client, db_url):
     add(client, "spinach", "1", "count", "fridge", in_amount="1", in_unit="weeks")
-    assert stored(db_path)[0].expires_on == date(2026, 11, 2)
+    assert stored(db_url)[0].expires_on == date(2026, 11, 2)
 
 
-def test_leaving_both_expiry_fields_blank_means_no_expiry(client, db_path):
+def test_leaving_both_expiry_fields_blank_means_no_expiry(client, db_url):
     add(client)
-    assert stored(db_path)[0].expires_on is None
+    assert stored(db_url)[0].expires_on is None
 
 
-def test_no_expiry_checkbox_ignores_the_other_expiry_fields(client, db_path):
+def test_no_expiry_checkbox_ignores_the_other_expiry_fields(client, db_url):
     add(client, no_expiry=True, expires_on="2026-11-01", in_amount="3")
-    assert stored(db_path)[0].expires_on is None
+    assert stored(db_url)[0].expires_on is None
 
 
 @pytest.mark.parametrize(
@@ -209,10 +203,10 @@ def test_no_expiry_checkbox_ignores_the_other_expiry_fields(client, db_path):
         {"in_amount": "2", "expires_on": "2026-11-01"},
     ],
 )
-def test_bad_expiry_is_rejected(client, db_path, bad):
+def test_bad_expiry_is_rejected(client, db_url, bad):
     response = add(client, **bad)
     assert response.status_code == 400
-    assert stored(db_path) == []
+    assert stored(db_url) == []
 
 
 def test_relative_expiry_is_remembered_and_offered_next_time(client):
@@ -262,19 +256,19 @@ def test_settings_page_lists_countries_with_not_set_selected_at_first(client):
     assert '<option value="AU" selected>' not in response.text
 
 
-def test_saving_the_household_country(client, db_path):
+def test_saving_the_household_country(client, db_url):
     response = client.post("/settings", data={"country": "AU"})
     assert response.status_code == 303
-    with StockRepository(db_path) as repo:
+    with StockRepository(db_url) as repo:
         assert repo.household_country() == "AU"
     assert '<option value="AU" selected>Australia</option>' in client.get("/settings").text
 
 
-def test_an_unknown_country_is_an_error_on_the_settings_page(client, db_path):
+def test_an_unknown_country_is_an_error_on_the_settings_page(client, db_url):
     response = client.post("/settings", data={"country": "ZZ"})
     assert response.status_code == 400
     assert 'class="error"' in response.text
-    with StockRepository(db_path) as repo:
+    with StockRepository(db_url) as repo:
         assert repo.household_country() is None
 
 
@@ -311,11 +305,11 @@ def test_the_settings_panel_ignores_other_return_addresses(client, target):
     assert 'name="next"' not in client.get("/settings/panel", params={"next": target}).text
 
 
-def test_saving_from_the_overlay_returns_to_the_page_you_were_on(client, db_path):
+def test_saving_from_the_overlay_returns_to_the_page_you_were_on(client, db_url):
     response = client.post("/settings", data={"country": "NZ", "next": "/"})
     assert response.status_code == 303
     assert response.headers["location"] == "/?saved=1"
-    with StockRepository(db_path) as repo:
+    with StockRepository(db_url) as repo:
         assert repo.household_country() == "NZ"
     assert "Settings saved" in client.get("/?saved=1").text
     assert "Settings saved" not in client.get("/").text
@@ -363,7 +357,7 @@ def test_the_add_form_has_a_barcode_field_and_a_look_up_button(client):
     assert 'formaction="/lookup"' in page
 
 
-def test_looking_up_a_barcode_fills_in_name_quantity_and_unit(client, off, db_path):
+def test_looking_up_a_barcode_fills_in_name_quantity_and_unit(client, off, db_url):
     off.response = penne()
     response = lookup(client)
     assert response.status_code == 200
@@ -371,7 +365,7 @@ def test_looking_up_a_barcode_fills_in_name_quantity_and_unit(client, off, db_pa
     assert re.search(r'name="quantity"[^>]*value="500"', response.text, re.S)
     assert '<option value="g" selected>g</option>' in response.text
     assert "Open Food Facts" in response.text
-    assert stored(db_path) == []  # a lookup never changes Stock
+    assert stored(db_url) == []  # a lookup never changes Stock
 
 
 def test_a_typed_ingredient_name_is_kept(client, off):
@@ -546,9 +540,9 @@ def test_a_thousand_grams_is_shown_as_a_kilogram(client):
     assert "1000 g" not in entry
 
 
-def test_setting_one_kilogram_shows_one_kilogram(client, db_path):
+def test_setting_one_kilogram_shows_one_kilogram(client, db_url):
     add(client, "flour", "500", "g")
-    [item] = stored(db_path)
+    [item] = stored(db_url)
     client.post(f"/items/{item.id}/quantity", data={"quantity": "1", "unit": "kg"})
     assert "1 kg" in list_item_html(client, "flour")
     popup = client.get(f"/items/{item.id}/panel").text  # the adjust form lives in the popup now
@@ -563,7 +557,7 @@ def test_millilitres_are_shown_as_litres_and_small_amounts_stay_small(client):
     assert "250 g" in list_item_html(client, "flour")
 
 
-# --- exports and the backup status --------------------------------------------------------
+# --- exports ----------------------------------------------------------------------------------
 
 
 def test_the_json_export_downloads_everything(client):
@@ -577,84 +571,19 @@ def test_the_json_export_downloads_everything(client):
     assert [(i["ingredient"], i["quantity"]) for i in data["stock_items"]] == [("flour", 1500)]
 
 
-def test_the_database_export_is_a_restorable_backup(client, tmp_path):
-    add(client, "flour", "500", "g", "pantry")
-    response = client.get("/export.db.gz")
-    assert response.status_code == 200
-    assert response.headers["content-disposition"] == 'attachment; filename="emu-2026-10-26.db.gz"'
-    restored = tmp_path / "restored.db"
-    restored.write_bytes(gzip.decompress(response.content))
-    with StockRepository(restored) as repo:
-        assert [(i.ingredient, i.quantity) for i in repo.list_items()] == [("flour", 500)]
+def test_the_export_is_never_cached(client):
+    assert client.get("/export.json").headers["cache-control"] == "no-store"
 
 
-@pytest.mark.parametrize("path", ["/export.json", "/export.db.gz"])
-def test_exports_are_never_cached(client, path):
-    assert client.get(path).headers["cache-control"] == "no-store"
-
-
-def test_settings_offer_both_downloads_in_the_panel_and_on_the_page(client):
+def test_settings_offer_the_json_export_in_the_panel_and_on_the_page(client):
     panel = client.get("/settings/panel", params={"next": "/"}).text
     for page in (panel, client.get("/settings").text):
-        assert 'href="/export.db.gz"' in page
         assert 'href="/export.json"' in page
+        assert "export.db.gz" not in page
 
 
-@pytest.fixture
-def backup_dir(tmp_path):
-    folder = tmp_path / "backups"
-    folder.mkdir()
-    return folder
-
-
-@pytest.fixture
-def backup_client(db_path, off, backup_dir):
-    app = create_app(
-        db_path, today=lambda: date(2026, 10, 26), fetch_product=off, backup_dir=backup_dir
-    )
-    return TestClient(app, follow_redirects=False)
-
-
-def backup_status(client):
-    page = client.get("/settings").text
-    match = re.search(r'<p class="(backup-status[^"]*)"[^>]*>(.*?)</p>', page, re.S)
-    return match.group(1), " ".join(match.group(2).split())
-
-
-def test_without_a_backup_folder_the_page_says_backups_are_not_set_up(client):
-    css, text = backup_status(client)
-    assert "stale" not in css
-    assert "not set up" in text
-
-
-def test_a_folder_with_no_backups_is_a_warning(backup_client):
-    css, text = backup_status(backup_client)
-    assert "stale" in css
-    assert "No nightly backup yet" in text
-
-
-@pytest.mark.parametrize(
-    ("backup_day", "text", "stale"),
-    [
-        (date(2026, 10, 26), "Last nightly backup: today", False),
-        (date(2026, 10, 25), "Last nightly backup: yesterday", False),
-        (date(2026, 10, 24), "Last nightly backup: 2 days ago", False),
-        (date(2026, 10, 22), "Last nightly backup was 4 days ago. Check the Pi.", True),
-    ],
-)
-def test_the_last_backup_is_shown_and_an_old_one_is_flagged(
-    backup_client, backup_dir, backup_day, text, stale
-):
-    (backup_dir / f"emu-{backup_day.isoformat()}.db.gz").write_bytes(b"x")
-    css, shown = backup_status(backup_client)
-    assert text in shown
-    assert ("stale" in css) is stale
-
-
-def test_the_backup_status_is_also_in_the_panel(backup_client, backup_dir):
-    (backup_dir / "emu-2026-10-26.db.gz").write_bytes(b"x")
-    panel = backup_client.get("/settings/panel", params={"next": "/"}).text
-    assert "Last nightly backup: today" in " ".join(panel.split())
+def test_there_is_no_database_download_since_the_server_backs_it_up(client):
+    assert client.get("/export.db.gz").status_code == 404
 
 
 # --- layout: header, overview and expiry chips -----------------------------------------------

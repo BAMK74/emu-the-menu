@@ -53,13 +53,8 @@ def off(code):
 
 
 @pytest.fixture
-def db_path(tmp_path):
-    return tmp_path / "emu.db"
-
-
-@pytest.fixture
-def client(db_path):
-    app = create_app(db_path, today=lambda: date(2026, 10, 10), fetch_product=off)
+def client(db_url):
+    app = create_app(db_url, today=lambda: date(2026, 10, 10), fetch_product=off)
     return TestClient(app, follow_redirects=False)
 
 
@@ -67,11 +62,11 @@ def icons(page):
     return re.findall(r'<svg class="ico"[^>]*><use href="/static/art\.svg#i-(\w+)"/></svg>', page)
 
 
-def test_stock_items_and_recipes_carry_their_drawings(client, db_path):
-    with StockRepository(db_path) as stock:
+def test_stock_items_and_recipes_carry_their_drawings(client, db_url):
+    with StockRepository(db_url) as stock:
         stock.add("carrots", 500, "g", Location.PANTRY)
         stock.add("milk", 1, "l", Location.FRIDGE)
-    with RecipeRepository(db_path) as recipes:
+    with RecipeRepository(db_url) as recipes:
         recipes.add("Carrot soup", 2, (MealType.DINNER,), Weather.ANY, (), [("carrots", 200, "g")])
         recipes.add("Omelette", 1, (MealType.LUNCH,), Weather.ANY, (), [("eggs", 2, "count")])
     assert sorted(icons(client.get("/").text)) == ["dairy", "veg"]

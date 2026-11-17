@@ -1,0 +1,38 @@
+name: Tests
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:18
+        env:
+          POSTGRES_USER: emu
+          POSTGRES_PASSWORD: emu
+          POSTGRES_DB: emu
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U emu -d emu"
+          --health-interval 2s
+          --health-timeout 3s
+          --health-retries 15
+    env:
+      EMU_TEST_DATABASE_URL: postgresql://emu:emu@localhost:5432/emu_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          enable-cache: true
+      - run: uv sync --locked
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run pytest -q

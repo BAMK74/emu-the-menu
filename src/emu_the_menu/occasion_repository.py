@@ -1,32 +1,11 @@
-"""Occasions in the same SQLite file as the rest, on a connection of their own."""
+"""Occasions, in the same database as the rest."""
 
-import sqlite3
 from collections.abc import Iterable
 from datetime import date, timedelta
-from pathlib import Path
 
+from emu_the_menu.db import Database, attach
 from emu_the_menu.holidays import Holiday
 from emu_the_menu.occasions import Occasion, Source, combine
-
-_SCHEMA = """
-CREATE TABLE IF NOT EXISTS occasions (
-    id            INTEGER PRIMARY KEY,
-    name          TEXT NOT NULL,
-    day           TEXT NOT NULL,
-    headcount     INTEGER,
-    extra_percent INTEGER NOT NULL DEFAULT 0,
-    source        TEXT NOT NULL DEFAULT 'manual' CHECK (source IN ('manual', 'holiday'))
-);
-CREATE INDEX IF NOT EXISTS occasions_day ON occasions (day);
-CREATE UNIQUE INDEX IF NOT EXISTS occasions_holiday
-    ON occasions (day, name COLLATE NOCASE) WHERE source = 'holiday';
-CREATE TABLE IF NOT EXISTS occasion_tags (
-    occasion_id INTEGER NOT NULL REFERENCES occasions(id) ON DELETE CASCADE,
-    tag         TEXT NOT NULL,
-    position    INTEGER NOT NULL,
-    PRIMARY KEY (occasion_id, tag)
-);
-"""
 
 
 class OccasionNotFoundError(LookupError):
@@ -34,10 +13,8 @@ class OccasionNotFoundError(LookupError):
 
 
 class OccasionRepository:
-    def __init__(self, path: str | Path):
-        self._db = sqlite3.connect(path)
-        self._db.execute("PRAGMA foreign_keys = ON")
-        self._db.executescript(_SCHEMA)
+    def __init__(self, database: str | Database | None = None):
+        self._db, self._owned = attach(database)
 
     def __enter__(self) -> "OccasionRepository":
         return self
@@ -46,25 +23,26 @@ class OccasionRepository:
         self.close()
 
     def close(self) -> None:
-        self._db.close()
+        if self._owned:
+            self._db.close()
 
     def _write(self, occasion_id, name, day, headcount, extra, tags, source) -> int:
-        with self._db:
+        with self._db.transaction():
             if occasion_id is None:
-                occasion_id = self._db.execute(
+                (occasion_id,) = self._db.execute(
                     "INSERT INTO occasions (name, day, headcount, extra_percent, source)"
-                    " VALUES (?, ?, ?, ?, ?)",
-                    (name, day.isoformat(), headcount, extra, source.value),
-                ).lastrowid
+                    " VALUES (%s, %s, %s, %s, %s) RETURNING id",
+                    (name, day, headcount, extra, source.value),
+                ).fetchone()
             else:
                 self._db.execute(
-                    "UPDATE occasions SET name = ?, day = ?, headcount = ?, extra_percent = ?"
-                    " WHERE id = ?",
-                    (name, day.isoformat(), headcount, extra, occasion_id),
+                    "UPDATE occasions SET name = %s, day = %s, headcount = %s, extra_percent = %s"
+                    " WHERE id = %s",
+                    (name, day, headcount, extra, occasion_id),
                 )
-            self._db.execute("DELETE FROM occasion_tags WHERE occasion_id = ?", (occasion_id,))
+            self._db.execute("DELETE FROM occasion_tags WHERE occasion_id = %s", (occasion_id,))
             self._db.executemany(
-                "INSERT INTO occasion_tags (occasion_id, tag, position) VALUES (?, ?, ?)",
+                "INSERT INTO occasion_tags (occasion_id, tag, position) VALUES (%s, %s, %s)",
                 [(occasion_id, tag, n) for n, tag in enumerate(tags)],
             )
         return occasion_id
@@ -93,13 +71,13 @@ class OccasionRepository:
         later import never overwrites it."""
         if self.get(occasion_id) is None:
             raise OccasionNotFoundError(occasion_id)
-        with self._db:
-            self._db.execute("UPDATE occasions SET source = 'manual' WHERE id = ?", (occasion_id,))
+        with self._db.transaction():
+            self._db.execute("UPDATE occasions SET source = 'manual' WHERE id = %s", (occasion_id,))
         self._write(occasion_id, name, day, headcount, extra_percent, tuple(tags), Source.MANUAL)
 
     def delete(self, occasion_id: int) -> None:
-        with self._db:
-            cursor = self._db.execute("DELETE FROM occasions WHERE id = ?", (occasion_id,))
+        with self._db.transaction():
+            cursor = self._db.execute("DELETE FROM occasions WHERE id = %s", (occasion_id,))
         if cursor.rowcount == 0:
             raise OccasionNotFoundError(occasion_id)
 
@@ -109,26 +87,22 @@ class OccasionRepository:
             tags = tuple(
                 t
                 for (t,) in self._db.execute(
-                    "SELECT tag FROM occasion_tags WHERE occasion_id = ? ORDER BY position", (oid,)
+                    "SELECT tag FROM occasion_tags WHERE occasion_id = %s ORDER BY position", (oid,)
                 )
             )
-            occasions.append(
-                Occasion(name, date.fromisoformat(day), headcount, extra, tags, Source(source), oid)
-            )
+            occasions.append(Occasion(name, day, headcount, extra, tags, Source(source), oid))
         return occasions
 
     _COLUMNS = "SELECT id, name, day, headcount, extra_percent, source FROM occasions"
 
     def get(self, occasion_id: int) -> Occasion | None:
-        found = self._read(self._db.execute(self._COLUMNS + " WHERE id = ?", (occasion_id,)))
+        found = self._read(self._db.execute(self._COLUMNS + " WHERE id = %s", (occasion_id,)))
         return found[0] if found else None
 
     def from_day(self, start: date) -> list[Occasion]:
         """Occasions on or after `start`, in date order."""
         return self._read(
-            self._db.execute(
-                self._COLUMNS + " WHERE day >= ? ORDER BY day, name", (start.isoformat(),)
-            )
+            self._db.execute(self._COLUMNS + " WHERE day >= %s ORDER BY day, name", (start,))
         )
 
     def all(self) -> list[Occasion]:
@@ -139,8 +113,8 @@ class OccasionRepository:
         end = start + timedelta(days=days - 1)
         rows = self._read(
             self._db.execute(
-                self._COLUMNS + " WHERE day BETWEEN ? AND ? ORDER BY day, id",
-                (start.isoformat(), end.isoformat()),
+                self._COLUMNS + " WHERE day BETWEEN %s AND %s ORDER BY day, id",
+                (start, end),
             )
         )
         by_day: dict[date, list[Occasion]] = {}
@@ -151,11 +125,12 @@ class OccasionRepository:
     def add_holidays(self, holidays: Iterable[Holiday]) -> int:
         """Add imported holidays not already there. Returns how many were new."""
         added = 0
-        with self._db:
+        with self._db.transaction():
             for holiday in holidays:
                 cursor = self._db.execute(
-                    "INSERT OR IGNORE INTO occasions (name, day, source) VALUES (?, ?, 'holiday')",
-                    (holiday.name, holiday.day.isoformat()),
+                    "INSERT INTO occasions (name, day, source) VALUES (%s, %s, 'holiday')"
+                    " ON CONFLICT DO NOTHING",
+                    (holiday.name, holiday.day),
                 )
                 added += cursor.rowcount
         return added
@@ -174,7 +149,7 @@ class OccasionRepository:
         ]
 
 
-def occasions_for(path: str | Path, start: date, days: int) -> dict[date, Occasion]:
+def occasions_for(database: str | Database | None, start: date, days: int) -> dict[date, Occasion]:
     """The Occasion standing for each day of a plan that has any."""
-    with OccasionRepository(path) as repo:
+    with OccasionRepository(database) as repo:
         return repo.for_days(start, days)

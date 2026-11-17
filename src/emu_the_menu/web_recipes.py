@@ -6,7 +6,6 @@ Recipe containing an Ingredient nobody has reviewed says "not checked", never "s
 
 import re
 from collections.abc import Callable, Iterator
-from pathlib import Path
 from urllib.parse import urlsplit
 
 from fastapi import APIRouter, Depends, Form, HTTPException, Request
@@ -67,17 +66,15 @@ def read_lines(
     return lines, typed
 
 
-def create_router(
-    db_path: str | Path, fetch_recipe_page: Callable[[str], str] = fetch_page
-) -> APIRouter:
+def create_router(database: str, fetch_recipe_page: Callable[[str], str] = fetch_page) -> APIRouter:
     router = APIRouter()
 
     def get_repo() -> Iterator[RecipeRepository]:
-        with RecipeRepository(db_path) as repo:
+        with RecipeRepository(database) as repo:
             yield repo
 
     def ingredient_names() -> list[str]:
-        with StockRepository(db_path) as stock:
+        with StockRepository(database) as stock:
             return [i.name for i in stock.ingredients()]
 
     def facts(recipe: Recipe):
@@ -204,7 +201,7 @@ def create_router(
 
     @router.get("/recipes", response_class=HTMLResponse)
     def recipes(request: Request, repo: RecipeRepository = Depends(get_repo)):
-        with EaterRepository(db_path) as eater_repo:
+        with EaterRepository(database) as eater_repo:
             eaters = eater_repo.list()
         shown = []
         for recipe in repo.recipes():

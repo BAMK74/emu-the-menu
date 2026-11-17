@@ -1,9 +1,8 @@
 <section class="backup">
   <h3>Backup</h3>
-  <p class="backup-status{{ " stale" if backup.stale }}" role="status">{{ backup.text }}</p>
+  <p>The server backs up the database for you.</p>
   <div class="downloads">
-    <a href="/export.db.gz" download>Download database backup</a>
     <a href="/export.json" download>Export as JSON</a>
   </div>
-  <p class="hint">The database backup restores everything. The JSON is a readable copy of your ingredients and stock.</p>
+  <p class="hint">The JSON is a readable copy of your ingredients, stock, eaters, recipes and occasions, to keep for yourself.</p>
 </section>

@@ -2,7 +2,6 @@
 for the Household's country."""
 
 from datetime import date
-from pathlib import Path
 
 from fastapi import APIRouter, Form, HTTPException, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
@@ -15,7 +14,7 @@ from emu_the_menu.templating import TEMPLATES
 from emu_the_menu.web_menu import day_label
 
 
-def create_router(db_path: str | Path, today=date.today, get_json=http_get_json) -> APIRouter:
+def create_router(database: str, today=date.today, get_json=http_get_json) -> APIRouter:
     router = APIRouter()
 
     def page(
@@ -25,9 +24,9 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
         notice: str | None = None,
         status: int = 200,
     ):
-        with StockRepository(db_path) as stock:
+        with StockRepository(database) as stock:
             country = stock.household_country()
-        with OccasionRepository(db_path) as repo:
+        with OccasionRepository(database) as repo:
             upcoming = repo.from_day(today())
         year = today().year
         return TEMPLATES.TemplateResponse(
@@ -72,13 +71,13 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
         except ValueError as exc:
             typed = {"name": name, "day": day, "headcount": headcount, "extra": extra, "tags": tags}
             return page(request, typed, str(exc), status=400)
-        with OccasionRepository(db_path) as repo:
+        with OccasionRepository(database) as repo:
             repo.add(*fields)
         return RedirectResponse("/occasions", status_code=303)
 
     @router.post("/occasions/holidays")
     def import_holidays(request: Request, year: str = Form("")):
-        with StockRepository(db_path) as stock:
+        with StockRepository(database) as stock:
             country = stock.household_country()
         try:
             wanted = int(year)
@@ -91,7 +90,7 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
             return page(request, error=f"{exc}. Try again later.", status=400)
         except ValueError as exc:
             return page(request, error=str(exc), status=400)
-        with OccasionRepository(db_path) as repo:
+        with OccasionRepository(database) as repo:
             added = repo.add_holidays(found)
         return RedirectResponse(f"/occasions?imported={added}", status_code=303)
 
@@ -107,7 +106,7 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
     ):
         try:
             fields = read_form(name, day, headcount, extra, tags)
-            with OccasionRepository(db_path) as repo:
+            with OccasionRepository(database) as repo:
                 repo.update(occasion_id, *fields)
         except ValueError as exc:
             return page(request, error=str(exc), status=400)
@@ -118,7 +117,7 @@ def create_router(db_path: str | Path, today=date.today, get_json=http_get_json)
     @router.post("/occasions/{occasion_id}/delete")
     def delete(occasion_id: int):
         try:
-            with OccasionRepository(db_path) as repo:
+            with OccasionRepository(database) as repo:
                 repo.delete(occasion_id)
         except OccasionNotFoundError:
             raise HTTPException(404, "No such occasion") from None

@@ -9,14 +9,9 @@ from emu_the_menu.web import create_app
 
 
 @pytest.fixture
-def db_path(tmp_path):
-    return tmp_path / "emu.db"
-
-
-@pytest.fixture
-def client(db_path):
+def client(db_url):
     app = create_app(
-        db_path, today=lambda: date(2026, 10, 26), fetch_product=lambda code: {"status": 0}
+        db_url, today=lambda: date(2026, 10, 26), fetch_product=lambda code: {"status": 0}
     )
     return TestClient(app, follow_redirects=False)
 
@@ -45,8 +40,8 @@ def add(
     )
 
 
-def stored(db_path):
-    with EaterRepository(db_path) as repo:
+def stored(db_url):
+    with EaterRepository(db_url) as repo:
         return repo.list()
 
 
@@ -81,11 +76,11 @@ def test_the_calorie_dropdown_offers_every_adjustment_with_default_selected(clie
     assert '<option value="-300">-300 kcal</option>' in select
 
 
-def test_adding_an_eater_redirects_and_lists_them(client, db_path):
+def test_adding_an_eater_redirects_and_lists_them(client, db_url):
     response = add(client, "Sam", "teen", "0", "Peanuts, shellfish", "olives")
     assert response.status_code == 303
     assert response.headers["location"] == "/eaters"
-    [eater] = stored(db_path)
+    [eater] = stored(db_url)
     assert (eater.name, eater.category, eater.allergies) == (
         "Sam",
         Category.TEEN,
@@ -115,20 +110,20 @@ def test_an_adjusted_goal_shows_the_default_and_the_difference(client):
         {"calorie_adjustment": "5000"},
     ],
 )
-def test_bad_input_is_rejected_with_a_message_and_nothing_stored(client, db_path, bad):
+def test_bad_input_is_rejected_with_a_message_and_nothing_stored(client, db_url, bad):
     response = add(client, **bad)
     assert response.status_code == 400
     assert 'class="error"' in response.text
-    assert stored(db_path) == []
+    assert stored(db_url) == []
 
 
-def test_a_duplicate_name_is_rejected_and_the_typed_values_are_kept(client, db_path):
+def test_a_duplicate_name_is_rejected_and_the_typed_values_are_kept(client, db_url):
     add(client, "Sam")
     response = add(client, "sam", "woman", "0", "eggs")
     assert response.status_code == 400
     assert "already" in response.text
     assert 'value="sam"' in response.text
-    assert len(stored(db_path)) == 1
+    assert len(stored(db_url)) == 1
 
 
 def test_the_edit_form_is_prefilled(client):
@@ -141,9 +136,9 @@ def test_the_edit_form_is_prefilled(client):
     assert 'value="olives"' in edit
 
 
-def test_updating_an_eater(client, db_path):
+def test_updating_an_eater(client, db_url):
     add(client, "Sam", "man", "0", "peanuts")
-    [eater] = stored(db_path)
+    [eater] = stored(db_url)
     response = client.post(
         f"/eaters/{eater.id}",
         data={
@@ -155,7 +150,7 @@ def test_updating_an_eater(client, db_path):
         },
     )
     assert response.status_code == 303
-    [updated] = stored(db_path)
+    [updated] = stored(db_url)
     assert (updated.name, updated.category, updated.calorie_goal, updated.allergies) == (
         "Samuel",
         Category.TEEN,
@@ -164,9 +159,9 @@ def test_updating_an_eater(client, db_path):
     )
 
 
-def test_an_invalid_update_changes_nothing(client, db_path):
+def test_an_invalid_update_changes_nothing(client, db_url):
     add(client, "Sam", "man")
-    [eater] = stored(db_path)
+    [eater] = stored(db_url)
     response = client.post(
         f"/eaters/{eater.id}",
         data={
@@ -179,7 +174,7 @@ def test_an_invalid_update_changes_nothing(client, db_path):
     )
     assert response.status_code == 400
     assert 'class="error"' in response.text
-    assert stored(db_path)[0].calorie_adjustment == 0
+    assert stored(db_url)[0].calorie_adjustment == 0
 
 
 def test_updating_or_deleting_a_missing_eater_is_a_404(client):
@@ -194,12 +189,12 @@ def test_updating_or_deleting_a_missing_eater_is_a_404(client):
     assert client.post("/eaters/999/delete").status_code == 404
 
 
-def test_deleting_an_eater(client, db_path):
+def test_deleting_an_eater(client, db_url):
     add(client, "Sam")
     add(client, "Mia", "child")
-    sam = stored(db_path)[0]
+    sam = stored(db_url)[0]
     assert client.post(f"/eaters/{sam.id}/delete").status_code == 303
-    assert [e.name for e in stored(db_path)] == ["Mia"]
+    assert [e.name for e in stored(db_url)] == ["Mia"]
 
 
 # --- default goals per category (changed in Settings) -----------------------------------------
@@ -286,9 +281,9 @@ def test_the_add_form_offers_every_diet_with_eating_everything_selected(client):
     assert "Pescatarian" in [label for _, _, label in options]
 
 
-def test_a_diet_is_saved_and_shown_on_the_card(client, db_path):
+def test_a_diet_is_saved_and_shown_on_the_card(client, db_url):
     assert add(client, "Mia", "woman", diet="pescatarian").status_code == 303
-    assert stored(db_path)[0].diet.value == "pescatarian"
+    assert stored(db_url)[0].diet.value == "pescatarian"
     assert "Diet: Pescatarian" in card(client, "Mia")
 
 
@@ -297,19 +292,19 @@ def test_eating_everything_adds_nothing_to_the_card(client):
     assert "Diet:" not in card(client, "Sam")
 
 
-def test_an_unknown_diet_is_rejected_and_nothing_is_stored(client, db_path):
+def test_an_unknown_diet_is_rejected_and_nothing_is_stored(client, db_url):
     response = add(client, "Mia", diet="carnivore")
     assert response.status_code == 400
     assert 'class="error"' in response.text
     assert "diet" in response.text.lower()
-    assert stored(db_path) == []
+    assert stored(db_url) == []
 
 
-def test_the_edit_form_preselects_the_diet_and_can_change_it(client, db_path):
+def test_the_edit_form_preselects_the_diet_and_can_change_it(client, db_url):
     add(client, "Mia", "woman", diet="vegetarian")
     edit = card(client, "Mia").split("<details")[1]
     assert [value for value, selected, _ in diet_options(edit) if selected] == ["vegetarian"]
-    [eater] = stored(db_path)
+    [eater] = stored(db_url)
     response = client.post(
         f"/eaters/{eater.id}",
         data={
@@ -374,9 +369,9 @@ def test_the_add_form_has_a_checkbox_for_every_eu_allergen_all_unticked(client):
     assert "Other allergies" in form
 
 
-def test_ticked_allergens_are_saved_and_shown_on_the_card(client, db_path):
+def test_ticked_allergens_are_saved_and_shown_on_the_card(client, db_url):
     assert add(client, "Mia", "woman", allergens=["milk", "tree-nuts"]).status_code == 303
-    assert [a.value for a in stored(db_path)[0].allergens] == ["milk", "tree-nuts"]
+    assert [a.value for a in stored(db_url)[0].allergens] == ["milk", "tree-nuts"]
     entry = card(client, "Mia")
     assert "Allergies:" in entry
     assert "Milk" in entry and "Tree nuts" in entry
@@ -394,9 +389,9 @@ def test_the_edit_form_ticks_the_persons_allergens(client):
     assert [v for v, checked in allergen_boxes(edit) if checked] == ["eggs", "soy"]
 
 
-def test_updating_changes_the_allergens(client, db_path):
+def test_updating_changes_the_allergens(client, db_url):
     add(client, "Mia", "woman", allergens=["eggs"])
-    [eater] = stored(db_path)
+    [eater] = stored(db_url)
     response = client.post(
         f"/eaters/{eater.id}",
         data={
@@ -410,15 +405,15 @@ def test_updating_changes_the_allergens(client, db_path):
         },
     )
     assert response.status_code == 303
-    assert [a.value for a in stored(db_path)[0].allergens] == ["fish", "sesame"]
+    assert [a.value for a in stored(db_url)[0].allergens] == ["fish", "sesame"]
 
 
-def test_an_unknown_allergen_is_rejected_and_nothing_is_stored(client, db_path):
+def test_an_unknown_allergen_is_rejected_and_nothing_is_stored(client, db_url):
     response = add(client, "Mia", "woman", allergens=["milk", "kiwi"])
     assert response.status_code == 400
     assert 'class="error"' in response.text
     assert "allergen" in response.text.lower()
-    assert stored(db_path) == []
+    assert stored(db_url) == []
 
 
 def test_ticks_are_kept_in_the_form_after_a_rejected_add(client):
@@ -460,9 +455,9 @@ def test_the_list_fields_say_which_separators_to_use(client):
     assert "Separate with commas or semicolons, like kiwi, buckwheat" in add_form
 
 
-def test_the_separators_the_note_promises_really_work(client, db_path):
+def test_the_separators_the_note_promises_really_work(client, db_url):
     add(client, "Sam", dislikes="olives; mushrooms, capers", allergies="kiwi;buckwheat, figs")
-    [sam] = stored(db_path)
+    [sam] = stored(db_url)
     assert sam.dislikes == ("olives", "mushrooms", "capers")
     assert sam.allergies == ("kiwi", "buckwheat", "figs")
 

@@ -10,7 +10,6 @@ nothing about allergens.
 """
 
 import math
-from pathlib import Path
 from urllib.parse import urlencode
 
 from fastapi import APIRouter, Request
@@ -29,20 +28,20 @@ def _whole(text: str, default: int = 0) -> int:
     return int(text) if text.strip().isdecimal() else default
 
 
-def create_router(db_path: str | Path) -> APIRouter:
+def create_router(database: str) -> APIRouter:
     router = APIRouter()
 
     def missing(recipe_id: int):
         """Ingredients without calories, most used first, and the Recipe asked for (or None)."""
         used: dict[int, int] = {}
         chosen = None
-        with RecipeRepository(db_path) as recipes:
+        with RecipeRepository(database) as recipes:
             for recipe in recipes.recipes():
                 for line in recipe.lines:
                     used[line.ingredient.id] = used.get(line.ingredient.id, 0) + 1
                 if recipe.id == recipe_id:
                     chosen = recipe
-        with StockRepository(db_path) as stock:
+        with StockRepository(database) as stock:
             found = [i for i in stock.ingredients() if i.kcal is None]
         if chosen is not None:
             wanted = {line.ingredient.id for line in chosen.lines}
@@ -99,7 +98,7 @@ def create_router(db_path: str | Path) -> APIRouter:
         recipe_id = _whole(str(form.get("recipe", "")))
         number = _whole(str(form.get("page", "")), 1)
         # Opened here, not injected: a connection must stay in the thread that made it.
-        with StockRepository(db_path) as stock:
+        with StockRepository(database) as stock:
             known = {i.id: i for i in stock.ingredients()}
             figures: dict[int, float] = {}
             typed: dict[int, str] = {}

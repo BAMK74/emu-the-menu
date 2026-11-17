@@ -8,7 +8,6 @@ a Meal on a past day that was never cooked no longer holds anything.
 """
 
 from datetime import date, timedelta
-from pathlib import Path
 
 from emu_the_menu.cooking import Pantry, uses_for
 from emu_the_menu.menu_repository import MenuRepository, SavedMenu
@@ -28,8 +27,8 @@ def stock_lots(stock: StockRepository) -> Lots:
     return lots
 
 
-def _accepted(db_path: str | Path, before: int | None) -> list[SavedMenu]:
-    with MenuRepository(db_path) as menus:
+def _accepted(database: str, before: int | None) -> list[SavedMenu]:
+    with MenuRepository(database) as menus:
         return [
             m
             for m in menus.accepted_menus()
@@ -37,14 +36,14 @@ def _accepted(db_path: str | Path, before: int | None) -> list[SavedMenu]:
         ]
 
 
-def _walk(accepted, lots: Lots, today: date, ignore_meal: int | None, db_path):
+def _walk(accepted, lots: Lots, today: date, ignore_meal: int | None, database):
     """Share the Stock out to the accepted Menus in order.
 
     Returns each amount set aside as (menu, ingredient, taken), and the Stock left over.
     """
     pantry = Pantry(lots)
     events = []
-    with RecipeRepository(db_path) as recipes:
+    with RecipeRepository(database) as recipes:
         found = {}
         for menu in accepted:
             for meal in menu.meals:
@@ -72,7 +71,7 @@ def _walk(accepted, lots: Lots, today: date, ignore_meal: int | None, db_path):
 
 
 def free_stock(
-    db_path: str | Path,
+    database: str,
     today: date,
     before: int | None = None,
     ignore_meal: int | None = None,
@@ -82,24 +81,24 @@ def free_stock(
     `before` counts only Menus accepted earlier than that place in line (what a Menu may itself
     use), and `ignore_meal` leaves one Meal out (the one being replaced).
     """
-    with StockRepository(db_path) as stock:
+    with StockRepository(database) as stock:
         lots = stock_lots(stock)
-    accepted = _accepted(db_path, before)
+    accepted = _accepted(database, before)
     if not accepted:
         return lots
-    return _walk(accepted, lots, today, ignore_meal, db_path)[1]
+    return _walk(accepted, lots, today, ignore_meal, database)[1]
 
 
 def holdings(
-    db_path: str | Path, today: date, before: int | None = None
+    database: str, today: date, before: int | None = None
 ) -> list[tuple[SavedMenu, list[tuple[Ingredient, float]]]]:
     """What each accepted Menu is holding, by Ingredient in its base unit, in name order.
     Menus holding nothing are left out. `before` is as for `free_stock`."""
-    with StockRepository(db_path) as stock:
+    with StockRepository(database) as stock:
         lots = stock_lots(stock)
-    accepted = _accepted(db_path, before)
+    accepted = _accepted(database, before)
     held: dict[int, dict[int, list]] = {}
-    for menu, ingredient, taken in _walk(accepted, lots, today, None, db_path)[0]:
+    for menu, ingredient, taken in _walk(accepted, lots, today, None, database)[0]:
         entry = held.setdefault(menu.id, {}).setdefault(ingredient.id, [ingredient, 0.0])
         entry[1] += taken
     return [
