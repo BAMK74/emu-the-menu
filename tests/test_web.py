@@ -62,7 +62,9 @@ def add(
 def suggestions(client):
     """The remembered-ingredient data the page hands to its script."""
     page = client.get("/").text
-    match = re.search(r"const suggestions = (.*?);$", page, re.MULTILINE)
+    match = re.search(
+        r'<script type="application/json" id="stock-suggestions">(.*?)</script>', page
+    )
     return json.loads(match.group(1))
 
 

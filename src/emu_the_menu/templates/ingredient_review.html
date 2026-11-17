@@ -88,14 +88,6 @@
   </form>
   {% endif %}
   <p><a href="/ingredients">Back to the ingredients</a></p>
-  <script>
-    // Changing anything in a row means you have looked at it, so tick its Looks right box.
-    document.querySelectorAll(".review-row").forEach((row) => {
-      const box = row.querySelector("[name=confirm]");
-      row.addEventListener("input", (event) => {
-        if (event.target !== box) box.checked = true;
-      });
-    });
-  </script>
+  <script src="/static/js/ingredient-review.js"></script>
   {% endif %}
 {% endblock %}

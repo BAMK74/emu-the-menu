@@ -20,6 +20,7 @@ import re
 import threading
 from collections.abc import Iterable, Iterator, Sequence
 from contextlib import contextmanager
+from contextvars import ContextVar
 from importlib import resources
 from typing import Any
 
@@ -28,8 +29,10 @@ from psycopg_pool import ConnectionPool
 
 ENV_VAR = "EMU_DATABASE_URL"
 POOL_MAX = 10  # connections per process; a household is a handful of people
+POOL_TIMEOUT = 30.0  # seconds a request waits for a free connection before it fails
 
 _MIGRATION_LOCK = 0x656D755F6D6967  # "emu_mig", an arbitrary key for pg_advisory_lock
+_WRITE_LOCK = 0x656D755F777269  # "emu_wri": held by every write transaction (see transaction())
 _MIGRATION_NAME = re.compile(r"^(\d{3})_[a-z0-9_]+\.sql$")
 
 _pools: dict[str, ConnectionPool] = {}
@@ -75,9 +78,16 @@ class Database:
     def transaction(self) -> Iterator[None]:
         """Run the statements inside as one change: all of them happen, or none on an error.
 
-        Nested blocks become savepoints of the outer one.
+        Write transactions run one at a time, across every process, as they did in SQLite: the
+        outermost block takes one advisory lock until it ends. Without it, two requests that read
+        and then write (refreshing the forecast, adding a new ingredient, taking stock) could
+        interleave under Postgres's READ COMMITTED and collide or lose an update. Reads outside a
+        transaction are not held up. Nested blocks become savepoints of the outer one.
         """
+        outermost = self._conn.info.transaction_status == psycopg.pq.TransactionStatus.IDLE
         with self._conn.transaction():
+            if outermost:
+                self._conn.execute("SELECT pg_advisory_xact_lock(%s)", (_WRITE_LOCK,))
             yield
 
     def close(self) -> None:
@@ -92,28 +102,58 @@ def open_database(url: str | None = None) -> Database:
     return Database(pool.getconn(), pool.putconn)
 
 
+# The connections borrowed by the request being handled, by URI (see `request_scope`).
+_request_connections: ContextVar[dict[str, Database] | None] = ContextVar(
+    "emu_request_connections", default=None
+)
+
+
+@contextmanager
+def request_scope() -> Iterator[None]:
+    """Make every repository opened inside share one connection per URI, given back at the end.
+
+    The web app wraps each request in this. A page opens several repositories, some inside
+    others; sharing one connection means a request never holds more than one, so requests waiting
+    for the pool can never all be waiting on each other. Nothing is borrowed until a repository
+    opens, so a request that does not touch the database (such as /healthz) borrows nothing.
+    """
+    connections: dict[str, Database] = {}
+    token = _request_connections.set(connections)
+    try:
+        yield
+    finally:
+        _request_connections.reset(token)
+        for db in connections.values():
+            db.close()
+
+
 def attach(source: str | Database | None) -> tuple[Database, bool]:
     """The Database a repository works on, and whether it is the repository's to give back.
 
     A repository opened with another one's Database shares that connection, so a Recipe
     repository and the Stock repository inside it see each other's writes in one transaction.
+    Inside `request_scope` every repository on the same URI shares the request's connection.
     """
     if isinstance(source, Database):
         return source, False
+    shared = _request_connections.get()
+    if shared is not None:
+        url = database_url(source)
+        if url not in shared:
+            shared[url] = open_database(url)
+        return shared[url], False
     return open_database(source), True
 
 
 @contextmanager
 def borrowed(source: str | Database | None) -> Iterator[Database]:
     """A Database for a one-off job: `source` itself if it is one, else a borrowed connection."""
-    if isinstance(source, Database):
-        yield source
-        return
-    db = open_database(source)
+    db, owned = attach(source)
     try:
         yield db
     finally:
-        db.close()
+        if owned:
+            db.close()
 
 
 def _pool(url: str) -> ConnectionPool:
@@ -132,6 +172,7 @@ def _pool(url: str) -> ConnectionPool:
                 # Check each connection before lending it, so one Postgres restart (a failover,
                 # an upgrade) costs a reconnect rather than an error page per dead connection.
                 check=ConnectionPool.check_connection,
+                timeout=POOL_TIMEOUT,
                 open=True,
                 name="emu",
             )
