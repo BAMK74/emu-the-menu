@@ -71,9 +71,9 @@ Then make the first Adult, in the container too: `docker exec -it <container> py
 
 ## Run it on a home server
 
-Emu is moving to the Traquenard Server, where it will run alongside the household's other projects. This repo no longer carries a home-server setup.
+Emu runs on the Traquenard Server at <https://menu.bamk.eu>, alongside the household's other projects. This repo no longer carries a home-server setup: the Server's deployment lives in [iamPepouze/traquenard-server](https://github.com/iamPepouze/traquenard-server), under `cluster/tenants/bamk/`.
 
-Do not open Emu to the internet. It has no logins yet, so anyone who can reach it can change everything. Run it on your own computer as above, or on a private network only you and your household can reach.
+Every page needs an account except sign-in, `/healthz`, `/disclaimer` and the static files, so Emu can be reached from the internet. If you run your own copy that way, put it behind HTTPS: Emu marks its cookies `Secure`, so browsers only send them over HTTPS (or to `localhost`).
 
 ## Important
 
